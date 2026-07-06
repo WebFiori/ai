@@ -384,7 +384,7 @@ class VertexAIClient extends AbstractClient {
      * @return HttpRequest The HTTP request to send.
      */
     protected function buildChatRequest(array $messages, array $options): HttpRequest {
-        $model = $options['model'] ?? $this->getConfig('model', 'gemini-2.0-flash');
+        $model = $options['model'] ?? $this->getConfig('model', 'gemini-2.5-flash');
         $body = [
             'contents' => $this->formatContents($messages),
         ];
@@ -476,7 +476,7 @@ class VertexAIClient extends AbstractClient {
      * @return HttpRequest The HTTP request to send.
      */
     protected function buildStreamChatRequest(array $messages, array $options): HttpRequest {
-        $model = $options['model'] ?? $this->getConfig('model', 'gemini-2.0-flash');
+        $model = $options['model'] ?? $this->getConfig('model', 'gemini-2.5-flash');
         $body = [
             'contents' => $this->formatContents($messages),
         ];
@@ -516,7 +516,7 @@ class VertexAIClient extends AbstractClient {
         ?callable $onError
     ): void {
         $accumulatedContent = '';
-        $model = $this->getConfig('model', 'gemini-2.0-flash');
+        $model = $this->getConfig('model', 'gemini-2.5-flash');
         $finishReason = null;
         $usage = null;
 
@@ -630,7 +630,7 @@ class VertexAIClient extends AbstractClient {
         if (empty($candidates)) {
             return new ChatResponse(
                 new Message('assistant', ''),
-                $this->getConfig('model', 'gemini-2.0-flash'),
+                $this->getConfig('model', 'gemini-2.5-flash'),
                 null,
                 null
             );
@@ -674,7 +674,7 @@ class VertexAIClient extends AbstractClient {
 
         return new ChatResponse(
             $message,
-            $data['modelVersion'] ?? $this->getConfig('model', 'gemini-2.0-flash'),
+            $data['modelVersion'] ?? $this->getConfig('model', 'gemini-2.5-flash'),
             $usage,
             $finishReason
         );
