@@ -17,7 +17,8 @@ $userMessage = '';
 
 // Simulated tools
 $tools = [
-    'get_weather' => function (array $args): string {
+    'get_weather' => function (array $args): string
+    {
         $location = $args['location'] ?? 'Unknown';
 
         return json_encode([
@@ -27,7 +28,8 @@ $tools = [
             'humidity' => rand(30, 80),
         ]);
     },
-    'get_time' => function (array $args): string {
+    'get_time' => function (array $args): string
+    {
         $timezone = $args['timezone'] ?? 'UTC';
 
         return json_encode(['timezone' => $timezone, 'time' => date('H:i:s')]);
@@ -101,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
         } else {
             $steps[] = ['type' => 'assistant', 'content' => $response->getMessage()->getContent()];
         }
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $error = $e->getMessage();
     }
 }
@@ -143,31 +145,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
         <strong>get_time</strong> — Returns current time in a timezone
     </div>
 
-    <?php if ($error): ?>
+    <?php if ($error) { ?>
         <div class="error"><?= htmlspecialchars($error) ?></div>
-    <?php endif; ?>
+    <?php } ?>
 
     <form method="POST">
         <input type="text" name="message" placeholder="What's the weather in Paris?" value="<?= htmlspecialchars($userMessage) ?>" autofocus>
         <button type="submit">Send</button>
     </form>
 
-    <?php foreach ($steps as $step): ?>
+    <?php foreach ($steps as $step) { ?>
         <div class="step <?= $step['type'] ?>">
-            <?php if ($step['type'] === 'user'): ?>
+            <?php if ($step['type'] === 'user') { ?>
                 <div class="label">You</div>
                 <div class="content"><?= htmlspecialchars($step['content']) ?></div>
-            <?php elseif ($step['type'] === 'tool_call'): ?>
+            <?php } elseif ($step['type'] === 'tool_call') { ?>
                 <div class="label">🔧 Tool Call: <?= htmlspecialchars($step['name']) ?></div>
                 <div class="content">
                     Args: <code><?= htmlspecialchars(json_encode($step['args'])) ?></code><br>
                     Result: <code><?= htmlspecialchars($step['result']) ?></code>
                 </div>
-            <?php elseif ($step['type'] === 'assistant'): ?>
+            <?php } elseif ($step['type'] === 'assistant') { ?>
                 <div class="label">Assistant</div>
                 <div class="content"><?= htmlspecialchars($step['content']) ?></div>
-            <?php endif; ?>
+            <?php } ?>
         </div>
-    <?php endforeach; ?>
+    <?php } ?>
 </body>
 </html>

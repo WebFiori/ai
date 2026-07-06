@@ -28,18 +28,18 @@ class SseParser {
     private string $buffer = '';
 
     /**
-     * Callback invoked for each complete SSE data payload.
-     *
-     * @var callable
-     */
-    private $onEvent;
-
-    /**
      * Callback invoked when the stream signals completion ([DONE]).
      *
      * @var callable|null
      */
     private $onDone;
+
+    /**
+     * Callback invoked for each complete SSE data payload.
+     *
+     * @var callable
+     */
+    private $onEvent;
 
     /**
      * Creates a new SseParser instance.

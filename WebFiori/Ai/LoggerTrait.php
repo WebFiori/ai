@@ -58,6 +58,21 @@ trait LoggerTrait {
     }
 
     /**
+     * Emits a log message at the specified level.
+     *
+     * Does nothing if no log callback is configured.
+     *
+     * @param string $level The log level ('debug', 'info', 'warning', 'error').
+     * @param string $message The log message.
+     * @param array<string, mixed> $context Structured context data.
+     */
+    private function log(string $level, string $message, array $context): void {
+        if ($this->logCallback !== null) {
+            ($this->logCallback)($level, $message, $context);
+        }
+    }
+
+    /**
      * Emits a debug-level log message.
      *
      * Use for detailed diagnostic information such as full request/response
@@ -106,20 +121,5 @@ trait LoggerTrait {
      */
     protected function logWarning(string $message, array $context = []): void {
         $this->log('warning', $message, $context);
-    }
-
-    /**
-     * Emits a log message at the specified level.
-     *
-     * Does nothing if no log callback is configured.
-     *
-     * @param string $level The log level ('debug', 'info', 'warning', 'error').
-     * @param string $message The log message.
-     * @param array<string, mixed> $context Structured context data.
-     */
-    private function log(string $level, string $message, array $context): void {
-        if ($this->logCallback !== null) {
-            ($this->logCallback)($level, $message, $context);
-        }
     }
 }

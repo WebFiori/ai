@@ -16,7 +16,6 @@ require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIProvider;
-use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolResult;
 
 $provider = new OpenAIProvider([
@@ -26,7 +25,8 @@ $provider = new OpenAIProvider([
 
 // Define available tools (in a real app, these would call real APIs)
 $tools = [
-    'get_weather' => function (array $args): string {
+    'get_weather' => function (array $args): string
+    {
         $location = $args['location'] ?? 'Unknown';
         // Simulated weather data
         $data = [

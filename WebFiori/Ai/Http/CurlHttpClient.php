@@ -98,7 +98,8 @@ class CurlHttpClient implements HttpClientInterface {
         $responseHeaders = [];
 
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $headerLine) use (&$responseHeaders) {
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $headerLine) use (&$responseHeaders)
+        {
             $parts = explode(':', $headerLine, 2);
 
             if (count($parts) === 2) {
@@ -145,7 +146,8 @@ class CurlHttpClient implements HttpClientInterface {
         $streamError = null;
 
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($onChunk, &$streamError) {
+        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($onChunk, &$streamError)
+        {
             try {
                 $onChunk($data);
             } catch (\Throwable $e) {

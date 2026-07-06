@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['prompt'])) {
         $image = $response->getImages()[0];
         $imageUrl = $image->getUrl();
         $revisedPrompt = $image->getRevisedPrompt();
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $error = $e->getMessage();
     }
 }
@@ -75,9 +75,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['prompt'])) {
     <h1>Image Generation</h1>
     <p class="subtitle">Generate images from text prompts using DALL-E 3.</p>
 
-    <?php if ($error): ?>
+    <?php if ($error) { ?>
         <div class="error"><?= htmlspecialchars($error) ?></div>
-    <?php endif; ?>
+    <?php } ?>
 
     <form method="POST">
         <label for="prompt">Prompt</label>
@@ -111,13 +111,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['prompt'])) {
         <button type="submit">Generate Image</button>
     </form>
 
-    <?php if ($imageUrl): ?>
+    <?php if ($imageUrl) { ?>
         <div class="result">
             <img src="<?= htmlspecialchars($imageUrl) ?>" alt="Generated image">
-            <?php if ($revisedPrompt): ?>
+            <?php if ($revisedPrompt) { ?>
                 <p class="revised">Revised prompt: <?= htmlspecialchars($revisedPrompt) ?></p>
-            <?php endif; ?>
+            <?php } ?>
         </div>
-    <?php endif; ?>
+    <?php } ?>
 </body>
 </html>

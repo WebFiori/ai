@@ -33,8 +33,6 @@ use WebFiori\Ai\Message;
  * @author Ibrahim
  */
 abstract class AbstractProvider implements ProviderInterface {
-    use LoggerTrait;
-
     /**
      * Provider configuration options.
      *
@@ -281,6 +279,7 @@ abstract class AbstractProvider implements ProviderInterface {
      * @throws \WebFiori\Ai\Exception\ProviderException If status indicates a server error.
      */
     abstract protected function handleErrorResponse(HttpResponse $response): void;
+    use LoggerTrait;
 
     /**
      * Parses an HTTP response into a ChatResponse.

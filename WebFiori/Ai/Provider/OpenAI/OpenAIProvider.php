@@ -53,6 +53,100 @@ class OpenAIProvider extends AbstractProvider {
     }
 
     /**
+     * Applies optional generation parameters to the request body.
+     *
+     * @param array<string, mixed> &$body The request body to modify.
+     * @param array<string, mixed> $options The options to apply.
+     */
+    private function applyOptions(array &$body, array $options): void {
+        $allowedOptions = [
+            'temperature', 'max_tokens', 'top_p', 'frequency_penalty',
+            'presence_penalty', 'stop', 'n',
+        ];
+
+        foreach ($allowedOptions as $option) {
+            if (isset($options[$option])) {
+                $body[$option] = $options[$option];
+            }
+        }
+    }
+
+    /**
+     * Formats Message objects into the OpenAI messages format.
+     *
+     * @param Message[] $messages The messages to format.
+     *
+     * @return array<int, array<string, mixed>> The formatted messages array.
+     */
+    private function formatMessages(array $messages): array {
+        $formatted = [];
+
+        foreach ($messages as $message) {
+            $entry = [
+                'role' => $message->getRole(),
+                'content' => $message->getContent(),
+            ];
+
+            if ($message->hasToolCalls()) {
+                $entry['tool_calls'] = [];
+
+                foreach ($message->getToolCalls() as $toolCall) {
+                    $entry['tool_calls'][] = [
+                        'id' => $toolCall->getId(),
+                        'type' => 'function',
+                        'function' => [
+                            'name' => $toolCall->getName(),
+                            'arguments' => json_encode($toolCall->getArguments()),
+                        ],
+                    ];
+                }
+            }
+
+            if ($message->getToolResult() !== null) {
+                $entry['tool_call_id'] = $message->getToolResult()->getToolCallId();
+                $entry['content'] = $message->getToolResult()->getContent();
+            }
+
+            $formatted[] = $entry;
+        }
+
+        return $formatted;
+    }
+
+    /**
+     * Returns the full endpoint URL for a given path.
+     *
+     * @param string $path The API path (e.g., '/chat/completions').
+     *
+     * @return string The full URL.
+     */
+    private function getEndpoint(string $path): string {
+        $baseUrl = $this->getConfig('base_url', 'https://api.openai.com/v1');
+
+        return rtrim($baseUrl, '/').$path;
+    }
+
+    /**
+     * Returns the HTTP headers for OpenAI API requests.
+     *
+     * @return array<string, string> The headers array.
+     */
+    private function getHeaders(): array {
+        $headers = [
+            'Content-Type' => 'application/json',
+            'Authorization' => 'Bearer '.$this->getConfig('api_key'),
+        ];
+
+        $org = $this->getConfig('organization');
+
+        if ($org !== null) {
+            $headers['OpenAI-Organization'] = $org;
+        }
+
+        return $headers;
+    }
+
+    /**
      * Builds the HTTP request for a chat completion call.
      *
      * @param Message[] $messages The conversation messages.
@@ -178,7 +272,8 @@ class OpenAIProvider extends AbstractProvider {
         $finishReason = null;
 
         $parser = new SseParser(
-            function (string $data) use ($onToken, &$accumulatedContent, &$model, &$finishReason) {
+            function (string $data) use ($onToken, &$accumulatedContent, &$model, &$finishReason)
+            {
                 $json = json_decode($data, true);
 
                 if ($json === null) {
@@ -207,7 +302,8 @@ class OpenAIProvider extends AbstractProvider {
                     }
                 }
             },
-            function () use ($onComplete, &$accumulatedContent, &$model, &$finishReason) {
+            function () use ($onComplete, &$accumulatedContent, &$model, &$finishReason)
+            {
                 if ($onComplete !== null) {
                     $message = new Message('assistant', $accumulatedContent);
                     $response = new ChatResponse($message, $model, null, $finishReason);
@@ -217,7 +313,8 @@ class OpenAIProvider extends AbstractProvider {
         );
 
         try {
-            $this->getHttpClient()->sendStreaming($request, function (string $chunk) use ($parser) {
+            $this->getHttpClient()->sendStreaming($request, function (string $chunk) use ($parser)
+            {
                 $parser->feed($chunk);
             });
         } catch (StreamingException $e) {
@@ -372,99 +469,5 @@ class OpenAIProvider extends AbstractProvider {
                 'api_key'
             );
         }
-    }
-
-    /**
-     * Applies optional generation parameters to the request body.
-     *
-     * @param array<string, mixed> &$body The request body to modify.
-     * @param array<string, mixed> $options The options to apply.
-     */
-    private function applyOptions(array &$body, array $options): void {
-        $allowedOptions = [
-            'temperature', 'max_tokens', 'top_p', 'frequency_penalty',
-            'presence_penalty', 'stop', 'n',
-        ];
-
-        foreach ($allowedOptions as $option) {
-            if (isset($options[$option])) {
-                $body[$option] = $options[$option];
-            }
-        }
-    }
-
-    /**
-     * Formats Message objects into the OpenAI messages format.
-     *
-     * @param Message[] $messages The messages to format.
-     *
-     * @return array<int, array<string, mixed>> The formatted messages array.
-     */
-    private function formatMessages(array $messages): array {
-        $formatted = [];
-
-        foreach ($messages as $message) {
-            $entry = [
-                'role' => $message->getRole(),
-                'content' => $message->getContent(),
-            ];
-
-            if ($message->hasToolCalls()) {
-                $entry['tool_calls'] = [];
-
-                foreach ($message->getToolCalls() as $toolCall) {
-                    $entry['tool_calls'][] = [
-                        'id' => $toolCall->getId(),
-                        'type' => 'function',
-                        'function' => [
-                            'name' => $toolCall->getName(),
-                            'arguments' => json_encode($toolCall->getArguments()),
-                        ],
-                    ];
-                }
-            }
-
-            if ($message->getToolResult() !== null) {
-                $entry['tool_call_id'] = $message->getToolResult()->getToolCallId();
-                $entry['content'] = $message->getToolResult()->getContent();
-            }
-
-            $formatted[] = $entry;
-        }
-
-        return $formatted;
-    }
-
-    /**
-     * Returns the full endpoint URL for a given path.
-     *
-     * @param string $path The API path (e.g., '/chat/completions').
-     *
-     * @return string The full URL.
-     */
-    private function getEndpoint(string $path): string {
-        $baseUrl = $this->getConfig('base_url', 'https://api.openai.com/v1');
-
-        return rtrim($baseUrl, '/').$path;
-    }
-
-    /**
-     * Returns the HTTP headers for OpenAI API requests.
-     *
-     * @return array<string, string> The headers array.
-     */
-    private function getHeaders(): array {
-        $headers = [
-            'Content-Type' => 'application/json',
-            'Authorization' => 'Bearer '.$this->getConfig('api_key'),
-        ];
-
-        $org = $this->getConfig('organization');
-
-        if ($org !== null) {
-            $headers['OpenAI-Organization'] = $org;
-        }
-
-        return $headers;
     }
 }

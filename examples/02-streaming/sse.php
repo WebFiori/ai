@@ -33,12 +33,14 @@ $provider->streamChat(
         new Message('system', 'You are a helpful assistant.'),
         new Message('user', $message),
     ],
-    onToken: function (string $token) {
+    onToken: function (string $token)
+    {
         echo 'data: '.json_encode(['token' => $token])."\n\n";
         ob_flush();
         flush();
     },
-    onComplete: function ($response) {
+    onComplete: function ($response)
+    {
         $data = [
             'done' => true,
             'model' => $response->getModel(),
@@ -48,7 +50,8 @@ $provider->streamChat(
         ob_flush();
         flush();
     },
-    onError: function ($e) {
+    onError: function ($e)
+    {
         echo 'data: '.json_encode(['error' => $e->getMessage()])."\n\n";
         ob_flush();
         flush();

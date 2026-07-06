@@ -44,6 +44,22 @@ class ExampleTest extends TestCase {
     }
 
     /**
+     * Test error handling in your application.
+     */
+    public function testHandlesRateLimitGracefully(): void {
+        $client = new FakeHttpClient();
+        $client->addResponse(new HttpResponse(429, ['Retry-After' => '30'], json_encode([
+            'error' => ['message' => 'Rate limit exceeded', 'type' => 'rate_limit_error'],
+        ])));
+
+        $provider = new OpenAIProvider(['api_key' => 'sk-test']);
+        $provider->setHttpClient($client);
+
+        $this->expectException(WebFiori\Ai\Exception\RateLimitException::class);
+        $provider->chat([new Message('user', 'Hello')]);
+    }
+
+    /**
      * Test that your code sends the correct request format.
      */
     public function testRequestFormat(): void {
@@ -78,22 +94,6 @@ class ExampleTest extends TestCase {
     }
 
     /**
-     * Test error handling in your application.
-     */
-    public function testHandlesRateLimitGracefully(): void {
-        $client = new FakeHttpClient();
-        $client->addResponse(new HttpResponse(429, ['Retry-After' => '30'], json_encode([
-            'error' => ['message' => 'Rate limit exceeded', 'type' => 'rate_limit_error'],
-        ])));
-
-        $provider = new OpenAIProvider(['api_key' => 'sk-test']);
-        $provider->setHttpClient($client);
-
-        $this->expectException(\WebFiori\Ai\Exception\RateLimitException::class);
-        $provider->chat([new Message('user', 'Hello')]);
-    }
-
-    /**
      * Test streaming responses.
      */
     public function testStreaming(): void {
@@ -112,7 +112,8 @@ class ExampleTest extends TestCase {
 
         $provider->streamChat(
             [new Message('user', 'Hi')],
-            function (string $token) use (&$tokens) {
+            function (string $token) use (&$tokens)
+            {
                 $tokens[] = $token;
             }
         );

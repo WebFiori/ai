@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
         foreach ($conversation->getHistory() as $msg) {
             $_SESSION['history'][] = ['role' => $msg->getRole(), 'content' => $msg->getContent()];
         }
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $error = $e->getMessage();
     }
 }
@@ -94,21 +94,21 @@ $history = $_SESSION['history'] ?? [];
     <h1>Conversation</h1>
     <p class="subtitle">Multi-turn chat with conversation history. The AI remembers what you said.</p>
 
-    <?php if ($error): ?>
+    <?php if ($error) { ?>
         <div class="error"><?= htmlspecialchars($error) ?></div>
-    <?php endif; ?>
+    <?php } ?>
 
     <div class="messages">
-        <?php if (empty($history)): ?>
+        <?php if (empty($history)) { ?>
             <div class="empty">Start a conversation by typing a message below.</div>
-        <?php else: ?>
-            <?php foreach ($history as $msg): ?>
+        <?php } else { ?>
+            <?php foreach ($history as $msg) { ?>
                 <div class="message <?= htmlspecialchars($msg['role']) ?>">
                     <div class="role"><?= htmlspecialchars($msg['role']) ?></div>
                     <div class="content"><?= htmlspecialchars($msg['content']) ?></div>
                 </div>
-            <?php endforeach; ?>
-        <?php endif; ?>
+            <?php } ?>
+        <?php } ?>
     </div>
 
     <form method="POST" class="input-row">

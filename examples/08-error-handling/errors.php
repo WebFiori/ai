@@ -100,7 +100,8 @@ $provider = new OpenAIProvider([
     'api_key' => getenv('OPENAI_API_KEY') ?: 'sk-demo',
 ]);
 
-$provider->setLogCallback(function (string $level, string $message, array $context) {
+$provider->setLogCallback(function (string $level, string $message, array $context)
+{
     $contextStr = !empty($context) ? ' '.json_encode($context) : '';
     echo "  [$level] $message$contextStr\n";
 });

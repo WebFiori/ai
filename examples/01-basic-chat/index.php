@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
             new Message('system', 'You are a helpful assistant. Keep responses concise.'),
             new Message('user', $userMessage),
         ]);
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $error = $e->getMessage();
     }
 }
@@ -63,25 +63,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
         <button type="submit">Send</button>
     </form>
 
-    <?php if ($error): ?>
+    <?php if ($error) { ?>
         <div class="result error">
             <h3>Error</h3>
             <pre><?= htmlspecialchars($error) ?></pre>
         </div>
-    <?php elseif ($response): ?>
+    <?php } elseif ($response) { ?>
         <div class="result">
             <h3>Response</h3>
             <pre><?= htmlspecialchars($response->getMessage()->getContent()) ?></pre>
             <div class="meta">
                 Model: <?= htmlspecialchars($response->getModel()) ?> |
                 Finish: <?= htmlspecialchars($response->getFinishReason() ?? 'n/a') ?>
-                <?php if ($response->getUsage()): ?>
+                <?php if ($response->getUsage()) { ?>
                     | Tokens: <?= $response->getUsage()->getTotalTokens() ?>
                     (prompt: <?= $response->getUsage()->getPromptTokens() ?>,
                     completion: <?= $response->getUsage()->getCompletionTokens() ?>)
-                <?php endif; ?>
+                <?php } ?>
             </div>
         </div>
-    <?php endif; ?>
+    <?php } ?>
 </body>
 </html>

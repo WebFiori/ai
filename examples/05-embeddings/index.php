@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['text1']) && !empty($
         $response = $provider->embed([$text1, $text2], ['model' => 'text-embedding-3-small']);
         $vectors = $response->getVectors();
         $similarity = cosineSimilarity($vectors[0], $vectors[1]);
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $error = $e->getMessage();
     }
 }
@@ -74,9 +74,9 @@ function cosineSimilarity(array $a, array $b): float {
     <h1>Semantic Similarity</h1>
     <p class="subtitle">Enter two texts and see how semantically similar they are (0 = unrelated, 1 = identical meaning).</p>
 
-    <?php if ($error): ?>
+    <?php if ($error) { ?>
         <div class="error"><?= htmlspecialchars($error) ?></div>
-    <?php endif; ?>
+    <?php } ?>
 
     <form method="POST">
         <label for="text1">Text 1</label>
@@ -88,11 +88,11 @@ function cosineSimilarity(array $a, array $b): float {
         <button type="submit">Compare</button>
     </form>
 
-    <?php if ($similarity !== null): ?>
+    <?php if ($similarity !== null) { ?>
         <div class="result">
             <div class="score"><?= number_format($similarity, 3) ?></div>
             <div class="label">Cosine Similarity</div>
         </div>
-    <?php endif; ?>
+    <?php } ?>
 </body>
 </html>

@@ -70,6 +70,281 @@ class VertexAIProvider extends AbstractProvider {
     }
 
     /**
+     * Builds the generation config from options.
+     *
+     * @param array<string, mixed> $options The request options.
+     *
+     * @return array<string, mixed> The generationConfig object.
+     */
+    private function buildGenerationConfig(array $options): array {
+        $config = [];
+
+        if (isset($options['temperature'])) {
+            $config['temperature'] = $options['temperature'];
+        }
+
+        if (isset($options['max_tokens'])) {
+            $config['maxOutputTokens'] = $options['max_tokens'];
+        }
+
+        if (isset($options['top_p'])) {
+            $config['topP'] = $options['top_p'];
+        }
+
+        if (isset($options['stop'])) {
+            $config['stopSequences'] = is_array($options['stop']) ? $options['stop'] : [$options['stop']];
+        }
+
+        return $config;
+    }
+
+    /**
+     * Extracts the system instruction from messages.
+     *
+     * Vertex AI handles system messages as a separate top-level field.
+     *
+     * @param Message[] $messages The conversation messages.
+     *
+     * @return array<string, mixed>|null The system instruction, or null.
+     */
+    private function extractSystemInstruction(array $messages): ?array {
+        foreach ($messages as $message) {
+            if ($message->getRole() === 'system') {
+                return [
+                    'parts' => [['text' => $message->getContent()]],
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Formats Message objects into Vertex AI contents format.
+     *
+     * Filters out system messages (handled separately) and maps roles.
+     *
+     * @param Message[] $messages The messages to format.
+     *
+     * @return array<int, array<string, mixed>> The formatted contents array.
+     */
+    private function formatContents(array $messages): array {
+        $contents = [];
+
+        foreach ($messages as $message) {
+            $role = $message->getRole();
+
+            // System messages are handled via systemInstruction
+            if ($role === 'system') {
+                continue;
+            }
+
+            // Map roles: 'assistant' → 'model', 'tool' → 'function'
+            $vertexRole = match ($role) {
+                'assistant' => 'model',
+                'tool' => 'function',
+                default => $role,
+            };
+
+            $parts = [];
+
+            if ($message->getContent() !== '') {
+                $parts[] = ['text' => $message->getContent()];
+            }
+
+            if ($message->hasToolCalls()) {
+                foreach ($message->getToolCalls() as $toolCall) {
+                    $parts[] = [
+                        'functionCall' => [
+                            'name' => $toolCall->getName(),
+                            'args' => $toolCall->getArguments(),
+                        ],
+                    ];
+                }
+            }
+
+            if ($message->getToolResult() !== null) {
+                $result = $message->getToolResult();
+                $parts[] = [
+                    'functionResponse' => [
+                        'name' => $result->getToolCallId(),
+                        'response' => json_decode($result->getContent(), true) ?? ['result' => $result->getContent()],
+                    ],
+                ];
+            }
+
+            if (!empty($parts)) {
+                $contents[] = [
+                    'role' => $vertexRole,
+                    'parts' => $parts,
+                ];
+            }
+        }
+
+        return $contents;
+    }
+
+    /**
+     * Generates an OAuth2 access token from service account credentials.
+     *
+     * Creates a self-signed JWT and exchanges it for an access token
+     * via Google's token endpoint.
+     *
+     * @param array<string, string> $credentials The service account credentials.
+     *
+     * @return string The access token.
+     *
+     * @throws AuthenticationException If token generation fails.
+     */
+    private function generateAccessToken(array $credentials): string {
+        $now = time();
+        $header = json_encode(['alg' => 'RS256', 'typ' => 'JWT']);
+        $claim = json_encode([
+            'iss' => $credentials['client_email'] ?? '',
+            'scope' => 'https://www.googleapis.com/auth/cloud-platform',
+            'aud' => 'https://oauth2.googleapis.com/token',
+            'iat' => $now,
+            'exp' => $now + 3600,
+        ]);
+
+        $base64Header = rtrim(strtr(base64_encode($header), '+/', '-_'), '=');
+        $base64Claim = rtrim(strtr(base64_encode($claim), '+/', '-_'), '=');
+        $signInput = $base64Header.'.'.$base64Claim;
+
+        $privateKey = $credentials['private_key'] ?? '';
+        $signature = '';
+        $success = openssl_sign($signInput, $signature, $privateKey, OPENSSL_ALGO_SHA256);
+
+        if (!$success) {
+            throw new AuthenticationException(
+                'Failed to sign JWT for Vertex AI authentication.',
+                401
+            );
+        }
+
+        $base64Signature = rtrim(strtr(base64_encode($signature), '+/', '-_'), '=');
+        $jwt = $signInput.'.'.$base64Signature;
+
+        // Exchange JWT for access token
+        $tokenRequest = new HttpRequest(
+            'POST',
+            'https://oauth2.googleapis.com/token',
+            ['Content-Type' => 'application/x-www-form-urlencoded'],
+            http_build_query([
+                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                'assertion' => $jwt,
+            ])
+        );
+
+        $tokenResponse = $this->getHttpClient()->send($tokenRequest);
+
+        if (!$tokenResponse->isSuccess()) {
+            throw new AuthenticationException(
+                'Failed to obtain access token from Google: '.$tokenResponse->getBody(),
+                $tokenResponse->getStatusCode()
+            );
+        }
+
+        $tokenData = $tokenResponse->getJson();
+
+        return $tokenData['access_token'] ?? '';
+    }
+
+    /**
+     * Returns the access token for API requests.
+     *
+     * If an access_token is configured directly, uses that. Otherwise
+     * generates one from the service account credentials.
+     *
+     * @return string The OAuth2 access token.
+     *
+     * @throws AuthenticationException If token generation fails.
+     */
+    private function getAccessToken(): string {
+        // Use pre-configured access token
+        $token = $this->getConfig('access_token');
+
+        if ($token !== null) {
+            return $token;
+        }
+
+        // Check cached token
+        if ($this->accessToken !== null && time() < $this->tokenExpiresAt) {
+            return $this->accessToken;
+        }
+
+        // Generate from service account credentials
+        $credentials = $this->getConfig('credentials');
+
+        if (is_string($credentials) && is_file($credentials)) {
+            $credentials = json_decode(file_get_contents($credentials), true);
+        }
+
+        if (!is_array($credentials)) {
+            throw new AuthenticationException(
+                'Invalid credentials configuration for Vertex AI provider.',
+                401
+            );
+        }
+
+        $this->accessToken = $this->generateAccessToken($credentials);
+        $this->tokenExpiresAt = time() + 3500; // ~58 minutes
+
+        return $this->accessToken;
+    }
+
+    /**
+     * Returns the full endpoint URL for a given model and action.
+     *
+     * @param string $model The model identifier.
+     * @param string $action The API action (e.g., 'generateContent', 'predict').
+     *
+     * @return string The full URL.
+     */
+    private function getEndpoint(string $model, string $action): string {
+        $projectId = $this->getConfig('project_id');
+        $location = $this->getConfig('location');
+
+        return sprintf(
+            'https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:%s',
+            $location,
+            $projectId,
+            $location,
+            $model,
+            $action
+        );
+    }
+
+    /**
+     * Returns the HTTP headers for Vertex AI API requests.
+     *
+     * @return array<string, string> The headers array.
+     */
+    private function getHeaders(): array {
+        return [
+            'Content-Type' => 'application/json',
+            'Authorization' => 'Bearer '.$this->getAccessToken(),
+        ];
+    }
+
+    /**
+     * Maps Vertex AI finish reason to a normalized string.
+     *
+     * @param string $reason The Vertex AI finish reason.
+     *
+     * @return string|null The normalized finish reason.
+     */
+    private function mapFinishReason(string $reason): ?string {
+        return match ($reason) {
+            'STOP' => 'stop',
+            'MAX_TOKENS' => 'length',
+            'SAFETY' => 'content_filter',
+            'RECITATION' => 'content_filter',
+            default => $reason !== '' ? strtolower($reason) : null,
+        };
+    }
+
+    /**
      * Builds the HTTP request for a chat completion call.
      *
      * @param Message[] $messages The conversation messages.
@@ -215,7 +490,8 @@ class VertexAIProvider extends AbstractProvider {
         $usage = null;
 
         $parser = new SseParser(
-            function (string $data) use ($onToken, &$accumulatedContent, &$finishReason, &$usage) {
+            function (string $data) use ($onToken, &$accumulatedContent, &$finishReason, &$usage)
+            {
                 $json = json_decode($data, true);
 
                 if ($json === null) {
@@ -253,7 +529,8 @@ class VertexAIProvider extends AbstractProvider {
         );
 
         try {
-            $this->getHttpClient()->sendStreaming($request, function (string $chunk) use ($parser) {
+            $this->getHttpClient()->sendStreaming($request, function (string $chunk) use ($parser)
+            {
                 $parser->feed($chunk);
             });
 
@@ -444,280 +721,5 @@ class VertexAIProvider extends AbstractProvider {
                 'credentials'
             );
         }
-    }
-
-    /**
-     * Builds the generation config from options.
-     *
-     * @param array<string, mixed> $options The request options.
-     *
-     * @return array<string, mixed> The generationConfig object.
-     */
-    private function buildGenerationConfig(array $options): array {
-        $config = [];
-
-        if (isset($options['temperature'])) {
-            $config['temperature'] = $options['temperature'];
-        }
-
-        if (isset($options['max_tokens'])) {
-            $config['maxOutputTokens'] = $options['max_tokens'];
-        }
-
-        if (isset($options['top_p'])) {
-            $config['topP'] = $options['top_p'];
-        }
-
-        if (isset($options['stop'])) {
-            $config['stopSequences'] = is_array($options['stop']) ? $options['stop'] : [$options['stop']];
-        }
-
-        return $config;
-    }
-
-    /**
-     * Extracts the system instruction from messages.
-     *
-     * Vertex AI handles system messages as a separate top-level field.
-     *
-     * @param Message[] $messages The conversation messages.
-     *
-     * @return array<string, mixed>|null The system instruction, or null.
-     */
-    private function extractSystemInstruction(array $messages): ?array {
-        foreach ($messages as $message) {
-            if ($message->getRole() === 'system') {
-                return [
-                    'parts' => [['text' => $message->getContent()]],
-                ];
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Formats Message objects into Vertex AI contents format.
-     *
-     * Filters out system messages (handled separately) and maps roles.
-     *
-     * @param Message[] $messages The messages to format.
-     *
-     * @return array<int, array<string, mixed>> The formatted contents array.
-     */
-    private function formatContents(array $messages): array {
-        $contents = [];
-
-        foreach ($messages as $message) {
-            $role = $message->getRole();
-
-            // System messages are handled via systemInstruction
-            if ($role === 'system') {
-                continue;
-            }
-
-            // Map roles: 'assistant' → 'model', 'tool' → 'function'
-            $vertexRole = match ($role) {
-                'assistant' => 'model',
-                'tool' => 'function',
-                default => $role,
-            };
-
-            $parts = [];
-
-            if ($message->getContent() !== '') {
-                $parts[] = ['text' => $message->getContent()];
-            }
-
-            if ($message->hasToolCalls()) {
-                foreach ($message->getToolCalls() as $toolCall) {
-                    $parts[] = [
-                        'functionCall' => [
-                            'name' => $toolCall->getName(),
-                            'args' => $toolCall->getArguments(),
-                        ],
-                    ];
-                }
-            }
-
-            if ($message->getToolResult() !== null) {
-                $result = $message->getToolResult();
-                $parts[] = [
-                    'functionResponse' => [
-                        'name' => $result->getToolCallId(),
-                        'response' => json_decode($result->getContent(), true) ?? ['result' => $result->getContent()],
-                    ],
-                ];
-            }
-
-            if (!empty($parts)) {
-                $contents[] = [
-                    'role' => $vertexRole,
-                    'parts' => $parts,
-                ];
-            }
-        }
-
-        return $contents;
-    }
-
-    /**
-     * Returns the access token for API requests.
-     *
-     * If an access_token is configured directly, uses that. Otherwise
-     * generates one from the service account credentials.
-     *
-     * @return string The OAuth2 access token.
-     *
-     * @throws AuthenticationException If token generation fails.
-     */
-    private function getAccessToken(): string {
-        // Use pre-configured access token
-        $token = $this->getConfig('access_token');
-
-        if ($token !== null) {
-            return $token;
-        }
-
-        // Check cached token
-        if ($this->accessToken !== null && time() < $this->tokenExpiresAt) {
-            return $this->accessToken;
-        }
-
-        // Generate from service account credentials
-        $credentials = $this->getConfig('credentials');
-
-        if (is_string($credentials) && is_file($credentials)) {
-            $credentials = json_decode(file_get_contents($credentials), true);
-        }
-
-        if (!is_array($credentials)) {
-            throw new AuthenticationException(
-                'Invalid credentials configuration for Vertex AI provider.',
-                401
-            );
-        }
-
-        $this->accessToken = $this->generateAccessToken($credentials);
-        $this->tokenExpiresAt = time() + 3500; // ~58 minutes
-
-        return $this->accessToken;
-    }
-
-    /**
-     * Returns the full endpoint URL for a given model and action.
-     *
-     * @param string $model The model identifier.
-     * @param string $action The API action (e.g., 'generateContent', 'predict').
-     *
-     * @return string The full URL.
-     */
-    private function getEndpoint(string $model, string $action): string {
-        $projectId = $this->getConfig('project_id');
-        $location = $this->getConfig('location');
-
-        return sprintf(
-            'https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:%s',
-            $location,
-            $projectId,
-            $location,
-            $model,
-            $action
-        );
-    }
-
-    /**
-     * Returns the HTTP headers for Vertex AI API requests.
-     *
-     * @return array<string, string> The headers array.
-     */
-    private function getHeaders(): array {
-        return [
-            'Content-Type' => 'application/json',
-            'Authorization' => 'Bearer '.$this->getAccessToken(),
-        ];
-    }
-
-    /**
-     * Generates an OAuth2 access token from service account credentials.
-     *
-     * Creates a self-signed JWT and exchanges it for an access token
-     * via Google's token endpoint.
-     *
-     * @param array<string, string> $credentials The service account credentials.
-     *
-     * @return string The access token.
-     *
-     * @throws AuthenticationException If token generation fails.
-     */
-    private function generateAccessToken(array $credentials): string {
-        $now = time();
-        $header = json_encode(['alg' => 'RS256', 'typ' => 'JWT']);
-        $claim = json_encode([
-            'iss' => $credentials['client_email'] ?? '',
-            'scope' => 'https://www.googleapis.com/auth/cloud-platform',
-            'aud' => 'https://oauth2.googleapis.com/token',
-            'iat' => $now,
-            'exp' => $now + 3600,
-        ]);
-
-        $base64Header = rtrim(strtr(base64_encode($header), '+/', '-_'), '=');
-        $base64Claim = rtrim(strtr(base64_encode($claim), '+/', '-_'), '=');
-        $signInput = $base64Header.'.'.$base64Claim;
-
-        $privateKey = $credentials['private_key'] ?? '';
-        $signature = '';
-        $success = openssl_sign($signInput, $signature, $privateKey, OPENSSL_ALGO_SHA256);
-
-        if (!$success) {
-            throw new AuthenticationException(
-                'Failed to sign JWT for Vertex AI authentication.',
-                401
-            );
-        }
-
-        $base64Signature = rtrim(strtr(base64_encode($signature), '+/', '-_'), '=');
-        $jwt = $signInput.'.'.$base64Signature;
-
-        // Exchange JWT for access token
-        $tokenRequest = new HttpRequest(
-            'POST',
-            'https://oauth2.googleapis.com/token',
-            ['Content-Type' => 'application/x-www-form-urlencoded'],
-            http_build_query([
-                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                'assertion' => $jwt,
-            ])
-        );
-
-        $tokenResponse = $this->getHttpClient()->send($tokenRequest);
-
-        if (!$tokenResponse->isSuccess()) {
-            throw new AuthenticationException(
-                'Failed to obtain access token from Google: '.$tokenResponse->getBody(),
-                $tokenResponse->getStatusCode()
-            );
-        }
-
-        $tokenData = $tokenResponse->getJson();
-
-        return $tokenData['access_token'] ?? '';
-    }
-
-    /**
-     * Maps Vertex AI finish reason to a normalized string.
-     *
-     * @param string $reason The Vertex AI finish reason.
-     *
-     * @return string|null The normalized finish reason.
-     */
-    private function mapFinishReason(string $reason): ?string {
-        return match ($reason) {
-            'STOP' => 'stop',
-            'MAX_TOKENS' => 'length',
-            'SAFETY' => 'content_filter',
-            'RECITATION' => 'content_filter',
-            default => $reason !== '' ? strtolower($reason) : null,
-        };
     }
 }

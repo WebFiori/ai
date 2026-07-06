@@ -21,15 +21,18 @@ $provider->streamChat(
     messages: [
         new Message('user', 'Write a short poem about PHP programming.'),
     ],
-    onToken: function (string $token) {
+    onToken: function (string $token)
+    {
         echo $token;
     },
-    onComplete: function ($response) {
+    onComplete: function ($response)
+    {
         echo PHP_EOL.PHP_EOL.'--- Stream complete ---'.PHP_EOL;
         echo 'Model: '.$response->getModel().PHP_EOL;
         echo 'Finish reason: '.$response->getFinishReason().PHP_EOL;
     },
-    onError: function ($e) {
+    onError: function ($e)
+    {
         echo PHP_EOL.'Error: '.$e->getMessage().PHP_EOL;
     }
 );

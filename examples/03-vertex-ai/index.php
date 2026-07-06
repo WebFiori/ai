@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
             ]);
             $openaiResponse = $openai->chat($messages);
         }
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $error = 'OpenAI: '.$e->getMessage();
     }
 
@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
             ]);
             $vertexResponse = $vertex->chat($messages);
         }
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $error = ($error ? $error.' | ' : '').'Vertex AI: '.$e->getMessage();
     }
 }
@@ -85,41 +85,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
         <button type="submit">Compare</button>
     </form>
 
-    <?php if ($error): ?>
+    <?php if ($error) { ?>
         <div class="error"><?= htmlspecialchars($error) ?></div>
-    <?php endif; ?>
+    <?php } ?>
 
-    <?php if ($openaiResponse || $vertexResponse): ?>
+    <?php if ($openaiResponse || $vertexResponse) { ?>
     <div class="grid">
         <div class="card">
             <h3>OpenAI (GPT-4o)</h3>
-            <?php if ($openaiResponse): ?>
+            <?php if ($openaiResponse) { ?>
                 <pre><?= htmlspecialchars($openaiResponse->getMessage()->getContent()) ?></pre>
                 <div class="meta">
                     Model: <?= htmlspecialchars($openaiResponse->getModel()) ?>
-                    <?php if ($openaiResponse->getUsage()): ?>
+                    <?php if ($openaiResponse->getUsage()) { ?>
                         | Tokens: <?= $openaiResponse->getUsage()->getTotalTokens() ?>
-                    <?php endif; ?>
+                    <?php } ?>
                 </div>
-            <?php else: ?>
+            <?php } else { ?>
                 <p class="na">Set OPENAI_API_KEY to enable.</p>
-            <?php endif; ?>
+            <?php } ?>
         </div>
         <div class="card">
             <h3>Vertex AI (Gemini 1.5 Pro)</h3>
-            <?php if ($vertexResponse): ?>
+            <?php if ($vertexResponse) { ?>
                 <pre><?= htmlspecialchars($vertexResponse->getMessage()->getContent()) ?></pre>
                 <div class="meta">
                     Model: <?= htmlspecialchars($vertexResponse->getModel()) ?>
-                    <?php if ($vertexResponse->getUsage()): ?>
+                    <?php if ($vertexResponse->getUsage()) { ?>
                         | Tokens: <?= $vertexResponse->getUsage()->getTotalTokens() ?>
-                    <?php endif; ?>
+                    <?php } ?>
                 </div>
-            <?php else: ?>
+            <?php } else { ?>
                 <p class="na">Set GCP_ACCESS_TOKEN to enable.</p>
-            <?php endif; ?>
+            <?php } ?>
         </div>
     </div>
-    <?php endif; ?>
+    <?php } ?>
 </body>
 </html>
