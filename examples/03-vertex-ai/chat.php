@@ -8,9 +8,9 @@
 require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\VertexAI\VertexAIProvider;
+use WebFiori\Ai\Provider\VertexAI\VertexAIClient;
 
-$provider = new VertexAIProvider([
+$provider = new VertexAIClient([
     'project_id' => getenv('GCP_PROJECT_ID'),
     'location' => getenv('GCP_LOCATION') ?: 'us-central1',
     'model' => 'gemini-1.5-pro',

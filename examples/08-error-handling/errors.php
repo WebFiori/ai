@@ -15,13 +15,13 @@ use WebFiori\Ai\Exception\InvalidConfigException;
 use WebFiori\Ai\Exception\ProviderException;
 use WebFiori\Ai\Exception\RateLimitException;
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\OpenAI\OpenAIProvider;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 
 // --- Example 1: Invalid configuration ---
 echo "=== Example 1: Invalid Configuration ===\n";
 
 try {
-    $provider = new OpenAIProvider([]); // Missing api_key
+    $provider = new OpenAIClient([]); // Missing api_key
 } catch (InvalidConfigException $e) {
     echo "Config error: ".$e->getMessage()."\n";
     echo "Option: ".$e->getOptionName()."\n";
@@ -32,7 +32,7 @@ echo "\n";
 // --- Example 2: Catching specific error types ---
 echo "=== Example 2: Specific Error Handling ===\n";
 
-$provider = new OpenAIProvider([
+$provider = new OpenAIClient([
     'api_key' => 'sk-invalid-key-for-demo',
 ]);
 
@@ -64,7 +64,7 @@ echo "\n";
 // --- Example 3: Retry pattern ---
 echo "=== Example 3: Simple Retry Pattern ===\n";
 
-function chatWithRetry(OpenAIProvider $provider, array $messages, int $maxRetries = 3): ?string {
+function chatWithRetry(OpenAIClient $provider, array $messages, int $maxRetries = 3): ?string {
     for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
         try {
             $response = $provider->chat($messages);
@@ -96,7 +96,7 @@ echo "\n";
 // --- Example 4: Logging callback for debugging ---
 echo "=== Example 4: Debug Logging ===\n";
 
-$provider = new OpenAIProvider([
+$provider = new OpenAIClient([
     'api_key' => getenv('OPENAI_API_KEY') ?: 'sk-demo',
 ]);
 

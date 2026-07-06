@@ -22,15 +22,15 @@ use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\AbstractProvider;
+use WebFiori\Ai\Provider\AbstractClient;
 use WebFiori\Ai\Usage;
 
 /**
- * Unit tests for AbstractProvider using a concrete test implementation.
+ * Unit tests for AbstractClient using a concrete test implementation.
  *
  * @author Ibrahim
  */
-class AbstractProviderTest extends TestCase {
+class AbstractClientTest extends TestCase {
     /**
      * @test
      */
@@ -200,10 +200,10 @@ class AbstractProviderTest extends TestCase {
      *
      * @param array<string, mixed> $config Provider configuration.
      *
-     * @return AbstractProvider A concrete test provider instance.
+     * @return AbstractClient A concrete test provider instance.
      */
-    private function createTestProvider(array $config): AbstractProvider {
-        return new class($config) extends AbstractProvider {
+    private function createTestProvider(array $config): AbstractClient {
+        return new class($config) extends AbstractClient {
             public function getName(): string {
                 return 'test';
             }

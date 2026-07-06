@@ -52,15 +52,15 @@ composer require webfiori/ai
 ```php
 <?php
 
-use WebFiori\Ai\Providers\OpenAI\OpenAIProvider;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 use WebFiori\Ai\Message;
 
-$provider = new OpenAIProvider([
+$client = new OpenAIClient([
     'api_key' => 'sk-...',
     'model' => 'gpt-4o',
 ]);
 
-$response = $provider->chat([
+$response = $client->chat([
     new Message('system', 'You are a helpful assistant.'),
     new Message('user', 'What is PHP?'),
 ]);
@@ -71,7 +71,7 @@ echo $response->getMessage()->getContent();
 ### Streaming
 
 ```php
-$provider->streamChat(
+$client->streamChat(
     messages: [
         new Message('user', 'Write a story about PHP'),
     ],
@@ -85,16 +85,16 @@ $provider->streamChat(
 ### Multiple Providers
 
 ```php
-use WebFiori\Ai\Providers\VertexAI\VertexAIProvider;
+use WebFiori\Ai\Provider\VertexAI\VertexAIClient;
 
-$provider = new VertexAIProvider([
+$client = new VertexAIClient([
     'project_id' => 'my-project',
     'location' => 'us-central1',
     'model' => 'gemini-1.5-pro',
     'credentials' => '/path/to/service-account.json',
 ]);
 
-$response = $provider->chat([
+$response = $client->chat([
     new Message('user', 'What is PHP?'),
 ]);
 ```

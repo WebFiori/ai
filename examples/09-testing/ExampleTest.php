@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
 use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\OpenAI\OpenAIProvider;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 
 class ExampleTest extends TestCase {
     /**
@@ -30,7 +30,7 @@ class ExampleTest extends TestCase {
             'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 6, 'total_tokens' => 16],
         ])));
 
-        $provider = new OpenAIProvider(['api_key' => 'sk-test']);
+        $provider = new OpenAIClient(['api_key' => 'sk-test']);
         $provider->setHttpClient($client);
 
         // Act: call your application code that uses the provider
@@ -52,7 +52,7 @@ class ExampleTest extends TestCase {
             'error' => ['message' => 'Rate limit exceeded', 'type' => 'rate_limit_error'],
         ])));
 
-        $provider = new OpenAIProvider(['api_key' => 'sk-test']);
+        $provider = new OpenAIClient(['api_key' => 'sk-test']);
         $provider->setHttpClient($client);
 
         $this->expectException(WebFiori\Ai\Exception\RateLimitException::class);
@@ -73,7 +73,7 @@ class ExampleTest extends TestCase {
             'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1],
         ])));
 
-        $provider = new OpenAIProvider(['api_key' => 'sk-my-key', 'model' => 'gpt-4o']);
+        $provider = new OpenAIClient(['api_key' => 'sk-my-key', 'model' => 'gpt-4o']);
         $provider->setHttpClient($client);
 
         $provider->chat(
@@ -105,7 +105,7 @@ class ExampleTest extends TestCase {
             "data: [DONE]\n\n",
         ]);
 
-        $provider = new OpenAIProvider(['api_key' => 'sk-test']);
+        $provider = new OpenAIClient(['api_key' => 'sk-test']);
         $provider->setHttpClient($client);
 
         $tokens = [];

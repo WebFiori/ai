@@ -8,7 +8,7 @@
 require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\OpenAI\OpenAIProvider;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 use WebFiori\Ai\Tool\ToolResult;
 
 $steps = [];
@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
     $userMessage = trim($_POST['message']);
 
     try {
-        $provider = new OpenAIProvider([
+        $provider = new OpenAIClient([
             'api_key' => getenv('OPENAI_API_KEY'),
             'model' => 'gpt-4o',
         ]);

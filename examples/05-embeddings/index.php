@@ -7,7 +7,7 @@
  */
 require_once __DIR__.'/../../vendor/autoload.php';
 
-use WebFiori\Ai\Provider\OpenAI\OpenAIProvider;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 
 $similarity = null;
 $error = null;
@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['text1']) && !empty($
     $text2 = trim($_POST['text2']);
 
     try {
-        $provider = new OpenAIProvider([
+        $provider = new OpenAIClient([
             'api_key' => getenv('OPENAI_API_KEY'),
             'model' => 'gpt-4o',
         ]);

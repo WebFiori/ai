@@ -18,7 +18,7 @@ use WebFiori\Ai\Exception\RateLimitException;
 use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\VertexAI\VertexAIProvider;
+use WebFiori\Ai\Provider\VertexAI\VertexAIClient;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolResult;
 
@@ -27,7 +27,7 @@ use WebFiori\Ai\Tool\ToolResult;
  *
  * @author Ibrahim
  */
-class VertexAIProviderTest extends TestCase {
+class VertexAIClientTest extends TestCase {
     /**
      * @test
      */
@@ -262,7 +262,7 @@ class VertexAIProviderTest extends TestCase {
     public function testMissingCredentialsThrows() {
         $this->expectException(InvalidConfigException::class);
         $this->expectExceptionMessage('credentials');
-        new VertexAIProvider([
+        new VertexAIClient([
             'project_id' => 'my-project',
             'location' => 'us-central1',
         ]);
@@ -274,7 +274,7 @@ class VertexAIProviderTest extends TestCase {
     public function testMissingLocationThrows() {
         $this->expectException(InvalidConfigException::class);
         $this->expectExceptionMessage('location');
-        new VertexAIProvider([
+        new VertexAIClient([
             'project_id' => 'my-project',
             'access_token' => 'token',
         ]);
@@ -286,7 +286,7 @@ class VertexAIProviderTest extends TestCase {
     public function testMissingProjectIdThrows() {
         $this->expectException(InvalidConfigException::class);
         $this->expectExceptionMessage('project_id');
-        new VertexAIProvider([
+        new VertexAIClient([
             'location' => 'us-central1',
             'access_token' => 'token',
         ]);
@@ -418,10 +418,10 @@ class VertexAIProviderTest extends TestCase {
     /**
      * Creates a Vertex AI provider with test configuration using a pre-set access token.
      *
-     * @return VertexAIProvider The configured provider instance.
+     * @return VertexAIClient The configured provider instance.
      */
-    private function createProvider(): VertexAIProvider {
-        return new VertexAIProvider([
+    private function createProvider(): VertexAIClient {
+        return new VertexAIClient([
             'project_id' => 'my-project',
             'location' => 'us-central1',
             'model' => 'gemini-1.5-pro',

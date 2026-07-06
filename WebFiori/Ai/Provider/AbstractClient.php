@@ -32,7 +32,7 @@ use WebFiori\Ai\Message;
  *
  * @author Ibrahim
  */
-abstract class AbstractProvider implements ProviderInterface {
+abstract class AbstractClient implements ProviderInterface {
     /**
      * Provider configuration options.
      *

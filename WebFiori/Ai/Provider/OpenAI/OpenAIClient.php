@@ -24,7 +24,7 @@ use WebFiori\Ai\Http\SseParser;
 use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\AbstractProvider;
+use WebFiori\Ai\Provider\AbstractClient;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Usage;
 
@@ -42,7 +42,7 @@ use WebFiori\Ai\Usage;
  *
  * @author Ibrahim
  */
-class OpenAIProvider extends AbstractProvider {
+class OpenAIClient extends AbstractClient {
     /**
      * Returns the provider name.
      *

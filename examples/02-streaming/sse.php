@@ -9,7 +9,7 @@
 require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\OpenAI\OpenAIProvider;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 
 header('Content-Type: text/event-stream');
 header('Cache-Control: no-cache');
@@ -23,7 +23,7 @@ if (empty($message)) {
     exit;
 }
 
-$provider = new OpenAIProvider([
+$provider = new OpenAIClient([
     'api_key' => getenv('OPENAI_API_KEY'),
     'model' => 'gpt-4o',
 ]);

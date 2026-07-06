@@ -9,8 +9,8 @@
 require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\OpenAI\OpenAIProvider;
-use WebFiori\Ai\Provider\VertexAI\VertexAIProvider;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\VertexAI\VertexAIClient;
 
 $openaiResponse = null;
 $vertexResponse = null;
@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
 
     try {
         if (getenv('OPENAI_API_KEY')) {
-            $openai = new OpenAIProvider([
+            $openai = new OpenAIClient([
                 'api_key' => getenv('OPENAI_API_KEY'),
                 'model' => 'gpt-4o',
             ]);
@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
 
     try {
         if (getenv('GCP_ACCESS_TOKEN')) {
-            $vertex = new VertexAIProvider([
+            $vertex = new VertexAIClient([
                 'project_id' => getenv('GCP_PROJECT_ID'),
                 'location' => getenv('GCP_LOCATION') ?: 'us-central1',
                 'model' => 'gemini-1.5-pro',

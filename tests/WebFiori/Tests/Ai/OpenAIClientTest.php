@@ -19,7 +19,7 @@ use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\OpenAI\OpenAIProvider;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolResult;
 
@@ -28,7 +28,7 @@ use WebFiori\Ai\Tool\ToolResult;
  *
  * @author Ibrahim
  */
-class OpenAIProviderTest extends TestCase {
+class OpenAIClientTest extends TestCase {
     /**
      * @test
      */
@@ -120,7 +120,7 @@ class OpenAIProviderTest extends TestCase {
             'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1],
         ])));
 
-        $provider = new OpenAIProvider([
+        $provider = new OpenAIClient([
             'api_key' => 'sk-test',
             'organization' => 'org-123',
         ]);
@@ -186,7 +186,7 @@ class OpenAIProviderTest extends TestCase {
             'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1],
         ])));
 
-        $provider = new OpenAIProvider([
+        $provider = new OpenAIClient([
             'api_key' => 'sk-test',
             'base_url' => 'https://my-proxy.example.com/api',
         ]);
@@ -352,7 +352,7 @@ class OpenAIProviderTest extends TestCase {
     public function testMissingApiKeyThrows() {
         $this->expectException(InvalidConfigException::class);
         $this->expectExceptionMessage('api_key');
-        new OpenAIProvider([]);
+        new OpenAIClient([]);
     }
 
     /**
@@ -455,10 +455,10 @@ class OpenAIProviderTest extends TestCase {
     /**
      * Creates an OpenAI provider with test configuration.
      *
-     * @return OpenAIProvider The configured provider instance.
+     * @return OpenAIClient The configured provider instance.
      */
-    private function createProvider(): OpenAIProvider {
-        return new OpenAIProvider([
+    private function createProvider(): OpenAIClient {
+        return new OpenAIClient([
             'api_key' => 'sk-test-key',
             'model' => 'gpt-4o',
         ]);

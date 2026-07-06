@@ -7,9 +7,9 @@
  */
 require_once __DIR__.'/../../vendor/autoload.php';
 
-use WebFiori\Ai\Provider\OpenAI\OpenAIProvider;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 
-$provider = new OpenAIProvider([
+$provider = new OpenAIClient([
     'api_key' => getenv('OPENAI_API_KEY'),
     'model' => 'gpt-4o',
 ]);
