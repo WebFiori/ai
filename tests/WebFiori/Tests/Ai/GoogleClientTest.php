@@ -23,7 +23,7 @@ use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolResult;
 
 /**
- * Unit tests for the Vertex AI provider.
+ * Unit tests for the Google provider.
  *
  * @author Ibrahim
  */
@@ -275,6 +275,7 @@ class GoogleClientTest extends TestCase {
         $this->expectException(InvalidConfigException::class);
         $this->expectExceptionMessage('location');
         new GoogleClient([
+            'api' => 'vertex_ai',
             'project_id' => 'my-project',
             'access_token' => 'token',
         ]);
@@ -287,6 +288,7 @@ class GoogleClientTest extends TestCase {
         $this->expectException(InvalidConfigException::class);
         $this->expectExceptionMessage('project_id');
         new GoogleClient([
+            'api' => 'vertex_ai',
             'location' => 'us-central1',
             'access_token' => 'token',
         ]);
@@ -416,12 +418,13 @@ class GoogleClientTest extends TestCase {
     }
 
     /**
-     * Creates a Vertex AI provider with test configuration using a pre-set access token.
+     * Creates a Google provider with test configuration using a pre-set access token.
      *
      * @return GoogleClient The configured provider instance.
      */
     private function createProvider(): GoogleClient {
         return new GoogleClient([
+            'api' => 'vertex_ai',
             'project_id' => 'my-project',
             'location' => 'us-central1',
             'model' => 'gemini-1.5-pro',
@@ -503,6 +506,7 @@ class GoogleClientTest extends TestCase {
         $this->expectException(InvalidConfigException::class);
         $this->expectExceptionMessage('project_id');
         new GoogleClient([
+            'api' => 'vertex_ai',
             'location' => 'us-central1',
             'access_token' => 'token',
         ]);

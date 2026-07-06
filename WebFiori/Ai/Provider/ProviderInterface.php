@@ -20,7 +20,7 @@ use WebFiori\Ai\Message;
  * Contract for AI provider implementations.
  *
  * This interface defines the common operations that all AI providers
- * (OpenAI, Vertex AI, Anthropic, Bedrock) must implement. Providers
+ * (OpenAI, Google, Anthropic, Bedrock) must implement. Providers
  * that do not support a specific operation should throw
  * {@see \WebFiori\Ai\Exception\UnsupportedFeatureException}.
  *
@@ -76,7 +76,7 @@ interface ProviderInterface {
     /**
      * Returns the name of the provider.
      *
-     * @return string A human-readable provider name (e.g., 'openai', 'vertex_ai').
+     * @return string A human-readable provider name (e.g., 'openai', 'google').
      */
     public function getName(): string;
 

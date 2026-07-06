@@ -3,17 +3,17 @@
 /**
  * Example 03: Provider Comparison (Web)
  *
- * Sends the same prompt to OpenAI and Vertex AI side by side.
- * Start: php -S localhost:8080 -t examples/03-vertex-ai
+ * Sends the same prompt to OpenAI and Google side by side.
+ * Start: php -S localhost:8080 -t examples/03-google
  */
 require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 use WebFiori\Ai\Provider\Google\GoogleClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 
 $openaiResponse = null;
-$vertexResponse = null;
+$googleResponse = null;
 $error = null;
 $userMessage = '';
 
@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
             ]);
             $openaiResponse = $openai->chat($messages);
         }
-    } catch (Throwable $e) {
+    } catch (\Throwable $e) {
         $error = 'OpenAI: '.$e->getMessage();
     }
 
@@ -41,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
         $credentialsFile = __DIR__.'/../../vertex-ai-key.json';
 
         if (getenv('GCP_ACCESS_TOKEN') || getenv('GCP_CREDENTIALS') || file_exists($credentialsFile)) {
-            $vertex = new GoogleClient([
+            $google = new GoogleClient([
                 'api' => getenv('GCP_API') ?: 'gemini',
                 'project_id' => getenv('GCP_PROJECT_ID') ?: null,
                 'location' => getenv('GCP_LOCATION') ?: 'us-central1',
@@ -49,10 +49,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
                 'credentials' => getenv('GCP_CREDENTIALS') ?: $credentialsFile,
                 'access_token' => getenv('GCP_ACCESS_TOKEN') ?: null,
             ]);
-            $vertexResponse = $vertex->chat($messages);
+            $googleResponse = $google->chat($messages);
         }
-    } catch (Throwable $e) {
-        $error = ($error ? $error.' | ' : '').'Vertex AI: '.$e->getMessage();
+    } catch (\Throwable $e) {
+        $error = ($error ? $error.' | ' : '').'Google: '.$e->getMessage();
     }
 }
 ?>
@@ -82,48 +82,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
 </head>
 <body>
     <h1>Provider Comparison</h1>
-    <p class="subtitle">Same prompt, different providers. Compare OpenAI GPT-4o vs Google Gemini 1.5 Pro.</p>
+    <p class="subtitle">Same prompt, different providers. Compare OpenAI GPT-4o vs Google Gemini 2.5 Flash.</p>
 
     <form method="POST">
         <input type="text" name="message" placeholder="Ask something..." value="<?= htmlspecialchars($userMessage) ?>" autofocus>
         <button type="submit">Compare</button>
     </form>
 
-    <?php if ($error) { ?>
+    <?php if ($error): ?>
         <div class="error"><?= htmlspecialchars($error) ?></div>
-    <?php } ?>
+    <?php endif; ?>
 
-    <?php if ($openaiResponse || $vertexResponse) { ?>
+    <?php if ($openaiResponse || $googleResponse): ?>
     <div class="grid">
         <div class="card">
             <h3>OpenAI (GPT-4o)</h3>
-            <?php if ($openaiResponse) { ?>
+            <?php if ($openaiResponse): ?>
                 <pre><?= htmlspecialchars($openaiResponse->getMessage()->getContent()) ?></pre>
                 <div class="meta">
                     Model: <?= htmlspecialchars($openaiResponse->getModel()) ?>
-                    <?php if ($openaiResponse->getUsage()) { ?>
+                    <?php if ($openaiResponse->getUsage()): ?>
                         | Tokens: <?= $openaiResponse->getUsage()->getTotalTokens() ?>
-                    <?php } ?>
+                    <?php endif; ?>
                 </div>
-            <?php } else { ?>
+            <?php else: ?>
                 <p class="na">Set OPENAI_API_KEY to enable.</p>
-            <?php } ?>
+            <?php endif; ?>
         </div>
         <div class="card">
-            <h3>Vertex AI (Gemini 1.5 Pro)</h3>
-            <?php if ($vertexResponse) { ?>
-                <pre><?= htmlspecialchars($vertexResponse->getMessage()->getContent()) ?></pre>
+            <h3>Google (Gemini 2.5 Flash)</h3>
+            <?php if ($googleResponse): ?>
+                <pre><?= htmlspecialchars($googleResponse->getMessage()->getContent()) ?></pre>
                 <div class="meta">
-                    Model: <?= htmlspecialchars($vertexResponse->getModel()) ?>
-                    <?php if ($vertexResponse->getUsage()) { ?>
-                        | Tokens: <?= $vertexResponse->getUsage()->getTotalTokens() ?>
-                    <?php } ?>
+                    Model: <?= htmlspecialchars($googleResponse->getModel()) ?>
+                    <?php if ($googleResponse->getUsage()): ?>
+                        | Tokens: <?= $googleResponse->getUsage()->getTotalTokens() ?>
+                    <?php endif; ?>
                 </div>
-            <?php } else { ?>
-                <p class="na">Set GCP_ACCESS_TOKEN to enable.</p>
-            <?php } ?>
+            <?php else: ?>
+                <p class="na">Set GCP_CREDENTIALS or place vertex-ai-key.json in project root.</p>
+            <?php endif; ?>
         </div>
     </div>
-    <?php } ?>
+    <?php endif; ?>
 </body>
 </html>

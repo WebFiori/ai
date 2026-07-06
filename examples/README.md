@@ -25,7 +25,7 @@ export GCP_ACCESS_TOKEN="ya29...."
 |---|---------|-------------|
 | 01 | [Basic Chat](01-basic-chat/) | Simple chat completion with OpenAI |
 | 02 | [Streaming](02-streaming/) | Real-time token-by-token streaming with a web UI |
-| 03 | [Vertex AI](03-vertex-ai/) | Chat with GCP Vertex AI (Gemini) |
+| 03 | [Google (Gemini)](03-google/) | Chat with Google Gemini models |
 | 04 | [Conversation](04-conversation/) | Multi-turn conversation with persistent history |
 | 05 | [Embeddings](05-embeddings/) | Generate and compare text embeddings |
 | 06 | [Image Generation](06-image-generation/) | Generate images from text prompts with a web UI |

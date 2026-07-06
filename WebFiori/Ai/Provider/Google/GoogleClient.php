@@ -35,13 +35,13 @@ use WebFiori\Ai\Usage;
  * via the Google API or the Gemini API using Gemini models.
  *
  * Configuration options:
- * - 'api' (optional): Which API endpoint to use. Either 'vertex_ai' (default)
- *   or 'gemini'. The Gemini API (generativelanguage.googleapis.com) is simpler
- *   and works with the free tier. Google (aiplatform.googleapis.com) is the
+ * - 'api' (optional): Which API endpoint to use. Either 'gemini' (default)
+ *   or 'vertex_ai'. The Gemini API (generativelanguage.googleapis.com) is simpler
+ *   and works with the free tier. Vertex AI (aiplatform.googleapis.com) is the
  *   enterprise endpoint requiring project_id and location.
  * - 'project_id' (required for vertex_ai API): GCP project ID.
  * - 'location' (required for vertex_ai API): GCP region (e.g., 'us-central1').
- * - 'model' (optional): Default model. Defaults to 'gemini-2.0-flash'.
+ * - 'model' (optional): Default model. Defaults to 'gemini-2.5-flash'.
  * - 'credentials' (required): Path to service account JSON file, or an array
  *   with the credentials, or an access token string.
  * - 'access_token' (optional): Pre-fetched OAuth2 access token. If provided,
@@ -372,7 +372,7 @@ class GoogleClient extends AbstractClient {
      * @return bool True if using the Gemini API, false for Google.
      */
     private function isGeminiApi(): bool {
-        return $this->getConfig('api', 'vertex_ai') === 'gemini';
+        return $this->getConfig('api', 'gemini') === 'gemini';
     }
 
     /**

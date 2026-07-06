@@ -1,9 +1,9 @@
 <?php
 
 /**
- * Example 03: Vertex AI Chat (CLI)
+ * Example 03: Google Gemini Chat (CLI)
  *
- * Run: php examples/03-vertex-ai/chat.php
+ * Run: php examples/03-google/chat.php
  */
 require_once __DIR__.'/../../vendor/autoload.php';
 
