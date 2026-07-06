@@ -1,0 +1,11 @@
+/nbproject
+/vendor/
+composer.lock
+clover.xml
+.phpunit.result.cache
+.php_cs.cache
+.php-cs-fixer.cache
+.idea/*
+*.Identifier
+/tests/.phpunit.cache
+/.vscode
