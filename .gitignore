@@ -9,3 +9,4 @@ clover.xml
 *.Identifier
 /tests/.phpunit.cache
 /.vscode
+vertex-ai-key.json
