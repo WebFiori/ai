@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "webfiori",
+  "private_key_id": "13f1e23fb9a36e7b56658dfeb30063bf2c9dc032",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDRPhf+hf3bMkHE\nQwFHnYHyARozieBGmMPlavp9I5Vh2eswwu8LEwJlVrKZmRnuhlsa4rDGnSv1YOsZ\nZ7hlwFporppnQ4DoOOAhR2HY/hThKzhxl3gtZ2Msl24Y9t+D5dxWYA1Wi00J1ftF\nHGjMtew6dELr93yoRGM7luzcQUSH8kgF9MSbMbaJH8HRrR9eX+g0VMq9YwX6qIvc\nivAnvBEqbGlGfP36FseSmg7aUCH9LrhxyqqujgKYIShwqkQh6aJClDejdHmpDily\n+JlGk9z/4IbsJbmaInLdIHS0JNAgA+1AiQlAaoGrYRG/ZHE8W2nbackSXJ2HdnoB\nyCUijF/XAgMBAAECggEAJ4zQlTv3cUytEK9HmSVE8BzUOoSnn0B12rHfWfL1Y/MA\nWQ2niFTWAZijFpRRSfwcUVci6c/AhNeGaJ1pxdXXYO0L41PnlD1X5AJtlMnl4W+9\ncf8a6J4fqUiQN2jGc9RpUuxB6SdYbvEC1xvZFUSXu67JDXgQmG+gwB01dSZjETzb\nEnqCmwn7RaHRDeOp70MYlR6SXW7Ctv8Gu7lw+1Atsk17vr+fC/uIR9abyDFMlXnj\nHn+P4fE4GHVh1pV1OKuoVYZwAAW5bwjOII/DgOlO55TFjMXrimAbtiojKoYEfCd4\naSNgefbg3aEpMfr6PNPocuKk5/5uBTAcoByjLfk3SQKBgQD9rS9Zq61VthiahEf7\n5DP2nXAS0mEoKzsfsDOAtxqneeVSLNjlXTx31N3fkf7VlP76At7Q34g3YRL5+ufw\njs3NjUcGx1UgMx4SgIoKeoDLK0IyZDn1i9KjVjBbryDtUWXXN52ad1ZhjVEyKhxN\nMQq38S6+9Ajww5pqoNlV21PR3wKBgQDTKLiVF92biLi2PqfcxSMM2o+gY8GPqBBm\ncYxgmLV6tVl4FLRf9bxPMjikphZ816YtwMaKc4BNEO/7ekoF/em/K6PFQLrvLjOE\n+bqt/SZYMLEyDyOhP45FlhbUTUUg2msx2VnWpUxnCFoRYqA5n58odZmkdaeG3x2G\nAdU1dXvhCQKBgFA1nE0sHUiGpUzmGqSoyU1nBnLNFm9PDAi+++ns+36M6leLWqFb\nU61IH0d7sCn0TJLcqXs90qJADXIBRakoXiZqT1TzXhUqVI3hGsSpa2PSL8IjMrhT\nF60RqYSz4SNoo1zjdu/KYAPEXTIRYpV9tjfnCLLUEqeeEYs5hL7C9MPdAoGADSiY\neBIIqUyX1iOJamSOjpqAIMqWoVEj1H529P4PMRpj/OutYd16YqUKipgfBqCZpnhA\n5xfTgvnvOoigXEc6bcNWbVBfVdBXPY4iZ/1CinReVnRDECVZxFRaD9jQ2f9CdtTI\nmGusmy8WDcdLnMupq2fIr0r1qZ31xQgQNUig86ECgYEAyvAKVsElJgiXhxEBCyzS\nl7ngLZD+YmWEqjMPsa12jpesoN0otSwYMbI3HqOuo6GX+FLthhkHl5QwibX1K+rF\nagl6D/rEgi1/tcAZ3k2oAW4mbYl7rzub6ODj33uWb3FMeaXjY6ial4L5d2ClJStv\nnvjSJz9N9QH9UcxsrGTLyDY=\n-----END PRIVATE KEY-----\n",
+  "client_email": "webfiori-ai@webfiori.iam.gserviceaccount.com",
+  "client_id": "106065660857359969800",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/webfiori-ai%40webfiori.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

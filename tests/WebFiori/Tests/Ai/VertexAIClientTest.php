@@ -428,4 +428,83 @@ class VertexAIClientTest extends TestCase {
             'access_token' => 'test-access-token',
         ]);
     }
+
+    /**
+     * @test
+     */
+    public function testGeminiApiEndpoint() {
+        $client = new FakeHttpClient();
+        $client->addResponse(new HttpResponse(200, [], json_encode([
+            'candidates' => [[
+                'content' => ['parts' => [['text' => 'Hi']], 'role' => 'model'],
+                'finishReason' => 'STOP',
+            ]],
+            'usageMetadata' => ['promptTokenCount' => 1, 'candidatesTokenCount' => 1],
+        ])));
+
+        $provider = new VertexAIClient([
+            'api' => 'gemini',
+            'model' => 'gemini-2.0-flash',
+            'access_token' => 'test-token',
+        ]);
+        $provider->setHttpClient($client);
+
+        $provider->chat([new Message('user', 'Hi')]);
+
+        $request = $client->getLastRequest();
+        $this->assertStringContainsString('generativelanguage.googleapis.com', $request->getUrl());
+        $this->assertStringContainsString('v1beta/models/gemini-2.0-flash', $request->getUrl());
+        $this->assertStringContainsString('generateContent', $request->getUrl());
+    }
+
+    /**
+     * @test
+     */
+    public function testGeminiApiStreamEndpoint() {
+        $client = new FakeHttpClient();
+        $client->addStreamingChunks([
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hi\"}],\"role\":\"model\"},\"finishReason\":\"STOP\"}]}\n\n",
+        ]);
+
+        $provider = new VertexAIClient([
+            'api' => 'gemini',
+            'model' => 'gemini-2.0-flash',
+            'access_token' => 'test-token',
+        ]);
+        $provider->setHttpClient($client);
+
+        $provider->streamChat(
+            [new Message('user', 'Hi')],
+            function (string $token) {}
+        );
+
+        $request = $client->getLastRequest();
+        $this->assertStringContainsString('generativelanguage.googleapis.com', $request->getUrl());
+        $this->assertStringContainsString('streamGenerateContent', $request->getUrl());
+    }
+
+    /**
+     * @test
+     */
+    public function testGeminiApiDoesNotRequireProjectId() {
+        // Should not throw — project_id and location not needed for Gemini API
+        $provider = new VertexAIClient([
+            'api' => 'gemini',
+            'access_token' => 'test-token',
+        ]);
+
+        $this->assertEquals('vertex_ai', $provider->getName());
+    }
+
+    /**
+     * @test
+     */
+    public function testVertexAiApiStillRequiresProjectId() {
+        $this->expectException(InvalidConfigException::class);
+        $this->expectExceptionMessage('project_id');
+        new VertexAIClient([
+            'location' => 'us-central1',
+            'access_token' => 'token',
+        ]);
+    }
 }
