@@ -10,7 +10,7 @@ require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
-use WebFiori\Ai\Provider\VertexAI\VertexAIClient;
+use WebFiori\Ai\Provider\Google\GoogleClient;
 
 $openaiResponse = null;
 $vertexResponse = null;
@@ -38,12 +38,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
     }
 
     try {
-        if (getenv('GCP_ACCESS_TOKEN')) {
-            $vertex = new VertexAIClient([
-                'project_id' => getenv('GCP_PROJECT_ID'),
+        $credentialsFile = __DIR__.'/../../vertex-ai-key.json';
+
+        if (getenv('GCP_ACCESS_TOKEN') || getenv('GCP_CREDENTIALS') || file_exists($credentialsFile)) {
+            $vertex = new GoogleClient([
+                'api' => getenv('GCP_API') ?: 'gemini',
+                'project_id' => getenv('GCP_PROJECT_ID') ?: null,
                 'location' => getenv('GCP_LOCATION') ?: 'us-central1',
-                'model' => 'gemini-1.5-pro',
-                'access_token' => getenv('GCP_ACCESS_TOKEN'),
+                'model' => getenv('GCP_MODEL') ?: 'gemini-2.5-flash',
+                'credentials' => getenv('GCP_CREDENTIALS') ?: $credentialsFile,
+                'access_token' => getenv('GCP_ACCESS_TOKEN') ?: null,
             ]);
             $vertexResponse = $vertex->chat($messages);
         }

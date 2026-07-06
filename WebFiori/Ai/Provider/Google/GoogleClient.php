@@ -8,7 +8,7 @@
  * For more information on the license, please visit:
  * https://github.com/WebFiori/ai/blob/main/LICENSE
  */
-namespace WebFiori\Ai\Provider\VertexAI;
+namespace WebFiori\Ai\Provider\Google;
 
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\EmbeddingResponse;
@@ -29,15 +29,15 @@ use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Usage;
 
 /**
- * Google Cloud Vertex AI (Gemini) provider implementation.
+ * Google Cloud Google (Gemini) provider implementation.
  *
  * Supports chat completions, streaming, embeddings, and image generation
- * via the Vertex AI API or the Gemini API using Gemini models.
+ * via the Google API or the Gemini API using Gemini models.
  *
  * Configuration options:
  * - 'api' (optional): Which API endpoint to use. Either 'vertex_ai' (default)
  *   or 'gemini'. The Gemini API (generativelanguage.googleapis.com) is simpler
- *   and works with the free tier. Vertex AI (aiplatform.googleapis.com) is the
+ *   and works with the free tier. Google (aiplatform.googleapis.com) is the
  *   enterprise endpoint requiring project_id and location.
  * - 'project_id' (required for vertex_ai API): GCP project ID.
  * - 'location' (required for vertex_ai API): GCP region (e.g., 'us-central1').
@@ -49,7 +49,7 @@ use WebFiori\Ai\Usage;
  *
  * @author Ibrahim
  */
-class VertexAIClient extends AbstractClient {
+class GoogleClient extends AbstractClient {
     /**
      * Cached OAuth2 access token.
      *
@@ -70,7 +70,7 @@ class VertexAIClient extends AbstractClient {
      * @return string The provider identifier.
      */
     public function getName(): string {
-        return 'vertex_ai';
+        return 'google';
     }
 
     /**
@@ -105,7 +105,7 @@ class VertexAIClient extends AbstractClient {
     /**
      * Extracts the system instruction from messages.
      *
-     * Vertex AI handles system messages as a separate top-level field.
+     * Google handles system messages as a separate top-level field.
      *
      * @param Message[] $messages The conversation messages.
      *
@@ -124,7 +124,7 @@ class VertexAIClient extends AbstractClient {
     }
 
     /**
-     * Formats Message objects into Vertex AI contents format.
+     * Formats Message objects into Google contents format.
      *
      * Filters out system messages (handled separately) and maps roles.
      *
@@ -228,7 +228,7 @@ class VertexAIClient extends AbstractClient {
 
         if (!$success) {
             throw new AuthenticationException(
-                'Failed to sign JWT for Vertex AI authentication.',
+                'Failed to sign JWT for Google authentication.',
                 401
             );
         }
@@ -293,7 +293,7 @@ class VertexAIClient extends AbstractClient {
 
         if (!is_array($credentials)) {
             throw new AuthenticationException(
-                'Invalid credentials configuration for Vertex AI provider.',
+                'Invalid credentials configuration for Google provider.',
                 401
             );
         }
@@ -335,7 +335,7 @@ class VertexAIClient extends AbstractClient {
     }
 
     /**
-     * Returns the HTTP headers for Vertex AI API requests.
+     * Returns the HTTP headers for Google API requests.
      *
      * @return array<string, string> The headers array.
      */
@@ -347,9 +347,9 @@ class VertexAIClient extends AbstractClient {
     }
 
     /**
-     * Maps Vertex AI finish reason to a normalized string.
+     * Maps Google finish reason to a normalized string.
      *
-     * @param string $reason The Vertex AI finish reason.
+     * @param string $reason The Google finish reason.
      *
      * @return string|null The normalized finish reason.
      */
@@ -367,9 +367,9 @@ class VertexAIClient extends AbstractClient {
      * Returns whether the Gemini API endpoint should be used.
      *
      * When 'api' is set to 'gemini', uses generativelanguage.googleapis.com.
-     * Otherwise uses the Vertex AI aiplatform.googleapis.com endpoint.
+     * Otherwise uses the Google aiplatform.googleapis.com endpoint.
      *
-     * @return bool True if using the Gemini API, false for Vertex AI.
+     * @return bool True if using the Gemini API, false for Google.
      */
     private function isGeminiApi(): bool {
         return $this->getConfig('api', 'vertex_ai') === 'gemini';
@@ -597,7 +597,7 @@ class VertexAIClient extends AbstractClient {
 
         $body = json_decode($response->getBody(), true);
         $error = $body['error'] ?? [];
-        $errorMessage = $error['message'] ?? 'Unknown Vertex AI error';
+        $errorMessage = $error['message'] ?? 'Unknown Google error';
         $errorCode = $error['status'] ?? null;
 
         if ($status === 401 || $status === 403) {
@@ -619,7 +619,7 @@ class VertexAIClient extends AbstractClient {
     /**
      * Parses an HTTP response into a ChatResponse.
      *
-     * @param HttpResponse $response The HTTP response from Vertex AI.
+     * @param HttpResponse $response The HTTP response from Google.
      *
      * @return ChatResponse The parsed chat response.
      */
@@ -683,7 +683,7 @@ class VertexAIClient extends AbstractClient {
     /**
      * Parses an HTTP response into an EmbeddingResponse.
      *
-     * @param HttpResponse $response The HTTP response from Vertex AI.
+     * @param HttpResponse $response The HTTP response from Google.
      *
      * @return EmbeddingResponse The parsed embedding response.
      */
@@ -703,7 +703,7 @@ class VertexAIClient extends AbstractClient {
     /**
      * Parses an HTTP response into an ImageResponse.
      *
-     * @param HttpResponse $response The HTTP response from Vertex AI.
+     * @param HttpResponse $response The HTTP response from Google.
      *
      * @return ImageResponse The parsed image response.
      */
@@ -735,14 +735,14 @@ class VertexAIClient extends AbstractClient {
         if (!$this->isGeminiApi()) {
             if (empty($config['project_id'])) {
                 throw new InvalidConfigException(
-                    'The "project_id" configuration option is required for Vertex AI provider.',
+                    'The "project_id" configuration option is required for Google provider.',
                     'project_id'
                 );
             }
 
             if (empty($config['location'])) {
                 throw new InvalidConfigException(
-                    'The "location" configuration option is required for Vertex AI provider.',
+                    'The "location" configuration option is required for Google provider.',
                     'location'
                 );
             }
@@ -750,7 +750,7 @@ class VertexAIClient extends AbstractClient {
 
         if (empty($config['credentials']) && empty($config['access_token'])) {
             throw new InvalidConfigException(
-                'Either "credentials" or "access_token" is required for Vertex AI provider.',
+                'Either "credentials" or "access_token" is required for Google provider.',
                 'credentials'
             );
         }

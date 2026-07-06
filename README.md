@@ -1,6 +1,6 @@
 # WebFiori AI
 
-A provider-agnostic AI library for PHP. Supports chat completions, embeddings, image generation, tool calling, and streaming across multiple providers (OpenAI, Google Vertex AI, Anthropic, AWS Bedrock).
+A provider-agnostic AI library for PHP. Supports chat completions, embeddings, image generation, tool calling, and streaming across multiple providers (OpenAI, Google Google, Anthropic, AWS Bedrock).
 
 <p align="center">
   <a href="https://github.com/WebFiori/ai/actions">
@@ -22,7 +22,7 @@ A provider-agnostic AI library for PHP. Supports chat completions, embeddings, i
 
 ## Key Features
 
-- **Provider-Agnostic** — Common interface across OpenAI, Google Vertex AI, Anthropic, and AWS Bedrock
+- **Provider-Agnostic** — Common interface across OpenAI, Google Google, Anthropic, and AWS Bedrock
 - **Chat Completions** — Send messages and receive AI-generated responses
 - **Streaming** — Token-by-token streaming via Server-Sent Events
 - **Embeddings** — Generate vector embeddings for semantic search
@@ -85,9 +85,9 @@ $client->streamChat(
 ### Multiple Providers
 
 ```php
-use WebFiori\Ai\Provider\VertexAI\VertexAIClient;
+use WebFiori\Ai\Provider\Google\GoogleClient;
 
-$client = new VertexAIClient([
+$client = new GoogleClient([
     'project_id' => 'my-project',
     'location' => 'us-central1',
     'model' => 'gemini-1.5-pro',
