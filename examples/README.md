@@ -10,6 +10,8 @@ Install dependencies from the project root:
 composer install
 ```
 
+For Google/Gemini examples, see the [Google Cloud Setup Guide](GOOGLE_SETUP.md).
+
 Set your API keys as environment variables:
 
 ```bash
