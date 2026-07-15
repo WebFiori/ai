@@ -1,20 +1,22 @@
 <?php
 
 /**
- * Example 03: Vertex AI Chat (CLI)
+ * Example 03: Google Gemini Chat (CLI)
  *
- * Run: php examples/03-vertex-ai/chat.php
+ * Run: php examples/03-google/chat.php
  */
 require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\VertexAI\VertexAIClient;
+use WebFiori\Ai\Provider\Google\GoogleClient;
 
-$provider = new VertexAIClient([
-    'project_id' => getenv('GCP_PROJECT_ID'),
+$provider = new GoogleClient([
+    'api' => getenv('GCP_API') ?: 'gemini',
+    'project_id' => getenv('GCP_PROJECT_ID') ?: null,
     'location' => getenv('GCP_LOCATION') ?: 'us-central1',
-    'model' => 'gemini-1.5-pro',
-    'access_token' => getenv('GCP_ACCESS_TOKEN'),
+    'model' => getenv('GCP_MODEL') ?: 'gemini-2.5-flash',
+    'credentials' => getenv('GCP_CREDENTIALS') ?: __DIR__.'/../../vertex-ai-key.json',
+    'access_token' => getenv('GCP_ACCESS_TOKEN') ?: null,
 ]);
 
 $response = $provider->chat([

@@ -18,16 +18,16 @@ use WebFiori\Ai\Exception\RateLimitException;
 use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\VertexAI\VertexAIClient;
+use WebFiori\Ai\Provider\Google\GoogleClient;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolResult;
 
 /**
- * Unit tests for the Vertex AI provider.
+ * Unit tests for the Google provider.
  *
  * @author Ibrahim
  */
-class VertexAIClientTest extends TestCase {
+class GoogleClientTest extends TestCase {
     /**
      * @test
      */
@@ -253,7 +253,7 @@ class VertexAIClientTest extends TestCase {
      */
     public function testGetName() {
         $provider = $this->createProvider();
-        $this->assertEquals('vertex_ai', $provider->getName());
+        $this->assertEquals('google', $provider->getName());
     }
 
     /**
@@ -262,7 +262,7 @@ class VertexAIClientTest extends TestCase {
     public function testMissingCredentialsThrows() {
         $this->expectException(InvalidConfigException::class);
         $this->expectExceptionMessage('credentials');
-        new VertexAIClient([
+        new GoogleClient([
             'project_id' => 'my-project',
             'location' => 'us-central1',
         ]);
@@ -274,7 +274,8 @@ class VertexAIClientTest extends TestCase {
     public function testMissingLocationThrows() {
         $this->expectException(InvalidConfigException::class);
         $this->expectExceptionMessage('location');
-        new VertexAIClient([
+        new GoogleClient([
+            'api' => 'vertex_ai',
             'project_id' => 'my-project',
             'access_token' => 'token',
         ]);
@@ -286,7 +287,8 @@ class VertexAIClientTest extends TestCase {
     public function testMissingProjectIdThrows() {
         $this->expectException(InvalidConfigException::class);
         $this->expectExceptionMessage('project_id');
-        new VertexAIClient([
+        new GoogleClient([
+            'api' => 'vertex_ai',
             'location' => 'us-central1',
             'access_token' => 'token',
         ]);
@@ -416,16 +418,97 @@ class VertexAIClientTest extends TestCase {
     }
 
     /**
-     * Creates a Vertex AI provider with test configuration using a pre-set access token.
+     * Creates a Google provider with test configuration using a pre-set access token.
      *
-     * @return VertexAIClient The configured provider instance.
+     * @return GoogleClient The configured provider instance.
      */
-    private function createProvider(): VertexAIClient {
-        return new VertexAIClient([
+    private function createProvider(): GoogleClient {
+        return new GoogleClient([
+            'api' => 'vertex_ai',
             'project_id' => 'my-project',
             'location' => 'us-central1',
             'model' => 'gemini-1.5-pro',
             'access_token' => 'test-access-token',
+        ]);
+    }
+
+    /**
+     * @test
+     */
+    public function testGeminiApiEndpoint() {
+        $client = new FakeHttpClient();
+        $client->addResponse(new HttpResponse(200, [], json_encode([
+            'candidates' => [[
+                'content' => ['parts' => [['text' => 'Hi']], 'role' => 'model'],
+                'finishReason' => 'STOP',
+            ]],
+            'usageMetadata' => ['promptTokenCount' => 1, 'candidatesTokenCount' => 1],
+        ])));
+
+        $provider = new GoogleClient([
+            'api' => 'gemini',
+            'model' => 'gemini-2.0-flash',
+            'access_token' => 'test-token',
+        ]);
+        $provider->setHttpClient($client);
+
+        $provider->chat([new Message('user', 'Hi')]);
+
+        $request = $client->getLastRequest();
+        $this->assertStringContainsString('generativelanguage.googleapis.com', $request->getUrl());
+        $this->assertStringContainsString('v1beta/models/gemini-2.0-flash', $request->getUrl());
+        $this->assertStringContainsString('generateContent', $request->getUrl());
+    }
+
+    /**
+     * @test
+     */
+    public function testGeminiApiStreamEndpoint() {
+        $client = new FakeHttpClient();
+        $client->addStreamingChunks([
+            "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hi\"}],\"role\":\"model\"},\"finishReason\":\"STOP\"}]}\n\n",
+        ]);
+
+        $provider = new GoogleClient([
+            'api' => 'gemini',
+            'model' => 'gemini-2.0-flash',
+            'access_token' => 'test-token',
+        ]);
+        $provider->setHttpClient($client);
+
+        $provider->streamChat(
+            [new Message('user', 'Hi')],
+            function (string $token) {}
+        );
+
+        $request = $client->getLastRequest();
+        $this->assertStringContainsString('generativelanguage.googleapis.com', $request->getUrl());
+        $this->assertStringContainsString('streamGenerateContent', $request->getUrl());
+    }
+
+    /**
+     * @test
+     */
+    public function testGeminiApiDoesNotRequireProjectId() {
+        // Should not throw — project_id and location not needed for Gemini API
+        $provider = new GoogleClient([
+            'api' => 'gemini',
+            'access_token' => 'test-token',
+        ]);
+
+        $this->assertEquals('google', $provider->getName());
+    }
+
+    /**
+     * @test
+     */
+    public function testVertexAiApiStillRequiresProjectId() {
+        $this->expectException(InvalidConfigException::class);
+        $this->expectExceptionMessage('project_id');
+        new GoogleClient([
+            'api' => 'vertex_ai',
+            'location' => 'us-central1',
+            'access_token' => 'token',
         ]);
     }
 }

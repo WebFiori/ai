@@ -1,19 +1,22 @@
 # 05 — Embeddings
 
-Generate vector embeddings from text and compute similarity between texts.
+Generate vector embeddings from text, compute similarity, and perform semantic search with vector storage.
 
 ## What It Demonstrates
 
 - Generating embeddings using `embed()`
 - Batch embedding multiple texts
 - Computing cosine similarity between vectors
-- Practical semantic search use case
+- Storing vectors in `InMemoryVectorStore` with metadata
+- Querying by semantic similarity
+- Filtering query results by metadata
 
 ## Files
 
 | File | Description |
 |------|-------------|
 | `embed.php` | CLI script — embed texts and compute similarity |
+| `search.php` | CLI script — semantic search with vector storage |
 | `index.php` | Web page — semantic similarity calculator |
 
 ## Running
@@ -22,6 +25,7 @@ Generate vector embeddings from text and compute similarity between texts.
 
 ```bash
 php examples/05-embeddings/embed.php
+php examples/05-embeddings/search.php
 ```
 
 ### Web

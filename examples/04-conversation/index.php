@@ -11,7 +11,7 @@ require_once __DIR__.'/../../vendor/autoload.php';
 use WebFiori\Ai\Conversation\Conversation;
 use WebFiori\Ai\Conversation\InMemoryStorage;
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\Google\GoogleClient;
 
 session_start();
 
@@ -39,9 +39,10 @@ $error = null;
 // Handle new message
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
     try {
-        $provider = new OpenAIClient([
-            'api_key' => getenv('OPENAI_API_KEY'),
-            'model' => 'gpt-4o',
+        $provider = new GoogleClient([
+            'api' => 'gemini',
+            'model' => 'gemini-2.5-flash',
+            'credentials' => __DIR__.'/../../vertex-ai-key.json',
         ]);
 
         $conversation = new Conversation($provider, $storage, 'web-session');

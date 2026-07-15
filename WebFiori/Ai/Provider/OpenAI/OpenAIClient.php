@@ -26,6 +26,7 @@ use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\AbstractClient;
 use WebFiori\Ai\Tool\ToolCall;
+use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Usage;
 
 /**
@@ -69,6 +70,10 @@ class OpenAIClient extends AbstractClient {
                 $body[$option] = $options[$option];
             }
         }
+
+        if (isset($options['tools']) && count($options['tools']) > 0) {
+            $body['tools'] = $this->formatTools($options['tools']);
+        }
     }
 
     /**
@@ -108,6 +113,30 @@ class OpenAIClient extends AbstractClient {
             }
 
             $formatted[] = $entry;
+        }
+
+        return $formatted;
+    }
+
+    /**
+     * Formats ToolInterface instances into the OpenAI tools format.
+     *
+     * @param ToolInterface[] $tools The tools to format.
+     *
+     * @return array<int, array<string, mixed>> The formatted tools array.
+     */
+    private function formatTools(array $tools): array {
+        $formatted = [];
+
+        foreach ($tools as $tool) {
+            $formatted[] = [
+                'type' => 'function',
+                'function' => [
+                    'name' => $tool->getName(),
+                    'description' => $tool->getDescription(),
+                    'parameters' => $tool->getParameters(),
+                ],
+            ];
         }
 
         return $formatted;

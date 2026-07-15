@@ -8,7 +8,7 @@
  * For more information on the license, please visit:
  * https://github.com/WebFiori/ai/blob/main/LICENSE
  */
-namespace WebFiori\Ai\Provider\VertexAI;
+namespace WebFiori\Ai\Provider\Google;
 
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\EmbeddingResponse;
@@ -26,18 +26,23 @@ use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\AbstractClient;
 use WebFiori\Ai\Tool\ToolCall;
+use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Usage;
 
 /**
- * Google Cloud Vertex AI (Gemini) provider implementation.
+ * Google Cloud Google (Gemini) provider implementation.
  *
  * Supports chat completions, streaming, embeddings, and image generation
- * via the Vertex AI API using Gemini models.
+ * via the Google API or the Gemini API using Gemini models.
  *
  * Configuration options:
- * - 'project_id' (required): GCP project ID.
- * - 'location' (required): GCP region (e.g., 'us-central1').
- * - 'model' (optional): Default model. Defaults to 'gemini-1.5-pro'.
+ * - 'api' (optional): Which API endpoint to use. Either 'gemini' (default)
+ *   or 'vertex_ai'. The Gemini API (generativelanguage.googleapis.com) is simpler
+ *   and works with the free tier. Vertex AI (aiplatform.googleapis.com) is the
+ *   enterprise endpoint requiring project_id and location.
+ * - 'project_id' (required for vertex_ai API): GCP project ID.
+ * - 'location' (required for vertex_ai API): GCP region (e.g., 'us-central1').
+ * - 'model' (optional): Default model. Defaults to 'gemini-2.5-flash'.
  * - 'credentials' (required): Path to service account JSON file, or an array
  *   with the credentials, or an access token string.
  * - 'access_token' (optional): Pre-fetched OAuth2 access token. If provided,
@@ -45,7 +50,7 @@ use WebFiori\Ai\Usage;
  *
  * @author Ibrahim
  */
-class VertexAIClient extends AbstractClient {
+class GoogleClient extends AbstractClient {
     /**
      * Cached OAuth2 access token.
      *
@@ -66,7 +71,7 @@ class VertexAIClient extends AbstractClient {
      * @return string The provider identifier.
      */
     public function getName(): string {
-        return 'vertex_ai';
+        return 'google';
     }
 
     /**
@@ -101,7 +106,7 @@ class VertexAIClient extends AbstractClient {
     /**
      * Extracts the system instruction from messages.
      *
-     * Vertex AI handles system messages as a separate top-level field.
+     * Google handles system messages as a separate top-level field.
      *
      * @param Message[] $messages The conversation messages.
      *
@@ -120,7 +125,7 @@ class VertexAIClient extends AbstractClient {
     }
 
     /**
-     * Formats Message objects into Vertex AI contents format.
+     * Formats Message objects into Google contents format.
      *
      * Filters out system messages (handled separately) and maps roles.
      *
@@ -185,6 +190,29 @@ class VertexAIClient extends AbstractClient {
     }
 
     /**
+     * Formats ToolInterface instances into the Google tools format.
+     *
+     * Google uses 'functionDeclarations' inside a tools array.
+     *
+     * @param ToolInterface[] $tools The tools to format.
+     *
+     * @return array<int, array<string, mixed>> The formatted tools array.
+     */
+    private function formatTools(array $tools): array {
+        $declarations = [];
+
+        foreach ($tools as $tool) {
+            $declarations[] = [
+                'name' => $tool->getName(),
+                'description' => $tool->getDescription(),
+                'parameters' => $tool->getParameters(),
+            ];
+        }
+
+        return [['functionDeclarations' => $declarations]];
+    }
+
+    /**
      * Generates an OAuth2 access token from service account credentials.
      *
      * Creates a self-signed JWT and exchanges it for an access token
@@ -199,9 +227,16 @@ class VertexAIClient extends AbstractClient {
     private function generateAccessToken(array $credentials): string {
         $now = time();
         $header = json_encode(['alg' => 'RS256', 'typ' => 'JWT']);
+
+        $scope = 'https://www.googleapis.com/auth/cloud-platform';
+
+        if ($this->isGeminiApi()) {
+            $scope .= ' https://www.googleapis.com/auth/generative-language';
+        }
+
         $claim = json_encode([
             'iss' => $credentials['client_email'] ?? '',
-            'scope' => 'https://www.googleapis.com/auth/cloud-platform',
+            'scope' => $scope,
             'aud' => 'https://oauth2.googleapis.com/token',
             'iat' => $now,
             'exp' => $now + 3600,
@@ -217,7 +252,7 @@ class VertexAIClient extends AbstractClient {
 
         if (!$success) {
             throw new AuthenticationException(
-                'Failed to sign JWT for Vertex AI authentication.',
+                'Failed to sign JWT for Google authentication.',
                 401
             );
         }
@@ -282,7 +317,7 @@ class VertexAIClient extends AbstractClient {
 
         if (!is_array($credentials)) {
             throw new AuthenticationException(
-                'Invalid credentials configuration for Vertex AI provider.',
+                'Invalid credentials configuration for Google provider.',
                 401
             );
         }
@@ -302,6 +337,14 @@ class VertexAIClient extends AbstractClient {
      * @return string The full URL.
      */
     private function getEndpoint(string $model, string $action): string {
+        if ($this->isGeminiApi()) {
+            return sprintf(
+                'https://generativelanguage.googleapis.com/v1beta/models/%s:%s',
+                $model,
+                $action
+            );
+        }
+
         $projectId = $this->getConfig('project_id');
         $location = $this->getConfig('location');
 
@@ -316,7 +359,7 @@ class VertexAIClient extends AbstractClient {
     }
 
     /**
-     * Returns the HTTP headers for Vertex AI API requests.
+     * Returns the HTTP headers for Google API requests.
      *
      * @return array<string, string> The headers array.
      */
@@ -328,9 +371,21 @@ class VertexAIClient extends AbstractClient {
     }
 
     /**
-     * Maps Vertex AI finish reason to a normalized string.
+     * Returns whether the Gemini API endpoint should be used.
      *
-     * @param string $reason The Vertex AI finish reason.
+     * When 'api' is set to 'gemini', uses generativelanguage.googleapis.com.
+     * Otherwise uses the Google aiplatform.googleapis.com endpoint.
+     *
+     * @return bool True if using the Gemini API, false for Google.
+     */
+    private function isGeminiApi(): bool {
+        return $this->getConfig('api', 'gemini') === 'gemini';
+    }
+
+    /**
+     * Maps Google finish reason to a normalized string.
+     *
+     * @param string $reason The Google finish reason.
      *
      * @return string|null The normalized finish reason.
      */
@@ -353,7 +408,7 @@ class VertexAIClient extends AbstractClient {
      * @return HttpRequest The HTTP request to send.
      */
     protected function buildChatRequest(array $messages, array $options): HttpRequest {
-        $model = $options['model'] ?? $this->getConfig('model', 'gemini-1.5-pro');
+        $model = $options['model'] ?? $this->getConfig('model', 'gemini-2.5-flash');
         $body = [
             'contents' => $this->formatContents($messages),
         ];
@@ -368,6 +423,10 @@ class VertexAIClient extends AbstractClient {
 
         if (!empty($generationConfig)) {
             $body['generationConfig'] = $generationConfig;
+        }
+
+        if (isset($options['tools']) && count($options['tools']) > 0) {
+            $body['tools'] = $this->formatTools($options['tools']);
         }
 
         return new HttpRequest(
@@ -389,6 +448,40 @@ class VertexAIClient extends AbstractClient {
     protected function buildEmbedRequest(string|array $input, array $options): HttpRequest {
         $model = $options['model'] ?? $this->getConfig('embedding_model', 'text-embedding-004');
         $texts = is_array($input) ? $input : [$input];
+
+        if ($this->isGeminiApi()) {
+            if (count($texts) === 1) {
+                $body = [
+                    'model' => "models/$model",
+                    'content' => ['parts' => [['text' => $texts[0]]]],
+                ];
+
+                return new HttpRequest(
+                    'POST',
+                    $this->getEndpoint($model, 'embedContent'),
+                    $this->getHeaders(),
+                    json_encode($body)
+                );
+            }
+
+            $requests = [];
+
+            foreach ($texts as $text) {
+                $requests[] = [
+                    'model' => "models/$model",
+                    'content' => ['parts' => [['text' => $text]]],
+                ];
+            }
+
+            $body = ['requests' => $requests];
+
+            return new HttpRequest(
+                'POST',
+                $this->getEndpoint($model, 'batchEmbedContents'),
+                $this->getHeaders(),
+                json_encode($body)
+            );
+        }
 
         $instances = [];
 
@@ -445,7 +538,7 @@ class VertexAIClient extends AbstractClient {
      * @return HttpRequest The HTTP request to send.
      */
     protected function buildStreamChatRequest(array $messages, array $options): HttpRequest {
-        $model = $options['model'] ?? $this->getConfig('model', 'gemini-1.5-pro');
+        $model = $options['model'] ?? $this->getConfig('model', 'gemini-2.5-flash');
         $body = [
             'contents' => $this->formatContents($messages),
         ];
@@ -460,6 +553,10 @@ class VertexAIClient extends AbstractClient {
 
         if (!empty($generationConfig)) {
             $body['generationConfig'] = $generationConfig;
+        }
+
+        if (isset($options['tools']) && count($options['tools']) > 0) {
+            $body['tools'] = $this->formatTools($options['tools']);
         }
 
         return new HttpRequest(
@@ -485,7 +582,7 @@ class VertexAIClient extends AbstractClient {
         ?callable $onError
     ): void {
         $accumulatedContent = '';
-        $model = $this->getConfig('model', 'gemini-1.5-pro');
+        $model = $this->getConfig('model', 'gemini-2.5-flash');
         $finishReason = null;
         $usage = null;
 
@@ -566,7 +663,7 @@ class VertexAIClient extends AbstractClient {
 
         $body = json_decode($response->getBody(), true);
         $error = $body['error'] ?? [];
-        $errorMessage = $error['message'] ?? 'Unknown Vertex AI error';
+        $errorMessage = $error['message'] ?? 'Unknown Google error';
         $errorCode = $error['status'] ?? null;
 
         if ($status === 401 || $status === 403) {
@@ -588,7 +685,7 @@ class VertexAIClient extends AbstractClient {
     /**
      * Parses an HTTP response into a ChatResponse.
      *
-     * @param HttpResponse $response The HTTP response from Vertex AI.
+     * @param HttpResponse $response The HTTP response from Google.
      *
      * @return ChatResponse The parsed chat response.
      */
@@ -599,7 +696,7 @@ class VertexAIClient extends AbstractClient {
         if (empty($candidates)) {
             return new ChatResponse(
                 new Message('assistant', ''),
-                $this->getConfig('model', 'gemini-1.5-pro'),
+                $this->getConfig('model', 'gemini-2.5-flash'),
                 null,
                 null
             );
@@ -643,7 +740,7 @@ class VertexAIClient extends AbstractClient {
 
         return new ChatResponse(
             $message,
-            $data['modelVersion'] ?? $this->getConfig('model', 'gemini-1.5-pro'),
+            $data['modelVersion'] ?? $this->getConfig('model', 'gemini-2.5-flash'),
             $usage,
             $finishReason
         );
@@ -652,7 +749,7 @@ class VertexAIClient extends AbstractClient {
     /**
      * Parses an HTTP response into an EmbeddingResponse.
      *
-     * @param HttpResponse $response The HTTP response from Vertex AI.
+     * @param HttpResponse $response The HTTP response from Google.
      *
      * @return EmbeddingResponse The parsed embedding response.
      */
@@ -660,8 +757,20 @@ class VertexAIClient extends AbstractClient {
         $data = $response->getJson();
         $vectors = [];
 
-        foreach ($data['predictions'] ?? [] as $prediction) {
-            $vectors[] = $prediction['embeddings']['values'] ?? [];
+        if ($this->isGeminiApi()) {
+            if (isset($data['embedding'])) {
+                // Single embedContent response
+                $vectors[] = $data['embedding']['values'] ?? [];
+            } else {
+                // batchEmbedContents response
+                foreach ($data['embeddings'] ?? [] as $embedding) {
+                    $vectors[] = $embedding['values'] ?? [];
+                }
+            }
+        } else {
+            foreach ($data['predictions'] ?? [] as $prediction) {
+                $vectors[] = $prediction['embeddings']['values'] ?? [];
+            }
         }
 
         $model = $this->getConfig('embedding_model', 'text-embedding-004');
@@ -672,7 +781,7 @@ class VertexAIClient extends AbstractClient {
     /**
      * Parses an HTTP response into an ImageResponse.
      *
-     * @param HttpResponse $response The HTTP response from Vertex AI.
+     * @param HttpResponse $response The HTTP response from Google.
      *
      * @return ImageResponse The parsed image response.
      */
@@ -701,23 +810,25 @@ class VertexAIClient extends AbstractClient {
      * @throws InvalidConfigException If required options are missing.
      */
     protected function validateConfig(array $config): void {
-        if (empty($config['project_id'])) {
-            throw new InvalidConfigException(
-                'The "project_id" configuration option is required for Vertex AI provider.',
-                'project_id'
-            );
-        }
+        if (!$this->isGeminiApi()) {
+            if (empty($config['project_id'])) {
+                throw new InvalidConfigException(
+                    'The "project_id" configuration option is required for Google provider.',
+                    'project_id'
+                );
+            }
 
-        if (empty($config['location'])) {
-            throw new InvalidConfigException(
-                'The "location" configuration option is required for Vertex AI provider.',
-                'location'
-            );
+            if (empty($config['location'])) {
+                throw new InvalidConfigException(
+                    'The "location" configuration option is required for Google provider.',
+                    'location'
+                );
+            }
         }
 
         if (empty($config['credentials']) && empty($config['access_token'])) {
             throw new InvalidConfigException(
-                'Either "credentials" or "access_token" is required for Vertex AI provider.',
+                'Either "credentials" or "access_token" is required for Google provider.',
                 'credentials'
             );
         }
