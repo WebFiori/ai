@@ -88,8 +88,8 @@ $client->streamChat(
 use WebFiori\Ai\Provider\Google\GoogleClient;
 
 $client = new GoogleClient([
+    'api_key' => 'your-gemini-api-key',
     'model' => 'gemini-2.5-flash',
-    'credentials' => '/path/to/service-account.json',
 ]);
 
 $response = $client->chat([

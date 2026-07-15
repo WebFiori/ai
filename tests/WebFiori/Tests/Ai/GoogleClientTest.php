@@ -511,4 +511,44 @@ class GoogleClientTest extends TestCase {
             'access_token' => 'token',
         ]);
     }
+
+    /**
+     * @test
+     */
+    public function testApiKeyAuthentication() {
+        $client = new FakeHttpClient();
+        $client->addResponse(new HttpResponse(200, [], json_encode([
+            'candidates' => [[
+                'content' => ['parts' => [['text' => 'Hello']], 'role' => 'model'],
+                'finishReason' => 'STOP',
+            ]],
+        ])));
+
+        $provider = new GoogleClient([
+            'api' => 'gemini',
+            'api_key' => 'test-api-key-123',
+            'model' => 'gemini-2.5-flash',
+        ]);
+        $provider->setHttpClient($client);
+
+        $provider->chat([new Message('user', 'Hi')]);
+
+        $request = $client->getLastRequest();
+        // API key should be in URL as query parameter
+        $this->assertStringContainsString('?key=test-api-key-123', $request->getUrl());
+        // No Authorization header
+        $this->assertArrayNotHasKey('Authorization', $request->getHeaders());
+    }
+
+    /**
+     * @test
+     */
+    public function testApiKeyDoesNotRequireCredentials() {
+        $provider = new GoogleClient([
+            'api' => 'gemini',
+            'api_key' => 'test-key',
+        ]);
+
+        $this->assertEquals('google', $provider->getName());
+    }
 }

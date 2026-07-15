@@ -8,12 +8,26 @@ The Gemini API via Google AI Studio is the simplest way to get started. No GCP p
 
 1. Go to [Google AI Studio](https://aistudio.google.com/apikey)
 2. Click **Create API Key**
-3. Copy the key and use it as an access token:
+3. Copy the key and use it in your code:
 
 ```php
 $provider = new GoogleClient([
     'api' => 'gemini',
-    'access_token' => 'YOUR_API_KEY',
+    'api_key' => 'YOUR_API_KEY',
+    'model' => 'gemini-2.5-flash',
+]);
+```
+
+Or set it as an environment variable:
+
+```bash
+export GEMINI_API_KEY="your-api-key-here"
+```
+
+```php
+$provider = new GoogleClient([
+    'api' => 'gemini',
+    'api_key' => getenv('GEMINI_API_KEY'),
     'model' => 'gemini-2.5-flash',
 ]);
 ```

@@ -40,13 +40,17 @@ use WebFiori\Ai\Usage;
  *   or 'vertex_ai'. The Gemini API (generativelanguage.googleapis.com) is simpler
  *   and works with the free tier. Vertex AI (aiplatform.googleapis.com) is the
  *   enterprise endpoint requiring project_id and location.
+ * - 'api_key' (optional): Gemini API key from Google AI Studio. Simplest auth
+ *   method for the Gemini API. The key is passed as a query parameter.
  * - 'project_id' (required for vertex_ai API): GCP project ID.
  * - 'location' (required for vertex_ai API): GCP region (e.g., 'us-central1').
  * - 'model' (optional): Default model. Defaults to 'gemini-2.5-flash'.
- * - 'credentials' (required): Path to service account JSON file, or an array
- *   with the credentials, or an access token string.
+ * - 'credentials' (optional): Path to service account JSON file, or an array
+ *   with the credentials.
  * - 'access_token' (optional): Pre-fetched OAuth2 access token. If provided,
  *   credentials file is not used.
+ *
+ * Authentication priority: api_key > access_token > credentials.
  *
  * @author Ibrahim
  */
@@ -338,11 +342,19 @@ class GoogleClient extends AbstractClient {
      */
     private function getEndpoint(string $model, string $action): string {
         if ($this->isGeminiApi()) {
-            return sprintf(
+            $url = sprintf(
                 'https://generativelanguage.googleapis.com/v1beta/models/%s:%s',
                 $model,
                 $action
             );
+
+            $apiKey = $this->getConfig('api_key');
+
+            if ($apiKey !== null) {
+                $url .= '?key='.$apiKey;
+            }
+
+            return $url;
         }
 
         $projectId = $this->getConfig('project_id');
@@ -364,10 +376,15 @@ class GoogleClient extends AbstractClient {
      * @return array<string, string> The headers array.
      */
     private function getHeaders(): array {
-        return [
+        $headers = [
             'Content-Type' => 'application/json',
-            'Authorization' => 'Bearer '.$this->getAccessToken(),
         ];
+
+        if ($this->getConfig('api_key') === null) {
+            $headers['Authorization'] = 'Bearer '.$this->getAccessToken();
+        }
+
+        return $headers;
     }
 
     /**
@@ -826,9 +843,9 @@ class GoogleClient extends AbstractClient {
             }
         }
 
-        if (empty($config['credentials']) && empty($config['access_token'])) {
+        if (empty($config['credentials']) && empty($config['access_token']) && empty($config['api_key'])) {
             throw new InvalidConfigException(
-                'Either "credentials" or "access_token" is required for Google provider.',
+                'One of "api_key", "credentials", or "access_token" is required for Google provider.',
                 'credentials'
             );
         }
