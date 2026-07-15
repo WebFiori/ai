@@ -34,7 +34,7 @@ $provider = new GoogleClient([
 
 ## Option 2: Service Account Key (Production)
 
-For production use or when you need access to Vertex AI features, use a service account.
+For production use or when you need access to Gemini Enterprise Agent Platform (previously Vertex AI) features, use a service account.
 
 ### Step 1: Create a GCP Project (if you don't have one)
 
@@ -49,7 +49,7 @@ Enable at least one of these APIs in your project:
 - **Gemini API (generativelanguage.googleapis.com):**
   [Enable here](https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com)
 
-- **Vertex AI API (aiplatform.googleapis.com):**
+- **Gemini Enterprise Agent Platform API (aiplatform.googleapis.com, previously Vertex AI):**
   [Enable here](https://console.cloud.google.com/apis/library/aiplatform.googleapis.com)
 
 ### Step 3: Create a Service Account
@@ -58,7 +58,7 @@ Enable at least one of these APIs in your project:
 2. Click **Create Service Account**
 3. Enter a name (e.g., `ai-library`) and click **Create and Continue**
 4. Grant the following roles:
-   - **Vertex AI User** (`roles/aiplatform.user`) — for Vertex AI endpoint
+   - **Vertex AI User** (`roles/aiplatform.user`) — for the enterprise endpoint (previously Vertex AI)
    - Or **AI Platform Admin** if you need full access
 5. Click **Done**
 
@@ -89,7 +89,7 @@ $provider = new GoogleClient([
     'model' => 'gemini-2.5-flash',
 ]);
 
-// Using the Vertex AI endpoint (enterprise, requires billing)
+// Using the Gemini Enterprise Agent Platform endpoint (previously Vertex AI)
 $provider = new GoogleClient([
     'api' => 'vertex_ai',
     'credentials' => __DIR__ . '/vertex-ai-key.json',
@@ -133,7 +133,7 @@ The service account key may have been rotated or disabled. Create a new key foll
 
 - Verify the service account has the correct roles (Step 3)
 - Verify the API is enabled (Step 2)
-- Check that billing is enabled on the project (required for Vertex AI)
+- Check that billing is enabled on the project (required for the enterprise endpoint)
 
 ### "API not enabled" or 404
 

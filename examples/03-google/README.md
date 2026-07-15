@@ -8,7 +8,7 @@ Chat completion using Google's Gemini models. Demonstrates provider swapping —
 - System messages handled as `systemInstruction`
 - Role mapping (assistant → model) handled transparently
 - Same `chat()` interface as OpenAI
-- Both Gemini API and Vertex AI endpoint support
+- Both Gemini API and Gemini Enterprise Agent Platform (previously Vertex AI) endpoint support
 
 ## Files
 
@@ -43,7 +43,7 @@ The example supports two API modes via the `GCP_API` environment variable:
 # Gemini API (default, simpler, free tier)
 export GCP_API=gemini
 
-# Vertex AI (enterprise, requires project_id and location)
+# Gemini Enterprise Agent Platform (previously Vertex AI, requires project_id and location)
 export GCP_API=vertex_ai
 export GCP_PROJECT_ID=my-project
 export GCP_LOCATION=us-central1

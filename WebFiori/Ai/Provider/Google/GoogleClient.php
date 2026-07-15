@@ -38,8 +38,9 @@ use WebFiori\Ai\Usage;
  * Configuration options:
  * - 'api' (optional): Which API endpoint to use. Either 'gemini' (default)
  *   or 'vertex_ai'. The Gemini API (generativelanguage.googleapis.com) is simpler
- *   and works with the free tier. Vertex AI (aiplatform.googleapis.com) is the
- *   enterprise endpoint requiring project_id and location.
+ *   and works with the free tier. Gemini Enterprise Agent Platform (previously
+ *   Vertex AI) at aiplatform.googleapis.com is the enterprise endpoint requiring
+ *   project_id and location.
  * - 'api_key' (optional): Gemini API key from Google AI Studio. Simplest auth
  *   method for the Gemini API. The key is passed as a query parameter.
  * - 'project_id' (required for vertex_ai API): GCP project ID.
