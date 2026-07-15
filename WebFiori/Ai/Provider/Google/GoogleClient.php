@@ -26,6 +26,7 @@ use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\AbstractClient;
 use WebFiori\Ai\Tool\ToolCall;
+use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Usage;
 
 /**
@@ -186,6 +187,29 @@ class GoogleClient extends AbstractClient {
         }
 
         return $contents;
+    }
+
+    /**
+     * Formats ToolInterface instances into the Google tools format.
+     *
+     * Google uses 'functionDeclarations' inside a tools array.
+     *
+     * @param ToolInterface[] $tools The tools to format.
+     *
+     * @return array<int, array<string, mixed>> The formatted tools array.
+     */
+    private function formatTools(array $tools): array {
+        $declarations = [];
+
+        foreach ($tools as $tool) {
+            $declarations[] = [
+                'name' => $tool->getName(),
+                'description' => $tool->getDescription(),
+                'parameters' => $tool->getParameters(),
+            ];
+        }
+
+        return [['functionDeclarations' => $declarations]];
     }
 
     /**
@@ -401,6 +425,10 @@ class GoogleClient extends AbstractClient {
             $body['generationConfig'] = $generationConfig;
         }
 
+        if (isset($options['tools']) && count($options['tools']) > 0) {
+            $body['tools'] = $this->formatTools($options['tools']);
+        }
+
         return new HttpRequest(
             'POST',
             $this->getEndpoint($model, 'generateContent'),
@@ -491,6 +519,10 @@ class GoogleClient extends AbstractClient {
 
         if (!empty($generationConfig)) {
             $body['generationConfig'] = $generationConfig;
+        }
+
+        if (isset($options['tools']) && count($options['tools']) > 0) {
+            $body['tools'] = $this->formatTools($options['tools']);
         }
 
         return new HttpRequest(

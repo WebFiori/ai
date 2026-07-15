@@ -21,6 +21,8 @@ use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\LoggerTrait;
 use WebFiori\Ai\Message;
+use WebFiori\Ai\Tool\ToolInterface;
+use WebFiori\Ai\Tool\ToolResult;
 
 /**
  * Base class for AI provider implementations.
@@ -97,6 +99,41 @@ abstract class AbstractClient implements ProviderInterface {
         $httpResponse = $this->sendRequest($request);
         $this->handleErrorResponse($httpResponse);
         $response = $this->parseChatResponse($httpResponse);
+
+        $autoExecute = $options['auto_execute_tools'] ?? false;
+        $tools = $options['tools'] ?? [];
+        $maxIterations = $options['max_tool_iterations'] ?? 10;
+
+        if ($autoExecute && count($tools) > 0) {
+            $iteration = 0;
+
+            while ($response->hasToolCalls() && $iteration < $maxIterations) {
+                $iteration++;
+                $messages[] = $response->getMessage();
+
+                foreach ($response->getMessage()->getToolCalls() as $toolCall) {
+                    $tool = $this->findTool($tools, $toolCall->getName());
+                    $result = $tool !== null ? $tool->execute($toolCall->getArguments()) : '';
+
+                    $this->logDebug('Tool executed', [
+                        'tool' => $toolCall->getName(),
+                        'iteration' => $iteration,
+                    ]);
+
+                    $messages[] = new Message(
+                        'tool',
+                        '',
+                        [],
+                        new ToolResult($toolCall->getId(), $result)
+                    );
+                }
+
+                $request = $this->buildChatRequest($messages, $options);
+                $httpResponse = $this->sendRequest($request);
+                $this->handleErrorResponse($httpResponse);
+                $response = $this->parseChatResponse($httpResponse);
+            }
+        }
 
         $durationMs = (int) ((microtime(true) - $startTime) * 1000);
 
@@ -343,5 +380,23 @@ abstract class AbstractClient implements ProviderInterface {
      */
     protected function validateConfig(array $config): void {
         // Default: no validation. Subclasses override.
+    }
+
+    /**
+     * Finds a tool by name from an array of tools.
+     *
+     * @param ToolInterface[] $tools The available tools.
+     * @param string $name The tool name to find.
+     *
+     * @return ToolInterface|null The matching tool, or null if not found.
+     */
+    private function findTool(array $tools, string $name): ?ToolInterface {
+        foreach ($tools as $tool) {
+            if ($tool->getName() === $name) {
+                return $tool;
+            }
+        }
+
+        return null;
     }
 }
