@@ -97,7 +97,8 @@ class InMemoryVectorStore implements VectorStorageInterface {
             );
         }
 
-        usort($results, function (VectorRecord $a, VectorRecord $b): int {
+        usort($results, function (VectorRecord $a, VectorRecord $b): int
+        {
             return $b->getScore() <=> $a->getScore();
         });
 

@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
             ]);
             $openaiResponse = $openai->chat($messages);
         }
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $error = 'OpenAI: '.$e->getMessage();
     }
 
@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
             ]);
             $googleResponse = $google->chat($messages);
         }
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $error = ($error ? $error.' | ' : '').'Google: '.$e->getMessage();
     }
 }
@@ -89,41 +89,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
         <button type="submit">Compare</button>
     </form>
 
-    <?php if ($error): ?>
+    <?php if ($error) { ?>
         <div class="error"><?= htmlspecialchars($error) ?></div>
-    <?php endif; ?>
+    <?php } ?>
 
-    <?php if ($openaiResponse || $googleResponse): ?>
+    <?php if ($openaiResponse || $googleResponse) { ?>
     <div class="grid">
         <div class="card">
             <h3>OpenAI (GPT-4o)</h3>
-            <?php if ($openaiResponse): ?>
+            <?php if ($openaiResponse) { ?>
                 <pre><?= htmlspecialchars($openaiResponse->getMessage()->getContent()) ?></pre>
                 <div class="meta">
                     Model: <?= htmlspecialchars($openaiResponse->getModel()) ?>
-                    <?php if ($openaiResponse->getUsage()): ?>
+                    <?php if ($openaiResponse->getUsage()) { ?>
                         | Tokens: <?= $openaiResponse->getUsage()->getTotalTokens() ?>
-                    <?php endif; ?>
+                    <?php } ?>
                 </div>
-            <?php else: ?>
+            <?php } else { ?>
                 <p class="na">Set OPENAI_API_KEY to enable.</p>
-            <?php endif; ?>
+            <?php } ?>
         </div>
         <div class="card">
             <h3>Google (Gemini 2.5 Flash)</h3>
-            <?php if ($googleResponse): ?>
+            <?php if ($googleResponse) { ?>
                 <pre><?= htmlspecialchars($googleResponse->getMessage()->getContent()) ?></pre>
                 <div class="meta">
                     Model: <?= htmlspecialchars($googleResponse->getModel()) ?>
-                    <?php if ($googleResponse->getUsage()): ?>
+                    <?php if ($googleResponse->getUsage()) { ?>
                         | Tokens: <?= $googleResponse->getUsage()->getTotalTokens() ?>
-                    <?php endif; ?>
+                    <?php } ?>
                 </div>
-            <?php else: ?>
+            <?php } else { ?>
                 <p class="na">Set GCP_CREDENTIALS or place vertex-ai-key.json in project root.</p>
-            <?php endif; ?>
+            <?php } ?>
         </div>
     </div>
-    <?php endif; ?>
+    <?php } ?>
 </body>
 </html>

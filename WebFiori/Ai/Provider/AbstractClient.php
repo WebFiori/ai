@@ -253,6 +253,24 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Finds a tool by name from an array of tools.
+     *
+     * @param ToolInterface[] $tools The available tools.
+     * @param string $name The tool name to find.
+     *
+     * @return ToolInterface|null The matching tool, or null if not found.
+     */
+    private function findTool(array $tools, string $name): ?ToolInterface {
+        foreach ($tools as $tool) {
+            if ($tool->getName() === $name) {
+                return $tool;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Builds the HTTP request for a chat completion call.
      *
      * @param Message[] $messages The conversation messages.
@@ -380,23 +398,5 @@ abstract class AbstractClient implements ProviderInterface {
      */
     protected function validateConfig(array $config): void {
         // Default: no validation. Subclasses override.
-    }
-
-    /**
-     * Finds a tool by name from an array of tools.
-     *
-     * @param ToolInterface[] $tools The available tools.
-     * @param string $name The tool name to find.
-     *
-     * @return ToolInterface|null The matching tool, or null if not found.
-     */
-    private function findTool(array $tools, string $name): ?ToolInterface {
-        foreach ($tools as $tool) {
-            if ($tool->getName() === $name) {
-                return $tool;
-            }
-        }
-
-        return null;
     }
 }

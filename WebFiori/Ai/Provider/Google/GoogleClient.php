@@ -371,6 +371,18 @@ class GoogleClient extends AbstractClient {
     }
 
     /**
+     * Returns whether the Gemini API endpoint should be used.
+     *
+     * When 'api' is set to 'gemini', uses generativelanguage.googleapis.com.
+     * Otherwise uses the Google aiplatform.googleapis.com endpoint.
+     *
+     * @return bool True if using the Gemini API, false for Google.
+     */
+    private function isGeminiApi(): bool {
+        return $this->getConfig('api', 'gemini') === 'gemini';
+    }
+
+    /**
      * Maps Google finish reason to a normalized string.
      *
      * @param string $reason The Google finish reason.
@@ -385,18 +397,6 @@ class GoogleClient extends AbstractClient {
             'RECITATION' => 'content_filter',
             default => $reason !== '' ? strtolower($reason) : null,
         };
-    }
-
-    /**
-     * Returns whether the Gemini API endpoint should be used.
-     *
-     * When 'api' is set to 'gemini', uses generativelanguage.googleapis.com.
-     * Otherwise uses the Google aiplatform.googleapis.com endpoint.
-     *
-     * @return bool True if using the Gemini API, false for Google.
-     */
-    private function isGeminiApi(): bool {
-        return $this->getConfig('api', 'gemini') === 'gemini';
     }
 
     /**
