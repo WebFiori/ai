@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.2.0](https://github.com/WebFiori/ai/compare/v0.1.0...v0.2.0) (2026-07-15)
+
+
+### Features
+
+* **embeddings:** implement vector storage interface ([db69891](https://github.com/WebFiori/ai/commit/db69891f9af4dbb46d9a168bc548b3176d126aec)), closes [#12](https://github.com/WebFiori/ai/issues/12)
+* **google:** add api_key authentication for Gemini API ([2c91341](https://github.com/WebFiori/ai/commit/2c91341710795967970e2ccea9f4c1f1b47756e4))
+* **tools:** implement tool/function calling support ([56c9ba6](https://github.com/WebFiori/ai/commit/56c9ba684750a99f80768c58d084298b2f3bffca)), closes [#13](https://github.com/WebFiori/ai/issues/13)
+
+
+### Bug Fixes
+
+* **google:** support Gemini API embeddings and switch examples to Google ([76c28c4](https://github.com/WebFiori/ai/commit/76c28c45841a577643dc64184562cf6496afaeee))
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#43](https://github.com/WebFiori/ai/issues/43) from WebFiori/dev ([dfed72d](https://github.com/WebFiori/ai/commit/dfed72deddbc969e58eb3c0f8ae8443172bb0775))
+* switch line endings to LF in .gitattributes ([71fd3a8](https://github.com/WebFiori/ai/commit/71fd3a8ac165d55616574d8124c272af39835cc7))
+
 ## 0.1.0 (2026-07-06)
 
 
