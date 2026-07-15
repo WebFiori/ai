@@ -152,3 +152,112 @@ curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"contents":[{"parts":[{"text":"Hello"}]}]}'
 ```
+
+## CI/CD Configuration
+
+If your CI/CD pipeline needs service account credentials without committing the JSON file to the repo, use one of these approaches.
+
+### Option A: Base64-Encoded Secret (GitHub Actions, GitLab CI, etc.)
+
+1. Encode the key file:
+
+```bash
+base64 -w 0 vertex-ai-key.json
+```
+
+2. Store the output as a CI secret (e.g., `GCP_SA_KEY_BASE64` in GitHub Actions).
+
+3. In your workflow, decode it to a file or pass it as an array:
+
+```yaml
+# .github/workflows/test.yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GCP_SA_KEY_BASE64: ${{ secrets.GCP_SA_KEY_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode credentials
+        run: echo "$GCP_SA_KEY_BASE64" | base64 -d > vertex-ai-key.json
+      - name: Run tests
+        run: composer test
+```
+
+In PHP, you can also pass the decoded JSON directly as an array:
+
+```php
+$provider = new GoogleClient([
+    'api' => 'gemini',
+    'credentials' => json_decode(base64_decode(getenv('GCP_SA_KEY_BASE64')), true),
+    'model' => 'gemini-2.5-flash',
+]);
+```
+
+### Option B: Raw JSON Secret
+
+Store the entire JSON content as a secret (`GCP_SA_KEY_JSON`):
+
+```yaml
+env:
+  GCP_SA_KEY_JSON: ${{ secrets.GCP_SA_KEY_JSON }}
+```
+
+```php
+$provider = new GoogleClient([
+    'api' => 'gemini',
+    'credentials' => json_decode(getenv('GCP_SA_KEY_JSON'), true),
+    'model' => 'gemini-2.5-flash',
+]);
+```
+
+### Option C: Workload Identity Federation (No Secrets)
+
+For GitHub Actions, you can use OIDC to get a short-lived token without storing any secrets:
+
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        id: auth
+        with:
+          workload_identity_provider: 'projects/PROJECT_NUM/locations/global/workloadIdentityPools/POOL/providers/PROVIDER'
+          service_account: 'webfiori-ai@webfiori.iam.gserviceaccount.com'
+      - name: Run tests
+        run: composer test
+        env:
+          GCP_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+```
+
+```php
+$provider = new GoogleClient([
+    'api' => 'gemini',
+    'access_token' => getenv('GCP_ACCESS_TOKEN'),
+    'model' => 'gemini-2.5-flash',
+]);
+```
+
+This is the most secure option — no long-lived credentials are stored anywhere.
+
+### Option D: API Key Secret (Simplest for CI)
+
+If you only need the Gemini API (not the enterprise endpoint), an API key is the simplest approach:
+
+```yaml
+env:
+  GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+```
+
+```php
+$provider = new GoogleClient([
+    'api' => 'gemini',
+    'api_key' => getenv('GEMINI_API_KEY'),
+    'model' => 'gemini-2.5-flash',
+]);
+```
