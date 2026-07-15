@@ -1,20 +1,21 @@
 # 07 — Tool Calling
 
-Demonstrates AI-invoked functions. The AI can request to call tools you define, use the results, and formulate a response.
+Demonstrates AI-invoked functions using the `Tool` class. Supports both manual mode (you control the loop) and auto-execute mode (the library handles it).
 
 ## What It Demonstrates
 
-- Defining tools with the `ToolInterface`
-- Detecting tool calls in the response
-- Executing tools and sending results back
-- The full tool calling loop (user → AI → tool → AI → user)
+- Defining tools with the `Tool` class
+- Auto-execute mode (`auto_execute_tools` option)
+- Manual tool calling loop for fine-grained control
+- Multiple tools in a single conversation
+- Max iteration limit to prevent infinite loops
 
 ## Files
 
 | File | Description |
 |------|-------------|
-| `tools.php` | CLI script — weather lookup tool calling demo |
-| `index.php` | Web page — interactive tool calling with live execution |
+| `tools.php` | CLI script — demonstrates both auto-execute and manual modes |
+| `index.php` | Web page — interactive auto-execute tool calling |
 
 ## Running
 
@@ -30,4 +31,4 @@ php examples/07-tool-calling/tools.php
 php -S localhost:8080 -t examples/07-tool-calling
 ```
 
-Open http://localhost:8080. Ask about the weather and watch the AI invoke the weather tool.
+Open http://localhost:8080. Ask about the weather or time and watch the AI invoke tools automatically.

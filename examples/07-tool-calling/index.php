@@ -9,58 +9,54 @@ require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
-use WebFiori\Ai\Tool\ToolResult;
+use WebFiori\Ai\Tool\Tool;
 
-$steps = [];
 $error = null;
 $userMessage = '';
+$aiResponse = '';
+$toolsExecuted = [];
 
-// Simulated tools
+// Define tools using the Tool class
 $tools = [
-    'get_weather' => function (array $args): string
-    {
-        $location = $args['location'] ?? 'Unknown';
-
-        return json_encode([
-            'location' => $location,
-            'temperature' => rand(15, 30),
-            'condition' => ['sunny', 'cloudy', 'rainy', 'windy'][rand(0, 3)],
-            'humidity' => rand(30, 80),
-        ]);
-    },
-    'get_time' => function (array $args): string
-    {
-        $timezone = $args['timezone'] ?? 'UTC';
-
-        return json_encode(['timezone' => $timezone, 'time' => date('H:i:s')]);
-    },
-];
-
-$toolDefinitions = [
-    [
-        'type' => 'function',
-        'function' => [
-            'name' => 'get_weather',
-            'description' => 'Get the current weather for a location',
-            'parameters' => [
-                'type' => 'object',
-                'properties' => ['location' => ['type' => 'string', 'description' => 'City name']],
-                'required' => ['location'],
-            ],
+    new Tool(
+        'get_weather',
+        'Get the current weather for a location',
+        [
+            'type' => 'object',
+            'properties' => ['location' => ['type' => 'string', 'description' => 'City name']],
+            'required' => ['location'],
         ],
-    ],
-    [
-        'type' => 'function',
-        'function' => [
-            'name' => 'get_time',
-            'description' => 'Get the current time in a timezone',
-            'parameters' => [
-                'type' => 'object',
-                'properties' => ['timezone' => ['type' => 'string', 'description' => 'Timezone (e.g., UTC, EST)']],
-                'required' => ['timezone'],
-            ],
+        function (array $args) use (&$toolsExecuted): string
+        {
+            $location = $args['location'] ?? 'Unknown';
+            $data = [
+                'location' => $location,
+                'temperature' => rand(15, 30),
+                'condition' => ['sunny', 'cloudy', 'rainy', 'windy'][rand(0, 3)],
+                'humidity' => rand(30, 80),
+            ];
+            $toolsExecuted[] = ['name' => 'get_weather', 'args' => $args, 'result' => $data];
+
+            return json_encode($data);
+        }
+    ),
+    new Tool(
+        'get_time',
+        'Get the current time in a timezone',
+        [
+            'type' => 'object',
+            'properties' => ['timezone' => ['type' => 'string', 'description' => 'Timezone (e.g., UTC, EST)']],
+            'required' => ['timezone'],
         ],
-    ],
+        function (array $args) use (&$toolsExecuted): string
+        {
+            $timezone = $args['timezone'] ?? 'UTC';
+            $data = ['timezone' => $timezone, 'time' => date('H:i:s')];
+            $toolsExecuted[] = ['name' => 'get_time', 'args' => $args, 'result' => $data];
+
+            return json_encode($data);
+        }
+    ),
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
@@ -72,37 +68,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
             'model' => 'gpt-4o',
         ]);
 
-        $messages = [
-            new Message('system', 'You are a helpful assistant. Use tools when appropriate.'),
-            new Message('user', $userMessage),
-        ];
+        // Auto-execute mode: the library handles the tool call loop
+        $response = $provider->chat(
+            [
+                new Message('system', 'You are a helpful assistant. Use tools when appropriate.'),
+                new Message('user', $userMessage),
+            ],
+            [
+                'tools' => $tools,
+                'auto_execute_tools' => true,
+                'max_tool_iterations' => 5,
+            ]
+        );
 
-        $steps[] = ['type' => 'user', 'content' => $userMessage];
-
-        $response = $provider->chat($messages, ['tools' => $toolDefinitions]);
-
-        if ($response->hasToolCalls()) {
-            $messages[] = $response->getMessage();
-
-            foreach ($response->getMessage()->getToolCalls() as $toolCall) {
-                $handler = $tools[$toolCall->getName()] ?? null;
-                $result = $handler ? $handler($toolCall->getArguments()) : '{"error":"Unknown tool"}';
-
-                $steps[] = [
-                    'type' => 'tool_call',
-                    'name' => $toolCall->getName(),
-                    'args' => $toolCall->getArguments(),
-                    'result' => $result,
-                ];
-
-                $messages[] = new Message('tool', '', [], new ToolResult($toolCall->getId(), $result));
-            }
-
-            $finalResponse = $provider->chat($messages);
-            $steps[] = ['type' => 'assistant', 'content' => $finalResponse->getMessage()->getContent()];
-        } else {
-            $steps[] = ['type' => 'assistant', 'content' => $response->getMessage()->getContent()];
-        }
+        $aiResponse = $response->getMessage()->getContent();
     } catch (Throwable $e) {
         $error = $e->getMessage();
     }
@@ -133,11 +112,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
         .tools-info { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 24px; font-size: 14px; }
         .tools-info h3 { font-size: 14px; margin-bottom: 8px; }
         .error { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 12px; border-radius: 6px; margin-bottom: 16px; }
+        .note { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 10px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; color: #166534; }
     </style>
 </head>
 <body>
     <h1>Tool Calling</h1>
-    <p class="subtitle">Ask about weather or time and watch the AI invoke tools to get real data.</p>
+    <p class="subtitle">Ask about weather or time and watch the AI invoke tools automatically.</p>
+
+    <div class="note">
+        Using <code>auto_execute_tools</code> — the library handles the tool call loop for you.
+    </div>
 
     <div class="tools-info">
         <h3>Available Tools</h3>
@@ -150,26 +134,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
     <?php } ?>
 
     <form method="POST">
-        <input type="text" name="message" placeholder="What's the weather in Paris?" value="<?= htmlspecialchars($userMessage) ?>" autofocus>
+        <input type="text" name="message" placeholder="What's the weather in Paris and the time in Tokyo?" value="<?= htmlspecialchars($userMessage) ?>" autofocus aria-label="Message">
         <button type="submit">Send</button>
     </form>
 
-    <?php foreach ($steps as $step) { ?>
-        <div class="step <?= $step['type'] ?>">
-            <?php if ($step['type'] === 'user') { ?>
-                <div class="label">You</div>
-                <div class="content"><?= htmlspecialchars($step['content']) ?></div>
-            <?php } elseif ($step['type'] === 'tool_call') { ?>
-                <div class="label">🔧 Tool Call: <?= htmlspecialchars($step['name']) ?></div>
-                <div class="content">
-                    Args: <code><?= htmlspecialchars(json_encode($step['args'])) ?></code><br>
-                    Result: <code><?= htmlspecialchars($step['result']) ?></code>
-                </div>
-            <?php } elseif ($step['type'] === 'assistant') { ?>
-                <div class="label">Assistant</div>
-                <div class="content"><?= htmlspecialchars($step['content']) ?></div>
-            <?php } ?>
+    <?php if ($userMessage) { ?>
+        <div class="step user">
+            <div class="label">You</div>
+            <div class="content"><?= htmlspecialchars($userMessage) ?></div>
         </div>
+
+        <?php foreach ($toolsExecuted as $tool) { ?>
+            <div class="step tool_call">
+                <div class="label">🔧 Tool: <?= htmlspecialchars($tool['name']) ?></div>
+                <div class="content">
+                    Args: <code><?= htmlspecialchars(json_encode($tool['args'])) ?></code><br>
+                    Result: <code><?= htmlspecialchars(json_encode($tool['result'])) ?></code>
+                </div>
+            </div>
+        <?php } ?>
+
+        <?php if ($aiResponse) { ?>
+            <div class="step assistant">
+                <div class="label">Assistant</div>
+                <div class="content"><?= htmlspecialchars($aiResponse) ?></div>
+            </div>
+        <?php } ?>
     <?php } ?>
 </body>
 </html>
