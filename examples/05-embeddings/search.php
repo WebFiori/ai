@@ -14,11 +14,12 @@
 require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Embedding\InMemoryVectorStore;
-use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\Google\GoogleClient;
 
-$provider = new OpenAIClient([
-    'api_key' => getenv('OPENAI_API_KEY'),
-    'model' => 'gpt-4o',
+$provider = new GoogleClient([
+    'api' => 'gemini',
+    'credentials' => __DIR__.'/../../vertex-ai-key.json',
+    'model' => 'gemini-2.5-flash',
 ]);
 
 // Sample documents to index
@@ -37,7 +38,7 @@ $documents = [
 echo 'Generating embeddings for '.count($documents).' documents...'.PHP_EOL;
 
 $texts = array_column($documents, 'text');
-$response = $provider->embed($texts, ['model' => 'text-embedding-3-small']);
+$response = $provider->embed($texts, ['model' => 'gemini-embedding-001']);
 $vectors = $response->getVectors();
 
 echo 'Done. Dimensions: '.$response->getDimensions().PHP_EOL.PHP_EOL;
@@ -58,7 +59,7 @@ echo 'Stored '.$store->count().' vectors.'.PHP_EOL.PHP_EOL;
 $query = 'How do I manage packages in PHP?';
 echo '═══ Query: "'.$query.'" ═══'.PHP_EOL.PHP_EOL;
 
-$queryVector = $provider->embed($query, ['model' => 'text-embedding-3-small'])->getVector();
+$queryVector = $provider->embed($query, ['model' => 'gemini-embedding-001'])->getVector();
 $results = $store->query($queryVector, 3);
 
 echo 'Top 3 results:'.PHP_EOL;
@@ -92,7 +93,7 @@ foreach ($filtered as $i => $record) {
 $query2 = 'What frontend frameworks can I use?';
 echo PHP_EOL.'═══ Query: "'.$query2.'" ═══'.PHP_EOL.PHP_EOL;
 
-$queryVector2 = $provider->embed($query2, ['model' => 'text-embedding-3-small'])->getVector();
+$queryVector2 = $provider->embed($query2, ['model' => 'gemini-embedding-001'])->getVector();
 $results2 = $store->query($queryVector2, 3);
 
 echo 'Top 3 results:'.PHP_EOL;

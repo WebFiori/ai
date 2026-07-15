@@ -449,6 +449,40 @@ class GoogleClient extends AbstractClient {
         $model = $options['model'] ?? $this->getConfig('embedding_model', 'text-embedding-004');
         $texts = is_array($input) ? $input : [$input];
 
+        if ($this->isGeminiApi()) {
+            if (count($texts) === 1) {
+                $body = [
+                    'model' => "models/$model",
+                    'content' => ['parts' => [['text' => $texts[0]]]],
+                ];
+
+                return new HttpRequest(
+                    'POST',
+                    $this->getEndpoint($model, 'embedContent'),
+                    $this->getHeaders(),
+                    json_encode($body)
+                );
+            }
+
+            $requests = [];
+
+            foreach ($texts as $text) {
+                $requests[] = [
+                    'model' => "models/$model",
+                    'content' => ['parts' => [['text' => $text]]],
+                ];
+            }
+
+            $body = ['requests' => $requests];
+
+            return new HttpRequest(
+                'POST',
+                $this->getEndpoint($model, 'batchEmbedContents'),
+                $this->getHeaders(),
+                json_encode($body)
+            );
+        }
+
         $instances = [];
 
         foreach ($texts as $text) {
@@ -723,8 +757,20 @@ class GoogleClient extends AbstractClient {
         $data = $response->getJson();
         $vectors = [];
 
-        foreach ($data['predictions'] ?? [] as $prediction) {
-            $vectors[] = $prediction['embeddings']['values'] ?? [];
+        if ($this->isGeminiApi()) {
+            if (isset($data['embedding'])) {
+                // Single embedContent response
+                $vectors[] = $data['embedding']['values'] ?? [];
+            } else {
+                // batchEmbedContents response
+                foreach ($data['embeddings'] ?? [] as $embedding) {
+                    $vectors[] = $embedding['values'] ?? [];
+                }
+            }
+        } else {
+            foreach ($data['predictions'] ?? [] as $prediction) {
+                $vectors[] = $prediction['embeddings']['values'] ?? [];
+            }
         }
 
         $model = $this->getConfig('embedding_model', 'text-embedding-004');

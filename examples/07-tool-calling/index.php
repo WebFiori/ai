@@ -8,7 +8,7 @@
 require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\Google\GoogleClient;
 use WebFiori\Ai\Tool\Tool;
 
 $error = null;
@@ -63,9 +63,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
     $userMessage = trim($_POST['message']);
 
     try {
-        $provider = new OpenAIClient([
-            'api_key' => getenv('OPENAI_API_KEY'),
-            'model' => 'gpt-4o',
+        $provider = new GoogleClient([
+            'api' => 'gemini',
+            'credentials' => __DIR__.'/../../vertex-ai-key.json',
+            'model' => 'gemini-2.5-flash',
         ]);
 
         // Auto-execute mode: the library handles the tool call loop

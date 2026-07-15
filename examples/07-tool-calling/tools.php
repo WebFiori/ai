@@ -13,13 +13,14 @@
 require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\Google\GoogleClient;
 use WebFiori\Ai\Tool\Tool;
 use WebFiori\Ai\Tool\ToolResult;
 
-$provider = new OpenAIClient([
-    'api_key' => getenv('OPENAI_API_KEY'),
-    'model' => 'gpt-4o',
+$provider = new GoogleClient([
+    'api' => 'gemini',
+    'credentials' => __DIR__.'/../../vertex-ai-key.json',
+    'model' => 'gemini-2.5-flash',
 ]);
 
 // Define tools using the Tool class
