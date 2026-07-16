@@ -164,10 +164,11 @@ class GoogleClient extends AbstractClient {
 
             if ($message->hasToolCalls()) {
                 foreach ($message->getToolCalls() as $toolCall) {
+                    $args = $toolCall->getArguments();
                     $parts[] = [
                         'functionCall' => [
                             'name' => $toolCall->getName(),
-                            'args' => $toolCall->getArguments(),
+                            'args' => empty($args) ? (object) [] : $args,
                         ],
                     ];
                 }
