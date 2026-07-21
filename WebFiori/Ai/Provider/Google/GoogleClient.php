@@ -165,21 +165,32 @@ class GoogleClient extends AbstractClient {
             if ($message->hasToolCalls()) {
                 foreach ($message->getToolCalls() as $toolCall) {
                     $args = $toolCall->getArguments();
-                    $parts[] = [
+                    $callData = [
                         'functionCall' => [
                             'name' => $toolCall->getName(),
-                            'args' => empty($args) ? (object) [] : $args,
                         ],
                     ];
+
+                    if (!empty($args)) {
+                        $callData['functionCall']['args'] = (object) $args;
+                    }
+
+                    $parts[] = $callData;
                 }
             }
 
             if ($message->getToolResult() !== null) {
                 $result = $message->getToolResult();
+                $decoded = json_decode($result->getContent(), true);
+
+                if (!is_array($decoded) || array_is_list($decoded)) {
+                    $decoded = ['result' => $result->getContent()];
+                }
+
                 $parts[] = [
                     'functionResponse' => [
                         'name' => $result->getToolCallId(),
-                        'response' => json_decode($result->getContent(), true) ?? ['result' => $result->getContent()],
+                        'response' => (object) $decoded,
                     ],
                 ];
             }
