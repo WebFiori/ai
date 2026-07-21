@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/WebFiori/ai/compare/v0.2.0...v0.2.1) (2026-07-21)
+
+
+### Bug Fixes
+
+* **google:** cast empty tool call args to object for valid JSON ([27b7a29](https://github.com/WebFiori/ai/commit/27b7a294102cbfde3858211bbd3ac183f6c0a951))
+* **google:** ensure functionCall.args and functionResponse.response are always JSON objects ([922a517](https://github.com/WebFiori/ai/commit/922a517083142a4574bd884bd1c3711c654fcb6f))
+
 ## [0.2.0](https://github.com/WebFiori/ai/compare/v0.1.0...v0.2.0) (2026-07-15)
 
 
