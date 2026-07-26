@@ -29,7 +29,7 @@ class FakeHttpClient implements HttpClientInterface {
     /**
      * Queue of responses to return for successive calls.
      *
-     * @var HttpResponse[]
+     * @var array<HttpResponse|\Throwable>
      */
     private array $responseQueue = [];
 
@@ -39,6 +39,22 @@ class FakeHttpClient implements HttpClientInterface {
      * @var string[][]
      */
     private array $streamingQueue = [];
+
+    /**
+     * Adds an exception to the queue.
+     *
+     * When this entry is dequeued, the exception is thrown instead of
+     * returning a response. Useful for testing retry and error handling logic.
+     *
+     * @param \Throwable $exception The exception to throw.
+     *
+     * @return self Returns the instance for method chaining.
+     */
+    public function addException(\Throwable $exception): self {
+        $this->responseQueue[] = $exception;
+
+        return $this;
+    }
 
     /**
      * Adds a response to the queue.
@@ -109,10 +125,14 @@ class FakeHttpClient implements HttpClientInterface {
     /**
      * Records the request and returns the next response from the queue.
      *
+     * If the next queued item is a Throwable (added via {@see addException()}),
+     * it is thrown instead of returning a response.
+     *
      * @param HttpRequest $request The request to send.
      *
      * @return HttpResponse The next queued response.
      *
+     * @throws \Throwable If the next queued item is an exception.
      * @throws \RuntimeException If no responses are queued.
      */
     public function send(HttpRequest $request): HttpResponse {
@@ -124,7 +144,13 @@ class FakeHttpClient implements HttpClientInterface {
             );
         }
 
-        return array_shift($this->responseQueue);
+        $next = array_shift($this->responseQueue);
+
+        if ($next instanceof \Throwable) {
+            throw $next;
+        }
+
+        return $next;
     }
 
     /**
