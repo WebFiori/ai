@@ -35,9 +35,31 @@ use WebFiori\Ai\Usage;
  * Supports chat completions and streaming via AWS Bedrock Runtime API,
  * providing access to Claude, Llama, Titan, and other models hosted on AWS.
  *
+ * Supports two authentication modes:
+ *
+ * **API Key (recommended for testing):**
+ * ```php
+ * $client = new BedrockClient([
+ *     'api_key' => 'your-bedrock-api-key',
+ *     'region'  => 'us-east-1',
+ *     'model'   => 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+ * ]);
+ * ```
+ *
+ * **AWS Credentials (SigV4):**
+ * ```php
+ * $client = new BedrockClient([
+ *     'access_key' => 'AKIA...',
+ *     'secret_key' => 'wJal...',
+ *     'region'     => 'us-east-1',
+ *     'model'      => 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+ * ]);
+ * ```
+ *
  * Configuration options:
- * - 'access_key' (required): AWS access key ID.
- * - 'secret_key' (required): AWS secret access key.
+ * - 'api_key' (required if not using access_key/secret_key): Bedrock API key.
+ * - 'access_key' (required if not using api_key): AWS access key ID.
+ * - 'secret_key' (required if not using api_key): AWS secret access key.
  * - 'region' (required): AWS region (e.g., 'us-east-1').
  * - 'model' (optional): Default model ID. Defaults to 'anthropic.claude-3-5-sonnet-20241022-v2:0'.
  * - 'max_tokens' (optional): Default max tokens. Defaults to 4096.
@@ -46,11 +68,11 @@ use WebFiori\Ai\Usage;
  */
 class BedrockClient extends AbstractClient {
     /**
-     * The AWS signer instance.
+     * The AWS signer instance (only used in SigV4 mode).
      *
-     * @var AwsSigner
+     * @var AwsSigner|null
      */
-    private AwsSigner $signer;
+    private ?AwsSigner $signer;
 
     /**
      * Creates a new BedrockClient instance.
@@ -62,12 +84,16 @@ class BedrockClient extends AbstractClient {
     public function __construct(array $config = []) {
         parent::__construct($config);
 
-        $this->signer = new AwsSigner(
-            $config['access_key'],
-            $config['secret_key'],
-            $config['region'],
-            'bedrock'
-        );
+        if (!empty($config['access_key'])) {
+            $this->signer = new AwsSigner(
+                $config['access_key'],
+                $config['secret_key'],
+                $config['region'],
+                'bedrock'
+            );
+        } else {
+            $this->signer = null;
+        }
     }
 
     /**
@@ -283,13 +309,16 @@ class BedrockClient extends AbstractClient {
     }
 
     /**
-     * Signs and returns headers for a Bedrock request.
+     * Returns headers for a Bedrock request.
+     *
+     * Uses Bearer token when 'api_key' is configured, otherwise signs
+     * the request using AWS Signature Version 4.
      *
      * @param string $method HTTP method.
      * @param string $url Request URL.
      * @param string $body Request body.
      *
-     * @return array<string, string> Signed headers.
+     * @return array<string, string> Request headers.
      */
     private function getSignedHeaders(string $method, string $url, string $body): array {
         $headers = [
@@ -297,6 +326,14 @@ class BedrockClient extends AbstractClient {
             'Accept' => 'application/json',
         ];
 
+        if ($this->signer === null) {
+            // API key mode — simple Bearer token
+            $headers['Authorization'] = 'Bearer '.$this->getConfig('api_key');
+
+            return $headers;
+        }
+
+        // SigV4 mode
         return $this->signer->sign($method, $url, $headers, $body);
     }
 
@@ -651,29 +688,35 @@ class BedrockClient extends AbstractClient {
     /**
      * Validates configuration.
      *
+     * Requires either 'api_key' (API key mode) or both 'access_key' and
+     * 'secret_key' (SigV4 mode). 'region' is required in both modes.
+     *
      * @param array<string, mixed> $config The configuration.
      *
      * @throws InvalidConfigException If required options missing.
      */
     protected function validateConfig(array $config): void {
-        if (empty($config['access_key'])) {
-            throw new InvalidConfigException(
-                'The "access_key" configuration option is required for Bedrock provider.',
-                'access_key'
-            );
-        }
-
-        if (empty($config['secret_key'])) {
-            throw new InvalidConfigException(
-                'The "secret_key" configuration option is required for Bedrock provider.',
-                'secret_key'
-            );
-        }
-
         if (empty($config['region'])) {
             throw new InvalidConfigException(
                 'The "region" configuration option is required for Bedrock provider.',
                 'region'
+            );
+        }
+
+        $hasApiKey = !empty($config['api_key']);
+        $hasSigV4 = !empty($config['access_key']) && !empty($config['secret_key']);
+
+        if (!$hasApiKey && !$hasSigV4) {
+            throw new InvalidConfigException(
+                'Bedrock provider requires either "api_key" or both "access_key" and "secret_key".',
+                'api_key'
+            );
+        }
+
+        if (!$hasApiKey && empty($config['secret_key'])) {
+            throw new InvalidConfigException(
+                'The "secret_key" configuration option is required when using AWS credentials.',
+                'secret_key'
             );
         }
     }

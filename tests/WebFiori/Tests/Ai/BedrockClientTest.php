@@ -115,34 +115,68 @@ class BedrockClientTest extends TestCase {
     /**
      * @test
      */
-    public function testMissingAccessKey() {
-        $this->expectException(InvalidConfigException::class);
-        new BedrockClient([
-            'secret_key' => 'secret',
-            'region' => 'us-east-1',
-        ]);
+    public function testChatCompletionWithApiKey() {
+        $client = new FakeHttpClient();
+        $client->addResponse(new HttpResponse(200, [], json_encode([
+            'content' => [['type' => 'text', 'text' => 'Hello from Bedrock!']],
+            'stop_reason' => 'end_turn',
+            'usage' => ['input_tokens' => 5, 'output_tokens' => 4],
+        ])));
+
+        $provider = $this->createProviderWithApiKey();
+        $provider->setHttpClient($client);
+
+        $response = $provider->chat([new Message('user', 'Hello')]);
+
+        $this->assertEquals('Hello from Bedrock!', $response->getMessage()->getContent());
+        $this->assertEquals('stop', $response->getFinishReason());
     }
 
     /**
      * @test
      */
-    public function testMissingSecretKey() {
-        $this->expectException(InvalidConfigException::class);
-        new BedrockClient([
-            'access_key' => 'access',
-            'region' => 'us-east-1',
-        ]);
+    public function testApiKeyRequestUsesBearer() {
+        $client = new FakeHttpClient();
+        $client->addResponse(new HttpResponse(200, [], json_encode([
+            'content' => [['type' => 'text', 'text' => 'Hi']],
+            'stop_reason' => 'end_turn',
+            'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
+        ])));
+
+        $provider = $this->createProviderWithApiKey();
+        $provider->setHttpClient($client);
+
+        $provider->chat([new Message('user', 'Hello')]);
+
+        $headers = $client->getLastRequest()->getHeaders();
+
+        // Should use Bearer token, not SigV4
+        $this->assertArrayHasKey('Authorization', $headers);
+        $this->assertStringStartsWith('Bearer ', $headers['Authorization']);
+        $this->assertStringContainsString('test-bedrock-api-key', $headers['Authorization']);
+
+        // Should NOT have SigV4 headers
+        $this->assertArrayNotHasKey('X-Amz-Date', $headers);
     }
 
     /**
      * @test
      */
-    public function testMissingRegion() {
+    public function testMissingBothAuthOptions() {
         $this->expectException(InvalidConfigException::class);
-        new BedrockClient([
-            'access_key' => 'access',
-            'secret_key' => 'secret',
+        new BedrockClient(['region' => 'us-east-1']);
+    }
+
+    /**
+     * @test
+     */
+    public function testApiKeyOnlyRequiresRegion() {
+        // Should not throw — api_key + region is valid
+        $provider = new BedrockClient([
+            'api_key' => 'test-key',
+            'region' => 'us-east-1',
         ]);
+        $this->assertEquals('bedrock', $provider->getName());
     }
 
     /**
@@ -174,7 +208,39 @@ class BedrockClientTest extends TestCase {
     }
 
     /**
-     * Creates a configured Bedrock provider for testing.
+     * @test
+     */
+    public function testMissingRegion() {
+        $this->expectException(InvalidConfigException::class);
+        new BedrockClient([
+            'access_key' => 'access',
+            'secret_key' => 'secret',
+        ]);
+    }
+
+    /**
+     * @test
+     */
+    public function testMissingRegionWithApiKey() {
+        $this->expectException(InvalidConfigException::class);
+        new BedrockClient(['api_key' => 'test-key']);
+    }
+
+    /**
+     * Creates a Bedrock provider using API key authentication.
+     *
+     * @return BedrockClient
+     */
+    private function createProviderWithApiKey(): BedrockClient {
+        return new BedrockClient([
+            'api_key' => 'test-bedrock-api-key',
+            'region' => 'us-east-1',
+            'model' => 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+        ]);
+    }
+
+    /**
+     * Creates a configured Bedrock provider for testing (SigV4 mode).
      *
      * @return BedrockClient
      */
