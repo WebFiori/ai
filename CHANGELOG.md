@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.3.0](https://github.com/WebFiori/ai/compare/v0.2.0...v0.3.0) (2026-07-26)
+
+
+### Features
+
+* **bedrock:** add API key authentication support ([f0da558](https://github.com/WebFiori/ai/commit/f0da5589e45c1dc1da899e85cd3a01198d670e87))
+* **provider:** implement Anthropic Claude provider ([f6b0c62](https://github.com/WebFiori/ai/commit/f6b0c62c58d8fe355f535c9a571376d8f5c7b61e)), closes [#19](https://github.com/WebFiori/ai/issues/19)
+* **provider:** implement AWS Bedrock provider ([1a27193](https://github.com/WebFiori/ai/commit/1a27193463d1400f7b377cf91050da64132f17b8)), closes [#20](https://github.com/WebFiori/ai/issues/20)
+
+
+### Bug Fixes
+
+* **bedrock:** implement EventStreamParser for Converse streaming ([9b8858d](https://github.com/WebFiori/ai/commit/9b8858da4121ebfe2cf52372061faca014788840))
+* **google:** cast empty tool call args to object for valid JSON ([27b7a29](https://github.com/WebFiori/ai/commit/27b7a294102cbfde3858211bbd3ac183f6c0a951))
+* **google:** ensure functionCall.args and functionResponse.response are always JSON objects ([922a517](https://github.com/WebFiori/ai/commit/922a517083142a4574bd884bd1c3711c654fcb6f))
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#46](https://github.com/WebFiori/ai/issues/46) from WebFiori/dev ([c9ab008](https://github.com/WebFiori/ai/commit/c9ab008aa73511ad1decb0f74ab4df1246e09f48))
+
 ## [0.2.0](https://github.com/WebFiori/ai/compare/v0.1.0...v0.2.0) (2026-07-15)
 
 
