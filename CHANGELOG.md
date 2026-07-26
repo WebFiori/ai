@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/WebFiori/ai/compare/v0.3.0...v0.4.0) (2026-07-26)
+
+
+### Features
+
+* **resilience:** implement retry with exponential backoff ([59bcb97](https://github.com/WebFiori/ai/commit/59bcb9716c60c83d1a40a13e3ed6f4525b2b70bd)), closes [#21](https://github.com/WebFiori/ai/issues/21)
+* **resilience:** retry with exponential backoff ([c9d644f](https://github.com/WebFiori/ai/commit/c9d644fa0164e240bb5c447a48830c38120d2e6d))
+
 ## [0.3.0](https://github.com/WebFiori/ai/compare/v0.2.0...v0.3.0) (2026-07-26)
 
 
