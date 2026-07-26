@@ -14,7 +14,6 @@ use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\Exception\StreamingException;
 use WebFiori\Ai\Http\HttpRequest;
 use WebFiori\Ai\Http\HttpResponse;
-use WebFiori\Ai\Http\SseParser;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Usage;
@@ -79,10 +78,14 @@ class ConverseStrategy implements InvocationStrategyInterface {
         $url = $client->getBedrockEndpoint($modelId, 'converse-stream');
         $jsonBody = json_encode($body);
 
+        // Converse stream uses AWS Event Stream binary framing
+        $headers = $client->getBedrockHeaders('POST', $url, $jsonBody);
+        $headers['Accept'] = 'application/vnd.amazon.eventstream';
+
         return new HttpRequest(
             'POST',
             $url,
-            $client->getBedrockHeaders('POST', $url, $jsonBody),
+            $headers,
             $jsonBody
         );
     }
@@ -111,8 +114,8 @@ class ConverseStrategy implements InvocationStrategyInterface {
         $currentToolCall = null;
         $modelId = $client->getConfig('model', 'anthropic.claude-3-5-sonnet-20241022-v2:0');
 
-        $parser = new SseParser(
-            function (string $data) use (
+        $parser = new EventStreamParser(
+            function (string $eventType, array $json) use (
                 $onToken,
                 &$accumulatedContent,
                 &$finishReason,
@@ -121,29 +124,12 @@ class ConverseStrategy implements InvocationStrategyInterface {
                 &$toolCalls,
                 &$currentToolCall
             ) {
-                $json = json_decode($data, true);
-
-                if ($json === null) {
-                    return;
-                }
-
-                // Converse stream uses event wrappers with a 'bytes' payload
-                $chunk = isset($json['bytes'])
-                    ? json_decode(base64_decode($json['bytes']), true)
-                    : $json;
-
-                if ($chunk === null) {
-                    return;
-                }
-
-                $type = $chunk['type'] ?? array_key_first($chunk) ?? '';
-
-                switch ($type) {
+                switch ($eventType) {
                     case 'messageStart':
                         break;
 
                     case 'contentBlockStart':
-                        $block = $chunk['contentBlockStart']['start'] ?? [];
+                        $block = $json['contentBlockStart']['start'] ?? [];
 
                         if (isset($block['toolUse'])) {
                             $currentToolCall = [
@@ -156,7 +142,7 @@ class ConverseStrategy implements InvocationStrategyInterface {
                         break;
 
                     case 'contentBlockDelta':
-                        $delta = $chunk['contentBlockDelta']['delta'] ?? [];
+                        $delta = $json['delta'] ?? [];
 
                         if (isset($delta['text'])) {
                             $text = $delta['text'];
@@ -177,13 +163,12 @@ class ConverseStrategy implements InvocationStrategyInterface {
                         break;
 
                     case 'messageStop':
-                        $stopReason = $chunk['messageStop']['stopReason'] ?? null;
-                        $finishReason = $this->mapStopReason($stopReason);
+                        $finishReason = $this->mapStopReason($json['stopReason'] ?? null);
 
                         break;
 
                     case 'metadata':
-                        $usage = $chunk['metadata']['usage'] ?? [];
+                        $usage = $json['usage'] ?? [];
                         $inputTokens = $usage['inputTokens'] ?? $inputTokens;
                         $outputTokens = $usage['outputTokens'] ?? $outputTokens;
 
