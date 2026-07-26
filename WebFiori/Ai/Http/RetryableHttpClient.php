@@ -133,12 +133,8 @@ class RetryableHttpClient implements HttpClientInterface {
             }
         }
 
-        // Should not be reached, but satisfy static analysis
-        if ($lastException !== null) {
-            throw $lastException;
-        }
-
-        return $this->inner->send($request);
+        // All retries exhausted with a retryable status code — return the last response
+        return $response;
     }
 
     /**
