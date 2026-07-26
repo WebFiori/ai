@@ -17,10 +17,12 @@ use WebFiori\Ai\Http\CurlHttpClient;
 use WebFiori\Ai\Http\HttpClientInterface;
 use WebFiori\Ai\Http\HttpRequest;
 use WebFiori\Ai\Http\HttpResponse;
+use WebFiori\Ai\Http\RetryableHttpClient;
 use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\LoggerTrait;
 use WebFiori\Ai\Message;
+use WebFiori\Ai\RetryConfig;
 use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Tool\ToolResult;
 
@@ -215,6 +217,30 @@ abstract class AbstractClient implements ProviderInterface {
      */
     public function setHttpClient(HttpClientInterface $client): void {
         $this->httpClient = $client;
+    }
+
+    /**
+     * Configures automatic retry with exponential backoff for failed requests.
+     *
+     * Wraps the current HTTP client in a RetryableHttpClient decorator. Must
+     * be called after setHttpClient() if a custom client is used.
+     *
+     * ```php
+     * $provider->setRetryConfig(new RetryConfig(
+     *     maxRetries: 3,
+     *     initialDelayMs: 1000,
+     *     backoffMultiplier: 2.0,
+     * ));
+     * ```
+     *
+     * @param RetryConfig $config Retry configuration.
+     */
+    public function setRetryConfig(RetryConfig $config): void {
+        $inner = $this->httpClient instanceof RetryableHttpClient
+            ? $this->httpClient->getInner()
+            : $this->httpClient;
+
+        $this->httpClient = new RetryableHttpClient($inner, $config, $this->getLogCallback());
     }
 
     /**
