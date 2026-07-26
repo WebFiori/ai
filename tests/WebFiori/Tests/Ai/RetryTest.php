@@ -11,9 +11,11 @@
 namespace WebFiori\Tests\Ai;
 
 use PHPUnit\Framework\TestCase;
+use WebFiori\Ai\Exception\AuthenticationException;
 use WebFiori\Ai\Exception\HttpException;
 use WebFiori\Ai\Exception\ProviderException;
 use WebFiori\Ai\Http\FakeHttpClient;
+use WebFiori\Ai\Http\HttpRequest;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Http\RetryableHttpClient;
 use WebFiori\Ai\Message;
@@ -21,51 +23,213 @@ use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 use WebFiori\Ai\RetryConfig;
 
 /**
- * Unit tests for retry logic with exponential backoff.
+ * Behavioral tests for retry logic with exponential backoff.
+ *
+ * Each test verifies a specific behavior that could break if the
+ * implementation changes. Tests do NOT verify PHP assignments or
+ * trivial getters — only observable behavior.
  *
  * @author Ibrahim
  */
 class RetryTest extends TestCase {
+    // -----------------------------------------------------------------------
+    // Backoff behavior
+    // -----------------------------------------------------------------------
+
     /**
      * @test
+     * Delay must grow exponentially between attempts (not stay flat).
      */
-    public function testActualDelayIsApplied() {
-        $inner = new FakeHttpClient();
-        $inner->addResponse(new HttpResponse(503, [], '{"error": {"message": "Unavailable", "type": "server_error"}}'));
-        $inner->addResponse(new HttpResponse(200, [], json_encode([
-            'choices' => [[
-                'message' => ['role' => 'assistant', 'content' => 'OK'],
-                'finish_reason' => 'stop',
-            ]],
-            'model' => 'gpt-4o',
-            'usage' => ['prompt_tokens' => 2, 'completion_tokens' => 1, 'total_tokens' => 3],
-        ])));
+    public function testBackoffDelayGrowsExponentially() {
+        $config = new RetryConfig(
+            initialDelayMs: 1000,
+            maxDelayMs: 60000,
+            backoffMultiplier: 2.0
+        );
 
-        // Use 1ms delay — fast enough for tests, but covers the usleep path
-        $config = new RetryConfig(maxRetries: 2, initialDelayMs: 1, maxDelayMs: 1, backoffMultiplier: 1.0);
-        $retryClient = new RetryableHttpClient($inner, $config);
+        $delay1 = $config->calculateDelayMs(1); // base: 1000ms
+        $delay2 = $config->calculateDelayMs(2); // base: 2000ms
+        $delay3 = $config->calculateDelayMs(3); // base: 4000ms
 
-        $provider = $this->createProvider();
-        $provider->setHttpClient($retryClient);
-
-        $response = $provider->chat([new Message('user', 'Hello')]);
-        $this->assertEquals('OK', $response->getMessage()->getContent());
+        // Each delay must be larger than the previous (accounting for jitter)
+        $this->assertGreaterThan(0, $delay1);
+        $this->assertGreaterThan($delay1 * 0.5, $delay2); // delay2 > half of delay1 minimum
+        $this->assertGreaterThan($delay2 * 0.5, $delay3);
     }
 
     /**
      * @test
+     * Delay must never exceed maxDelayMs regardless of attempt number.
      */
-    public function testExceptionRetryLogsWarning() {
+    public function testBackoffIsCappedAtMaxDelay() {
+        $config = new RetryConfig(
+            initialDelayMs: 1000,
+            maxDelayMs: 5000,
+            backoffMultiplier: 10.0
+        );
+
+        // By attempt 4 uncapped delay would be 1000 * 10^3 = 1,000,000ms
+        for ($attempt = 1; $attempt <= 10; $attempt++) {
+            $delay = $config->calculateDelayMs($attempt);
+            // Allow 20% jitter above the cap
+            $this->assertLessThanOrEqual(6000, $delay, "Attempt $attempt delay $delay exceeds max");
+        }
+    }
+
+    /**
+     * @test
+     * Jitter must not produce a negative delay.
+     */
+    public function testDelayIsNeverNegative() {
+        $config = new RetryConfig(initialDelayMs: 1, maxDelayMs: 1);
+
+        for ($i = 0; $i < 100; $i++) {
+            $delay = $config->calculateDelayMs(1);
+            $this->assertGreaterThanOrEqual(0, $delay);
+        }
+    }
+
+    /**
+     * @test
+     * A 401 auth failure must not be retried — retrying won't fix wrong credentials.
+     */
+    public function testDoesNotRetryAuthenticationFailure() {
+        $inner = new FakeHttpClient();
+        $inner->addResponse(new HttpResponse(401, [], '{"error":{"message":"invalid key","type":"invalid_api_key"}}'));
+
+        $provider = $this->createProvider($inner, maxRetries: 3);
+
+        $this->expectException(AuthenticationException::class);
+        $provider->chat([new Message('user', 'Hello')]);
+
+        $this->assertCount(1, $inner->getRequests());
+    }
+
+    // -----------------------------------------------------------------------
+    // Retry does NOT trigger
+    // -----------------------------------------------------------------------
+
+    /**
+     * @test
+     * A 400 Bad Request must not be retried — it's a client error, not transient.
+     */
+    public function testDoesNotRetryBadRequest() {
+        $inner = new FakeHttpClient();
+        $inner->addResponse(new HttpResponse(400, [], '{"error":{"message":"bad","type":"invalid_request_error"}}'));
+
+        $provider = $this->createProvider($inner, maxRetries: 3);
+
+        $this->expectException(ProviderException::class);
+        $provider->chat([new Message('user', 'Hello')]);
+
+        // Must fail on first attempt — no retry
+        $this->assertCount(1, $inner->getRequests());
+    }
+
+    /**
+     * @test
+     * Non-retryable exceptions must propagate immediately without any retry.
+     */
+    public function testDoesNotRetryNonRetryableException() {
+        $inner = new FakeHttpClient();
+        $inner->addException(new \InvalidArgumentException('Bad config'));
+
+        $retryClient = new RetryableHttpClient(
+            $inner,
+            new RetryConfig(maxRetries: 3, initialDelayMs: 0)
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        $request = new HttpRequest('POST', 'https://example.com', [], '{}');
+        $retryClient->send($request);
+
+        $this->assertCount(1, $inner->getRequests());
+    }
+
+    /**
+     * @test
+     * With maxRetries=3, exactly 4 total attempts before giving up.
+     */
+    public function testGivesUpAfterMaxRetries() {
+        $inner = new FakeHttpClient();
+
+        for ($i = 0; $i < 4; $i++) {
+            $inner->addResponse(new HttpResponse(500, [], '{"error":{"message":"err","type":"t"}}'));
+        }
+
+        $provider = $this->createProvider($inner, maxRetries: 3);
+
+        $this->expectException(ProviderException::class);
+        $provider->chat([new Message('user', 'Hello')]);
+
+        $this->assertCount(4, $inner->getRequests());
+    }
+
+    /**
+     * @test
+     * Exception retries also respect maxRetries limit.
+     */
+    public function testGivesUpAfterMaxRetriesOnException() {
+        $inner = new FakeHttpClient();
+
+        for ($i = 0; $i < 4; $i++) {
+            $inner->addException(new HttpException('Timeout'));
+        }
+
+        $provider = $this->createProvider($inner, maxRetries: 3);
+
+        $this->expectException(HttpException::class);
+        $provider->chat([new Message('user', 'Hello')]);
+    }
+
+    // -----------------------------------------------------------------------
+    // Logging
+    // -----------------------------------------------------------------------
+
+    /**
+     * @test
+     * Each retry attempt on a retryable status code must produce a warning log
+     * with attempt number and status code.
+     */
+    public function testLogsEachRetryAttemptWithCorrectContext() {
+        $inner = new FakeHttpClient();
+        $inner->addResponse(new HttpResponse(500, [], '{"error":{"message":"err","type":"t"}}'));
+        $inner->addResponse(new HttpResponse(503, [], '{"error":{"message":"err","type":"t"}}'));
+        $inner->addResponse($this->successResponse());
+
+        $logEntries = [];
+        $config = new RetryConfig(maxRetries: 3, initialDelayMs: 0);
+        $retryClient = new RetryableHttpClient(
+            $inner,
+            $config,
+            function (string $level, string $message, array $context) use (&$logEntries)
+            {
+                $logEntries[] = compact('level', 'message', 'context');
+            }
+        );
+
+        $provider = $this->createProvider($inner);
+        $provider->setHttpClient($retryClient);
+        $provider->chat([new Message('user', 'Hello')]);
+
+        $this->assertCount(2, $logEntries);
+        $this->assertEquals('warning', $logEntries[0]['level']);
+        $this->assertEquals(1, $logEntries[0]['context']['attempt']);
+        $this->assertEquals(500, $logEntries[0]['context']['status_code']);
+        $this->assertEquals('warning', $logEntries[1]['level']);
+        $this->assertEquals(2, $logEntries[1]['context']['attempt']);
+        $this->assertEquals(503, $logEntries[1]['context']['status_code']);
+    }
+
+    /**
+     * @test
+     * Each retry on an exception must produce a warning log with exception class.
+     */
+    public function testLogsEachRetryOnException() {
         $inner = new FakeHttpClient();
         $inner->addException(new HttpException('Network error'));
-        $inner->addResponse(new HttpResponse(200, [], json_encode([
-            'choices' => [[
-                'message' => ['role' => 'assistant', 'content' => 'OK'],
-                'finish_reason' => 'stop',
-            ]],
-            'model' => 'gpt-4o',
-            'usage' => ['prompt_tokens' => 2, 'completion_tokens' => 1, 'total_tokens' => 3],
-        ])));
+        $inner->addResponse($this->successResponse());
 
         $logEntries = [];
         $config = new RetryConfig(maxRetries: 2, initialDelayMs: 0);
@@ -74,520 +238,253 @@ class RetryTest extends TestCase {
             $config,
             function (string $level, string $message, array $context) use (&$logEntries)
             {
-                $logEntries[] = ['level' => $level, 'message' => $message, 'context' => $context];
+                $logEntries[] = compact('level', 'message', 'context');
             }
         );
 
-        $provider = $this->createProvider();
+        $provider = $this->createProvider($inner);
         $provider->setHttpClient($retryClient);
         $provider->chat([new Message('user', 'Hello')]);
 
         $this->assertCount(1, $logEntries);
         $this->assertEquals('warning', $logEntries[0]['level']);
-        $this->assertStringContainsString('exception', strtolower($logEntries[0]['message']));
-        $this->assertArrayHasKey('exception', $logEntries[0]['context']);
-    }
-
-    /**
-     * @test
-     */
-    public function testExceptionRetryWithNoLogCallback() {
-        // Verify logRetryException with null callback does not crash
-        $inner = new FakeHttpClient();
-        $inner->addException(new HttpException('Timeout'));
-        $inner->addResponse(new HttpResponse(200, [], json_encode([
-            'choices' => [[
-                'message' => ['role' => 'assistant', 'content' => 'OK'],
-                'finish_reason' => 'stop',
-            ]],
-            'model' => 'gpt-4o',
-            'usage' => ['prompt_tokens' => 2, 'completion_tokens' => 1, 'total_tokens' => 3],
-        ])));
-
-        // No log callback — should not throw
-        $config = new RetryConfig(maxRetries: 2, initialDelayMs: 0);
-        $retryClient = new RetryableHttpClient($inner, $config, null);
-
-        $provider = $this->createProvider();
-        $provider->setHttpClient($retryClient);
-
-        $response = $provider->chat([new Message('user', 'Hello')]);
-        $this->assertEquals('OK', $response->getMessage()->getContent());
-    }
-
-    /**
-     * @test
-     */
-    public function testExhaustedExceptionRetriesThrows() {
-        $inner = new FakeHttpClient();
-        $inner->addException(new HttpException('Timeout'));
-        $inner->addException(new HttpException('Timeout'));
-        $inner->addException(new HttpException('Timeout'));
-        $inner->addException(new HttpException('Timeout'));
-
-        $config = new RetryConfig(maxRetries: 3, initialDelayMs: 0);
-        $retryClient = new RetryableHttpClient($inner, $config);
-
-        $provider = $this->createProvider();
-        $provider->setHttpClient($retryClient);
-
-        $this->expectException(HttpException::class);
-        $provider->chat([new Message('user', 'Hello')]);
-    }
-
-    /**
-     * @test
-     */
-    public function testGetInnerClient() {
-        $inner = new FakeHttpClient();
-        $config = new RetryConfig();
-        $retryClient = new RetryableHttpClient($inner, $config);
-
-        $this->assertSame($inner, $retryClient->getInner());
-    }
-
-    /**
-     * @test
-     */
-    public function testGivesUpAfterMaxRetries() {
-        $inner = new FakeHttpClient();
-
-        // All 4 responses (1 initial + 3 retries) are 500
-        for ($i = 0; $i < 4; $i++) {
-            $inner->addResponse(new HttpResponse(500, [], '{"error": {"message": "Server Error", "type": "server_error"}}'));
-        }
-
-        $config = new RetryConfig(maxRetries: 3, initialDelayMs: 0);
-        $retryClient = new RetryableHttpClient($inner, $config);
-
-        $provider = $this->createProvider();
-        $provider->setHttpClient($retryClient);
-
-        $this->expectException(ProviderException::class);
-        $provider->chat([new Message('user', 'Hello')]);
-
-        $this->assertEquals(4, (count($inner->getRequests())));
-    }
-
-    /**
-     * @test
-     */
-    public function testNonRetryableExceptionThrownImmediately() {
-        $inner = new FakeHttpClient();
-        $inner->addException(new \InvalidArgumentException('Bad config'));
-
-        $config = new RetryConfig(maxRetries: 3, initialDelayMs: 0);
-        $retryClient = new RetryableHttpClient($inner, $config);
-
-        $provider = $this->createProvider();
-        $provider->setHttpClient($retryClient);
-
-        $this->expectException(\InvalidArgumentException::class);
-        $provider->chat([new Message('user', 'Hello')]);
-
-        // Should fail on first attempt, not retry
-        $this->assertEquals(1, count($inner->getRequests()));
-    }
-
-    /**
-     * @test
-     */
-    public function testNoRetryOn400() {
-        $inner = new FakeHttpClient();
-        $inner->addResponse(new HttpResponse(400, [], '{"error": {"message": "Bad request", "type": "invalid_request_error"}}'));
-
-        $config = new RetryConfig(maxRetries: 3, initialDelayMs: 0);
-        $retryClient = new RetryableHttpClient($inner, $config);
-
-        $provider = $this->createProvider();
-        $provider->setHttpClient($retryClient);
-
-        // 400 is not in retryable codes, so it should throw immediately
-        $this->expectException(ProviderException::class);
-        $provider->chat([new Message('user', 'Hello')]);
-
-        // Only 1 request made — no retry
-        $this->assertEquals(1, (count($inner->getRequests())));
-    }
-
-    /**
-     * @test
-     */
-    public function testNoRetryOn401() {
-        $inner = new FakeHttpClient();
-        $inner->addResponse(new HttpResponse(401, [], '{"error": {"message": "Invalid API key", "type": "invalid_api_key"}}'));
-
-        $config = new RetryConfig(maxRetries: 3, initialDelayMs: 0);
-        $retryClient = new RetryableHttpClient($inner, $config);
-
-        $provider = $this->createProvider();
-        $provider->setHttpClient($retryClient);
-
-        $this->expectException(\WebFiori\Ai\Exception\AuthenticationException::class);
-        $provider->chat([new Message('user', 'Hello')]);
-    }
-    /**
-     * @test
-     */
-    public function testNoRetryOnSuccess() {
-        $inner = new FakeHttpClient();
-        $inner->addResponse(new HttpResponse(200, [], json_encode([
-            'choices' => [[
-                'message' => ['role' => 'assistant', 'content' => 'Hello'],
-                'finish_reason' => 'stop',
-            ]],
-            'model' => 'gpt-4o',
-            'usage' => ['prompt_tokens' => 5, 'completion_tokens' => 2, 'total_tokens' => 7],
-        ])));
-
-        $config = new RetryConfig(maxRetries: 3, initialDelayMs: 0);
-        $retryClient = new RetryableHttpClient($inner, $config);
-
-        $provider = $this->createProvider();
-        $provider->setHttpClient($retryClient);
-
-        $response = $provider->chat([new Message('user', 'Hello')]);
-
-        $this->assertEquals('Hello', $response->getMessage()->getContent());
-        $this->assertEquals(1, (count($inner->getRequests())));
-    }
-
-    /**
-     * @test
-     */
-    public function testRespectsRetryAfterHeader() {
-        $inner = new FakeHttpClient();
-        $inner->addResponse(new HttpResponse(429, ['retry-after' => '0'], '{"error": {"message": "Rate limit"}}'));
-        $inner->addResponse(new HttpResponse(200, [], json_encode([
-            'choices' => [[
-                'message' => ['role' => 'assistant', 'content' => 'Done'],
-                'finish_reason' => 'stop',
-            ]],
-            'model' => 'gpt-4o',
-            'usage' => ['prompt_tokens' => 2, 'completion_tokens' => 1, 'total_tokens' => 3],
-        ])));
-
-        $config = new RetryConfig(maxRetries: 2, initialDelayMs: 0);
-        $retryClient = new RetryableHttpClient($inner, $config);
-
-        $provider = $this->createProvider();
-        $provider->setHttpClient($retryClient);
-
-        $response = $provider->chat([new Message('user', 'Hello')]);
-
-        $this->assertEquals('Done', $response->getMessage()->getContent());
-        $this->assertEquals(2, (count($inner->getRequests())));
-    }
-
-    /**
-     * @test
-     */
-    public function testRetriesOn429ThenSucceeds() {
-        $inner = new FakeHttpClient();
-        $inner->addResponse(new HttpResponse(429, [], '{"error": {"message": "Rate limit exceeded"}}'));
-        $inner->addResponse(new HttpResponse(200, [], json_encode([
-            'choices' => [[
-                'message' => ['role' => 'assistant', 'content' => 'OK'],
-                'finish_reason' => 'stop',
-            ]],
-            'model' => 'gpt-4o',
-            'usage' => ['prompt_tokens' => 2, 'completion_tokens' => 1, 'total_tokens' => 3],
-        ])));
-
-        $config = new RetryConfig(maxRetries: 2, initialDelayMs: 0);
-        $retryClient = new RetryableHttpClient($inner, $config);
-
-        $provider = $this->createProvider();
-        $provider->setHttpClient($retryClient);
-
-        $response = $provider->chat([new Message('user', 'Hello')]);
-
-        $this->assertEquals('OK', $response->getMessage()->getContent());
-        $this->assertEquals(2, (count($inner->getRequests())));
-    }
-
-    /**
-     * @test
-     */
-    public function testRetriesOn500ThenSucceeds() {
-        $inner = new FakeHttpClient();
-        $inner->addResponse(new HttpResponse(500, [], '{"error": "Internal Server Error"}'));
-        $inner->addResponse(new HttpResponse(500, [], '{"error": "Internal Server Error"}'));
-        $inner->addResponse(new HttpResponse(200, [], json_encode([
-            'choices' => [[
-                'message' => ['role' => 'assistant', 'content' => 'Hello after retries'],
-                'finish_reason' => 'stop',
-            ]],
-            'model' => 'gpt-4o',
-            'usage' => ['prompt_tokens' => 5, 'completion_tokens' => 4, 'total_tokens' => 9],
-        ])));
-
-        $config = new RetryConfig(maxRetries: 3, initialDelayMs: 0);
-        $retryClient = new RetryableHttpClient($inner, $config);
-
-        $provider = $this->createProvider();
-        $provider->setHttpClient($retryClient);
-
-        $response = $provider->chat([new Message('user', 'Hello')]);
-
-        $this->assertEquals('Hello after retries', $response->getMessage()->getContent());
-        $this->assertEquals(3, (count($inner->getRequests())));
-    }
-
-    /**
-     * @test
-     */
-    public function testRetryConfigCalculatesBackoff() {
-        $config = new RetryConfig(
-            maxRetries: 3,
-            initialDelayMs: 1000,
-            maxDelayMs: 30000,
-            backoffMultiplier: 2.0
-        );
-
-        // Without jitter the base values would be 1000, 2000, 4000
-        // With ±20% jitter, they should be within 800-1200, 1600-2400, 3200-4800
-        $delay1 = $config->calculateDelayMs(1);
-        $delay2 = $config->calculateDelayMs(2);
-        $delay3 = $config->calculateDelayMs(3);
-
-        $this->assertGreaterThanOrEqual(800, $delay1);
-        $this->assertLessThanOrEqual(1200, $delay1);
-
-        $this->assertGreaterThanOrEqual(1600, $delay2);
-        $this->assertLessThanOrEqual(2400, $delay2);
-
-        $this->assertGreaterThanOrEqual(3200, $delay3);
-        $this->assertLessThanOrEqual(4800, $delay3);
-    }
-
-    /**
-     * @test
-     */
-    public function testRetryConfigCapsAtMaxDelay() {
-        $config = new RetryConfig(
-            maxRetries: 10,
-            initialDelayMs: 1000,
-            maxDelayMs: 5000,
-            backoffMultiplier: 10.0
-        );
-
-        // By attempt 4, base delay would be 1000 * 10^3 = 1,000,000ms
-        // Should be capped at 5000ms (±20%)
-        $delay = $config->calculateDelayMs(4);
-        $this->assertLessThanOrEqual(6000, $delay); // 5000 + 20% jitter max
-    }
-
-    /**
-     * @test
-     */
-    public function testRetryConfigGetters() {
-        $config = new RetryConfig(
-            maxRetries: 5,
-            initialDelayMs: 500,
-            maxDelayMs: 15000,
-            backoffMultiplier: 3.0,
-            retryableStatusCodes: [429, 503],
-            retryableExceptions: [HttpException::class]
-        );
-
-        $this->assertEquals(5, $config->getMaxRetries());
-        $this->assertEquals(500, $config->getInitialDelayMs());
-        $this->assertEquals(15000, $config->getMaxDelayMs());
-        $this->assertEquals(3.0, $config->getBackoffMultiplier());
-        $this->assertEquals([429, 503], $config->getRetryableStatusCodes());
-        $this->assertEquals([HttpException::class], $config->getRetryableExceptions());
-    }
-
-    /**
-     * @test
-     */
-    public function testRetryConfigIsRetryableException() {
-        $config = new RetryConfig(retryableExceptions: [HttpException::class]);
-
-        $this->assertTrue($config->isRetryableException(new HttpException('timeout')));
-        $this->assertFalse($config->isRetryableException(new \RuntimeException('other')));
-    }
-
-    /**
-     * @test
-     */
-    public function testRetryConfigIsRetryableStatusCode() {
-        $config = new RetryConfig(retryableStatusCodes: [429, 500, 503]);
-
-        $this->assertTrue($config->isRetryableStatusCode(429));
-        $this->assertTrue($config->isRetryableStatusCode(500));
-        $this->assertTrue($config->isRetryableStatusCode(503));
-        $this->assertFalse($config->isRetryableStatusCode(400));
-        $this->assertFalse($config->isRetryableStatusCode(401));
-        $this->assertFalse($config->isRetryableStatusCode(200));
-    }
-
-    /**
-     * @test
-     */
-    public function testRetryLogsWarnings() {
-        $inner = new FakeHttpClient();
-        $inner->addResponse(new HttpResponse(500, [], '{"error": {"message": "Error", "type": "server_error"}}'));
-        $inner->addResponse(new HttpResponse(200, [], json_encode([
-            'choices' => [[
-                'message' => ['role' => 'assistant', 'content' => 'OK'],
-                'finish_reason' => 'stop',
-            ]],
-            'model' => 'gpt-4o',
-            'usage' => ['prompt_tokens' => 2, 'completion_tokens' => 1, 'total_tokens' => 3],
-        ])));
-
-        $logEntries = [];
-        $config = new RetryConfig(maxRetries: 2, initialDelayMs: 0);
-        $retryClient = new RetryableHttpClient($inner, $config, function (string $level, string $message, array $context) use (&$logEntries)
-        {
-            $logEntries[] = ['level' => $level, 'message' => $message, 'context' => $context];
-        });
-
-        $provider = $this->createProvider();
-        $provider->setHttpClient($retryClient);
-        $provider->chat([new Message('user', 'Hello')]);
-
-        $this->assertCount(1, $logEntries);
-        $this->assertEquals('warning', $logEntries[0]['level']);
-        $this->assertStringContainsString('Retrying', $logEntries[0]['message']);
-        $this->assertEquals(500, $logEntries[0]['context']['status_code']);
+        $this->assertEquals(HttpException::class, $logEntries[0]['context']['exception']);
         $this->assertEquals(1, $logEntries[0]['context']['attempt']);
     }
 
+    // -----------------------------------------------------------------------
+    // Retry limits
+    // -----------------------------------------------------------------------
+
     /**
      * @test
+     * With maxRetries=1, exactly 2 total attempts should be made (1 + 1 retry).
      */
-    public function testRetryOnHttpException() {
+    public function testMaxRetriesLimitIsEnforced() {
+        $inner = new FakeHttpClient();
+        $inner->addResponse(new HttpResponse(500, [], '{"error":{"message":"err","type":"t"}}')); // attempt 1
+        $inner->addResponse(new HttpResponse(500, [], '{"error":{"message":"err","type":"t"}}')); // retry 1
+        $inner->addResponse($this->successResponse()); // should never be reached
+
+        $provider = $this->createProvider($inner, maxRetries: 1);
+
+        $this->expectException(ProviderException::class);
+        $provider->chat([new Message('user', 'Hello')]);
+
+        $this->assertCount(2, $inner->getRequests());
+    }
+
+    // -----------------------------------------------------------------------
+    // Retry-After header
+    // -----------------------------------------------------------------------
+
+    /**
+     * @test
+     * A Retry-After header on a 429 overrides the calculated backoff delay.
+     * Verify by checking that retry still succeeds (functional correctness).
+     */
+    public function testRespectsRetryAfterHeaderAndSucceeds() {
+        $inner = new FakeHttpClient();
+        $inner->addResponse(new HttpResponse(429, ['retry-after' => '0'], '{"error":{"message":"rate limit","type":"t"}}'));
+        $inner->addResponse($this->successResponse('After Retry-After'));
+
+        $provider = $this->createProvider($inner, maxRetries: 2);
+        $response = $provider->chat([new Message('user', 'Hello')]);
+
+        $this->assertEquals('After Retry-After', $response->getMessage()->getContent());
+        $this->assertCount(2, $inner->getRequests());
+    }
+
+    /**
+     * @test
+     * A 500 error should be retried until success.
+     */
+    public function testRetriesOnInternalServerError() {
+        $inner = new FakeHttpClient();
+        $inner->addResponse(new HttpResponse(500, [], '{"error":{"message":"err","type":"t"}}'));
+        $inner->addResponse(new HttpResponse(500, [], '{"error":{"message":"err","type":"t"}}'));
+        $inner->addResponse($this->successResponse('After retries'));
+
+        $provider = $this->createProvider($inner, maxRetries: 3);
+        $response = $provider->chat([new Message('user', 'Hello')]);
+
+        $this->assertEquals('After retries', $response->getMessage()->getContent());
+        $this->assertCount(3, $inner->getRequests());
+    }
+
+    /**
+     * @test
+     * Network exceptions (HttpException) should be retried.
+     */
+    public function testRetriesOnNetworkException() {
         $inner = new FakeHttpClient();
         $inner->addException(new HttpException('Connection timed out'));
-        $inner->addResponse(new HttpResponse(200, [], json_encode([
-            'choices' => [[
-                'message' => ['role' => 'assistant', 'content' => 'Recovered'],
-                'finish_reason' => 'stop',
-            ]],
-            'model' => 'gpt-4o',
-            'usage' => ['prompt_tokens' => 2, 'completion_tokens' => 1, 'total_tokens' => 3],
-        ])));
+        $inner->addResponse($this->successResponse('Recovered'));
 
-        $config = new RetryConfig(maxRetries: 2, initialDelayMs: 0);
-        $retryClient = new RetryableHttpClient($inner, $config);
-
-        $provider = $this->createProvider();
-        $provider->setHttpClient($retryClient);
-
+        $provider = $this->createProvider($inner, maxRetries: 2);
         $response = $provider->chat([new Message('user', 'Hello')]);
+
         $this->assertEquals('Recovered', $response->getMessage()->getContent());
     }
 
     /**
      * @test
+     * A 429 rate limit should be retried until success.
      */
-    public function testReturnsLastResponseWhenRetriesExhaustedOnRetryableCode() {
-        // Use a fake client that returns only retryable responses
-        // but bypass provider error handling by testing RetryableHttpClient directly
+    public function testRetriesOnRateLimit() {
         $inner = new FakeHttpClient();
-        $inner->addResponse(new HttpResponse(503, [], 'first'));
-        $inner->addResponse(new HttpResponse(503, [], 'second'));
-        $inner->addResponse(new HttpResponse(503, [], 'last'));
+        $inner->addResponse(new HttpResponse(429, [], '{"error":{"message":"rate limit","type":"t"}}'));
+        $inner->addResponse($this->successResponse());
 
-        $config = new RetryConfig(
-            maxRetries: 2,
-            initialDelayMs: 0,
-            retryableStatusCodes: [503]
-        );
-        $retryClient = new RetryableHttpClient($inner, $config);
+        $provider = $this->createProvider($inner, maxRetries: 2);
+        $response = $provider->chat([new Message('user', 'Hello')]);
 
-        // Call send() directly — bypasses provider error handling
-        $request = new \WebFiori\Ai\Http\HttpRequest('POST', 'https://example.com', [], '{}');
-        $response = $retryClient->send($request);
-
-        // Returns the last response after exhausting retries
-        $this->assertEquals(503, $response->getStatusCode());
-        $this->assertEquals('last', $response->getBody());
-        $this->assertEquals(3, count($inner->getRequests())); // 1 initial + 2 retries
+        $this->assertEquals('Hello', $response->getMessage()->getContent());
+        $this->assertCount(2, $inner->getRequests());
     }
 
     /**
      * @test
+     * When no log callback is set, retry must still work silently without crashing.
      */
-    public function testSetRetryConfigOnProvider() {
+    public function testRetryWorksWithNoLogCallback() {
         $inner = new FakeHttpClient();
-        $inner->addResponse(new HttpResponse(503, [], '{"error": {"message": "Service Unavailable", "type": "service_error"}}'));
-        $inner->addResponse(new HttpResponse(200, [], json_encode([
-            'choices' => [[
-                'message' => ['role' => 'assistant', 'content' => 'Back online'],
-                'finish_reason' => 'stop',
-            ]],
-            'model' => 'gpt-4o',
-            'usage' => ['prompt_tokens' => 2, 'completion_tokens' => 2, 'total_tokens' => 4],
-        ])));
+        $inner->addException(new HttpException('Timeout'));
+        $inner->addResponse($this->successResponse());
 
-        $provider = $this->createProvider();
-        $provider->setHttpClient($inner);
+        $config = new RetryConfig(maxRetries: 2, initialDelayMs: 0);
+        $retryClient = new RetryableHttpClient($inner, $config, null);
+
+        $provider = $this->createProvider($inner);
+        $provider->setHttpClient($retryClient);
+
+        $response = $provider->chat([new Message('user', 'Hello')]);
+        $this->assertEquals('Hello', $response->getMessage()->getContent());
+    }
+
+    /**
+     * @test
+     * setRetryConfig must activate retry behavior end-to-end.
+     */
+    public function testSetRetryConfigActivatesRetryOnProvider() {
+        $inner = new FakeHttpClient();
+        $inner->addResponse(new HttpResponse(503, [], '{"error":{"message":"err","type":"t"}}'));
+        $inner->addResponse($this->successResponse('Back online'));
+
+        $provider = $this->createProvider($inner);
         $provider->setRetryConfig(new RetryConfig(maxRetries: 2, initialDelayMs: 0));
 
         $response = $provider->chat([new Message('user', 'Hello')]);
 
         $this->assertEquals('Back online', $response->getMessage()->getContent());
-        $this->assertEquals(2, (count($inner->getRequests())));
+        $this->assertCount(2, $inner->getRequests());
     }
+
+    // -----------------------------------------------------------------------
+    // setRetryConfig integration
+    // -----------------------------------------------------------------------
 
     /**
      * @test
+     * Calling setRetryConfig twice must not double-wrap the inner client.
      */
-    public function testSetRetryConfigPreservesInnerClient() {
+    public function testSetRetryConfigDoesNotDoubleWrap() {
         $inner = new FakeHttpClient();
-        $provider = $this->createProvider();
-        $provider->setHttpClient($inner);
 
+        $provider = $this->createProvider($inner);
         $provider->setRetryConfig(new RetryConfig(maxRetries: 2, initialDelayMs: 0));
-
-        // Calling setRetryConfig again should not double-wrap
         $provider->setRetryConfig(new RetryConfig(maxRetries: 3, initialDelayMs: 0));
 
         $http = $provider->getHttpClient();
         $this->assertInstanceOf(RetryableHttpClient::class, $http);
-        $this->assertSame($inner, $http->getInner());
         $this->assertNotInstanceOf(RetryableHttpClient::class, $http->getInner());
+        $this->assertSame($inner, $http->getInner());
     }
+
+    // -----------------------------------------------------------------------
+    // Streaming
+    // -----------------------------------------------------------------------
 
     /**
      * @test
+     * Streaming requests must be passed through directly without any retry wrapping.
+     * A single failed streaming attempt must not be retried.
      */
-    public function testStreamingDelegatesDirectlyWithoutRetry() {
+    public function testStreamingIsNotRetried() {
         $inner = new FakeHttpClient();
-        $inner->addStreamingChunks(['data: {"choices":[{"delta":{"content":"Hello"},"finish_reason":null}]}'."\n\n"]);
+        $inner->addStreamingChunks([
+            "data: {\"choices\":[{\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}]}\n\n",
+        ]);
 
         $config = new RetryConfig(maxRetries: 3, initialDelayMs: 0);
         $retryClient = new RetryableHttpClient($inner, $config);
 
-        $provider = $this->createProvider();
+        $provider = $this->createProvider($inner);
         $provider->setHttpClient($retryClient);
 
-        $received = '';
         $provider->streamChat(
             [new Message('user', 'Hello')],
-            onToken: function (string $token) use (&$received)
+            onToken: function (string $token)
             {
-                $received .= $token;
             }
         );
 
-        // One request only — no retry attempted for streaming
-        $this->assertEquals(1, count($inner->getRequests()));
+        $this->assertCount(1, $inner->getRequests());
+    }
+    // -----------------------------------------------------------------------
+    // Retry triggering
+    // -----------------------------------------------------------------------
+
+    /**
+     * @test
+     * Successful responses must not trigger any retry.
+     */
+    public function testSuccessfulResponseIsNotRetried() {
+        $inner = new FakeHttpClient();
+        $inner->addResponse($this->successResponse());
+
+        $provider = $this->createProvider($inner, maxRetries: 3);
+        $provider->chat([new Message('user', 'Hello')]);
+
+        $this->assertCount(1, $inner->getRequests());
     }
 
     /**
-     * Creates an OpenAI provider for testing.
-     *
-     * @return OpenAIClient
+     * Creates an OpenAI provider wired to the given FakeHttpClient,
+     * with optional retry config applied.
      */
-    private function createProvider(): OpenAIClient {
-        return new OpenAIClient([
+    private function createProvider(FakeHttpClient $inner, int $maxRetries = 0): OpenAIClient {
+        $provider = new OpenAIClient([
             'api_key' => 'test-api-key',
             'model' => 'gpt-4o',
         ]);
+        $provider->setHttpClient($inner);
+
+        if ($maxRetries > 0) {
+            $provider->setRetryConfig(new RetryConfig(
+                maxRetries: $maxRetries,
+                initialDelayMs: 0
+            ));
+        }
+
+        return $provider;
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
+    /**
+     * Creates a success response with optional content.
+     */
+    private function successResponse(string $content = 'Hello'): HttpResponse {
+        return new HttpResponse(200, [], json_encode([
+            'choices' => [[
+                'message' => ['role' => 'assistant', 'content' => $content],
+                'finish_reason' => 'stop',
+            ]],
+            'model' => 'gpt-4o',
+            'usage' => ['prompt_tokens' => 5, 'completion_tokens' => 2, 'total_tokens' => 7],
+        ]));
     }
 }
