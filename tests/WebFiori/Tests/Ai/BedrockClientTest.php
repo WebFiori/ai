@@ -17,6 +17,7 @@ use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\Message;
+use WebFiori\Ai\Provider\Bedrock\ApiMethod;
 use WebFiori\Ai\Provider\Bedrock\BedrockClient;
 
 /**
@@ -28,30 +29,26 @@ class BedrockClientTest extends TestCase {
     /**
      * @test
      */
-    public function testChatCompletionWithClaude() {
+    public function testChatCompletionConverseDefault() {
         $client = new FakeHttpClient();
         $client->addResponse(new HttpResponse(200, [], json_encode([
-            'id' => 'msg_bedrock',
-            'type' => 'message',
-            'role' => 'assistant',
-            'model' => 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-            'content' => [[
-                'type' => 'text',
-                'text' => 'Hello! How can I help you?',
-            ]],
-            'stop_reason' => 'end_turn',
+            'output' => [
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => [['text' => 'Hello! How can I help you?']],
+                ],
+            ],
+            'stopReason' => 'end_turn',
             'usage' => [
-                'input_tokens' => 10,
-                'output_tokens' => 8,
+                'inputTokens' => 10,
+                'outputTokens' => 8,
             ],
         ])));
 
         $provider = $this->createProvider();
         $provider->setHttpClient($client);
 
-        $response = $provider->chat([
-            new Message('user', 'Hello'),
-        ]);
+        $response = $provider->chat([new Message('user', 'Hello')]);
 
         $this->assertEquals('Hello! How can I help you?', $response->getMessage()->getContent());
         $this->assertEquals('stop', $response->getFinishReason());
@@ -62,35 +59,27 @@ class BedrockClientTest extends TestCase {
     /**
      * @test
      */
-    public function testRequestIncludesAwsSignature() {
+    public function testConverseEndpoint() {
         $client = new FakeHttpClient();
         $client->addResponse(new HttpResponse(200, [], json_encode([
-            'content' => [['type' => 'text', 'text' => 'Hi']],
-            'stop_reason' => 'end_turn',
-            'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
+            'output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'Hi']]]],
+            'stopReason' => 'end_turn',
+            'usage' => ['inputTokens' => 1, 'outputTokens' => 1],
         ])));
 
-        $provider = $this->createProvider();
+        $provider = $this->createProvider(ApiMethod::CONVERSE);
         $provider->setHttpClient($client);
-
         $provider->chat([new Message('user', 'Hello')]);
 
-        $request = $client->getLastRequest();
-        $headers = $request->getHeaders();
-
-        // Should have AWS SigV4 headers
-        $this->assertArrayHasKey('Authorization', $headers);
-        $this->assertArrayHasKey('X-Amz-Date', $headers);
-        $this->assertArrayHasKey('X-Amz-Content-Sha256', $headers);
-
-        // Authorization should be SigV4 format
-        $this->assertStringStartsWith('AWS4-HMAC-SHA256', $headers['Authorization']);
+        $url = $client->getLastRequest()->getUrl();
+        $this->assertStringContainsString('/converse', $url);
+        $this->assertStringNotContainsString('/invoke', $url);
     }
 
     /**
      * @test
      */
-    public function testEndpointFormat() {
+    public function testInvokeEndpoint() {
         $client = new FakeHttpClient();
         $client->addResponse(new HttpResponse(200, [], json_encode([
             'content' => [['type' => 'text', 'text' => 'Hi']],
@@ -98,38 +87,78 @@ class BedrockClientTest extends TestCase {
             'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
         ])));
 
-        $provider = $this->createProvider();
+        $provider = $this->createProvider(ApiMethod::INVOKE);
         $provider->setHttpClient($client);
-
         $provider->chat([new Message('user', 'Hello')]);
 
-        $request = $client->getLastRequest();
-        $url = $request->getUrl();
-
-        // Should use Bedrock runtime endpoint format
-        $this->assertStringContainsString('bedrock-runtime.us-east-1.amazonaws.com', $url);
-        $this->assertStringContainsString('/model/', $url);
+        $url = $client->getLastRequest()->getUrl();
         $this->assertStringContainsString('/invoke', $url);
+        $this->assertStringNotContainsString('/converse', $url);
     }
 
     /**
      * @test
      */
-    public function testChatCompletionWithApiKey() {
+    public function testChatCompletionInvokeStrategy() {
         $client = new FakeHttpClient();
         $client->addResponse(new HttpResponse(200, [], json_encode([
-            'content' => [['type' => 'text', 'text' => 'Hello from Bedrock!']],
+            'content' => [['type' => 'text', 'text' => 'Hello via Invoke!']],
             'stop_reason' => 'end_turn',
-            'usage' => ['input_tokens' => 5, 'output_tokens' => 4],
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
         ])));
 
-        $provider = $this->createProviderWithApiKey();
+        $provider = $this->createProvider(ApiMethod::INVOKE);
         $provider->setHttpClient($client);
 
         $response = $provider->chat([new Message('user', 'Hello')]);
 
-        $this->assertEquals('Hello from Bedrock!', $response->getMessage()->getContent());
+        $this->assertEquals('Hello via Invoke!', $response->getMessage()->getContent());
         $this->assertEquals('stop', $response->getFinishReason());
+    }
+
+    /**
+     * @test
+     */
+    public function testResponsesStrategyThrowsNotImplemented() {
+        $provider = $this->createProvider(ApiMethod::RESPONSES);
+
+        $this->expectException(UnsupportedFeatureException::class);
+        $provider->chat([new Message('user', 'Hello')]);
+    }
+
+    /**
+     * @test
+     */
+    public function testInvalidApiMethodThrows() {
+        $this->expectException(InvalidConfigException::class);
+        new BedrockClient([
+            'api_key' => 'key',
+            'region' => 'us-east-1',
+            'api_method' => 'invalid_method',
+        ]);
+    }
+
+    /**
+     * @test
+     */
+    public function testRequestIncludesAwsSignature() {
+        $client = new FakeHttpClient();
+        $client->addResponse(new HttpResponse(200, [], json_encode([
+            'output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'Hi']]]],
+            'stopReason' => 'end_turn',
+            'usage' => ['inputTokens' => 1, 'outputTokens' => 1],
+        ])));
+
+        $provider = $this->createProvider();
+        $provider->setHttpClient($client);
+        $provider->chat([new Message('user', 'Hello')]);
+
+        $headers = $client->getLastRequest()->getHeaders();
+
+        $this->assertArrayHasKey('Authorization', $headers);
+        $this->assertArrayHasKey('X-Amz-Date', $headers);
+        $this->assertArrayHasKey('X-Amz-Content-Sha256', $headers);
+        $this->assertStringStartsWith('AWS4-HMAC-SHA256', $headers['Authorization']);
     }
 
     /**
@@ -138,24 +167,20 @@ class BedrockClientTest extends TestCase {
     public function testApiKeyRequestUsesBearer() {
         $client = new FakeHttpClient();
         $client->addResponse(new HttpResponse(200, [], json_encode([
-            'content' => [['type' => 'text', 'text' => 'Hi']],
-            'stop_reason' => 'end_turn',
-            'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
+            'output' => ['message' => ['role' => 'assistant', 'content' => [['text' => 'Hi']]]],
+            'stopReason' => 'end_turn',
+            'usage' => ['inputTokens' => 1, 'outputTokens' => 1],
         ])));
 
         $provider = $this->createProviderWithApiKey();
         $provider->setHttpClient($client);
-
         $provider->chat([new Message('user', 'Hello')]);
 
         $headers = $client->getLastRequest()->getHeaders();
 
-        // Should use Bearer token, not SigV4
         $this->assertArrayHasKey('Authorization', $headers);
         $this->assertStringStartsWith('Bearer ', $headers['Authorization']);
         $this->assertStringContainsString('test-bedrock-api-key', $headers['Authorization']);
-
-        // Should NOT have SigV4 headers
         $this->assertArrayNotHasKey('X-Amz-Date', $headers);
     }
 
@@ -171,39 +196,10 @@ class BedrockClientTest extends TestCase {
      * @test
      */
     public function testApiKeyOnlyRequiresRegion() {
-        // Should not throw — api_key + region is valid
         $provider = new BedrockClient([
             'api_key' => 'test-key',
             'region' => 'us-east-1',
         ]);
-        $this->assertEquals('bedrock', $provider->getName());
-    }
-
-    /**
-     * @test
-     */
-    public function testEmbeddingsNotSupported() {
-        $provider = $this->createProvider();
-
-        $this->expectException(UnsupportedFeatureException::class);
-        $provider->embed('Hello world');
-    }
-
-    /**
-     * @test
-     */
-    public function testImageGenerationNotSupported() {
-        $provider = $this->createProvider();
-
-        $this->expectException(UnsupportedFeatureException::class);
-        $provider->generateImage(new ImageRequest('A cat'));
-    }
-
-    /**
-     * @test
-     */
-    public function testGetName() {
-        $provider = $this->createProvider();
         $this->assertEquals('bedrock', $provider->getName());
     }
 
@@ -227,29 +223,56 @@ class BedrockClientTest extends TestCase {
     }
 
     /**
+     * @test
+     */
+    public function testEmbeddingsNotSupported() {
+        $this->expectException(UnsupportedFeatureException::class);
+        $this->createProvider()->embed('Hello world');
+    }
+
+    /**
+     * @test
+     */
+    public function testImageGenerationNotSupported() {
+        $this->expectException(UnsupportedFeatureException::class);
+        $this->createProvider()->generateImage(new ImageRequest('A cat'));
+    }
+
+    /**
+     * @test
+     */
+    public function testGetName() {
+        $this->assertEquals('bedrock', $this->createProvider()->getName());
+    }
+
+    /**
+     * Creates a Bedrock provider (SigV4 mode) with optional api_method.
+     *
+     * @param string $apiMethod One of the ApiMethod constants.
+     *
+     * @return BedrockClient
+     */
+    private function createProvider(string $apiMethod = ApiMethod::CONVERSE): BedrockClient {
+        return new BedrockClient([
+            'access_key' => 'AKIAIOSFODNN7EXAMPLE',
+            'secret_key' => 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+            'region'     => 'us-east-1',
+            'model'      => 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+            'api_method' => $apiMethod,
+        ]);
+    }
+
+    /**
      * Creates a Bedrock provider using API key authentication.
      *
      * @return BedrockClient
      */
     private function createProviderWithApiKey(): BedrockClient {
         return new BedrockClient([
-            'api_key' => 'test-bedrock-api-key',
-            'region' => 'us-east-1',
-            'model' => 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-        ]);
-    }
-
-    /**
-     * Creates a configured Bedrock provider for testing (SigV4 mode).
-     *
-     * @return BedrockClient
-     */
-    private function createProvider(): BedrockClient {
-        return new BedrockClient([
-            'access_key' => 'AKIAIOSFODNN7EXAMPLE',
-            'secret_key' => 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
-            'region' => 'us-east-1',
-            'model' => 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+            'api_key'    => 'test-bedrock-api-key',
+            'region'     => 'us-east-1',
+            'model'      => 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+            'api_method' => ApiMethod::CONVERSE,
         ]);
     }
 }
