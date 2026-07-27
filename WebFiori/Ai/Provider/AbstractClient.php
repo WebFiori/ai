@@ -17,11 +17,13 @@ use WebFiori\Ai\Http\CurlHttpClient;
 use WebFiori\Ai\Http\HttpClientInterface;
 use WebFiori\Ai\Http\HttpRequest;
 use WebFiori\Ai\Http\HttpResponse;
+use WebFiori\Ai\Http\RateLimitAwareHttpClient;
 use WebFiori\Ai\Http\RetryableHttpClient;
 use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\LoggerTrait;
 use WebFiori\Ai\Message;
+use WebFiori\Ai\RateLimitStatus;
 use WebFiori\Ai\RetryConfig;
 use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Tool\ToolResult;
@@ -172,6 +174,33 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Enables rate limit header tracking on this provider.
+     *
+     * Wraps the current HTTP client in a RateLimitAwareHttpClient decorator.
+     * After each API call, rate limit headers are parsed and stored. Use
+     * {@see getRateLimitStatus()} to read the current status.
+     *
+     * A warning is logged when remaining capacity drops below the threshold.
+     *
+     * ```php
+     * $provider->enableRateLimitTracking(warningThreshold: 0.1); // warn at <10%
+     * $response = $provider->chat($messages);
+     * $status = $provider->getRateLimitStatus();
+     * echo $status?->getRemainingRequests();
+     * ```
+     *
+     * @param float $warningThreshold Fraction of remaining capacity (0.0–1.0) below
+     *        which a warning is logged. Default is 0.1 (10%).
+     */
+    public function enableRateLimitTracking(float $warningThreshold = 0.1): void {
+        $inner = $this->httpClient instanceof RateLimitAwareHttpClient
+            ? $this->httpClient->getInner()
+            : $this->httpClient;
+
+        $this->httpClient = new RateLimitAwareHttpClient($inner, $warningThreshold, $this->getLogCallback());
+    }
+
+    /**
      * Generates an image from a text prompt.
      *
      * @param ImageRequest $request The image generation request.
@@ -208,6 +237,22 @@ abstract class AbstractClient implements ProviderInterface {
      */
     public function getHttpClient(): HttpClientInterface {
         return $this->httpClient;
+    }
+
+    /**
+     * Returns the last known rate limit status from the most recent API response.
+     *
+     * Returns null if rate limit tracking is not enabled, no requests have been
+     * made yet, or the provider does not include rate limit headers in responses.
+     *
+     * @return RateLimitStatus|null The current rate limit status.
+     */
+    public function getRateLimitStatus(): ?RateLimitStatus {
+        if ($this->httpClient instanceof RateLimitAwareHttpClient) {
+            return $this->httpClient->getLastStatus();
+        }
+
+        return null;
     }
 
     /**
