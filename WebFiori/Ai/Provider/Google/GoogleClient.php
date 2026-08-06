@@ -40,11 +40,13 @@ use WebFiori\Ai\Usage;
  *   or 'vertex_ai'. The Gemini API (generativelanguage.googleapis.com) is simpler
  *   and works with the free tier. Gemini Enterprise Agent Platform (previously
  *   Vertex AI) at aiplatform.googleapis.com is the enterprise endpoint requiring
- *   project_id and location.
+ *   project_id.
  * - 'api_key' (optional): Gemini API key from Google AI Studio. Simplest auth
  *   method for the Gemini API. The key is passed as a query parameter.
  * - 'project_id' (required for vertex_ai API): GCP project ID.
- * - 'location' (required for vertex_ai API): GCP region (e.g., 'us-central1').
+ * - 'location' (optional for vertex_ai API): GCP region (e.g., 'us-central1').
+ *   Defaults to 'global' which uses Google's global endpoint and automatic routing.
+ *   Use a specific region if you have data residency requirements.
  * - 'model' (optional): Default model. Defaults to 'gemini-2.5-flash'.
  * - 'credentials' (optional): Path to service account JSON file, or an array
  *   with the credentials.
@@ -371,8 +373,19 @@ class GoogleClient extends AbstractClient {
         }
 
         $projectId = $this->getConfig('project_id');
-        $location = $this->getConfig('location');
+        $location = $this->getConfig('location', 'global');
 
+        // Global location uses a single endpoint without regional subdomain
+        if ($location === 'global') {
+            return sprintf(
+                'https://aiplatform.googleapis.com/v1/projects/%s/locations/global/publishers/google/models/%s:%s',
+                $projectId,
+                $model,
+                $action
+            );
+        }
+
+        // Regional locations use region-prefixed subdomain
         return sprintf(
             'https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:%s',
             $location,
@@ -845,13 +858,6 @@ class GoogleClient extends AbstractClient {
                 throw new InvalidConfigException(
                     'The "project_id" configuration option is required for Google provider.',
                     'project_id'
-                );
-            }
-
-            if (empty($config['location'])) {
-                throw new InvalidConfigException(
-                    'The "location" configuration option is required for Google provider.',
-                    'location'
                 );
             }
         }
