@@ -189,12 +189,24 @@ class GoogleClient extends AbstractClient {
                     $decoded = ['result' => $result->getContent()];
                 }
 
-                $parts[] = [
+                $part = [
                     'functionResponse' => [
                         'name' => $result->getToolCallId(),
                         'response' => (object) $decoded,
                     ],
                 ];
+
+                // Gemini requires all functionResponse parts for a single model turn
+                // to be in one 'function' role content entry. Merge consecutive tool
+                // messages into the last content entry instead of creating a new one.
+                $last = end($contents);
+
+                if ($last !== false && $last['role'] === 'function') {
+                    $contents[count($contents) - 1]['parts'][] = $part;
+                    continue;
+                }
+
+                $parts[] = $part;
             }
 
             if (!empty($parts)) {
