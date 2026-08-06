@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.4.3](https://github.com/WebFiori/ai/compare/v0.4.0...v0.4.3) (2026-08-06)
+
+
+### Features
+
+* **cache:** implement response caching interface ([7efc501](https://github.com/WebFiori/ai/commit/7efc5016ec4dc5c34dc859a61e7e725bc1160a72)), closes [#23](https://github.com/WebFiori/ai/issues/23)
+* **google:** support global location endpoint for Vertex AI ([fcf0322](https://github.com/WebFiori/ai/commit/fcf0322a816373b3b047458f4c9b46502ba42d27))
+* **resilience:** rate limit header tracking ([2cc8b38](https://github.com/WebFiori/ai/commit/2cc8b38329456d07418cfe306a54feb30b283e40))
+* **resilience:** rate limit tracking release trigger ([3ba16ad](https://github.com/WebFiori/ai/commit/3ba16adfe8ee543fb69f839047389042f2606661)), closes [#22](https://github.com/WebFiori/ai/issues/22)
+
+
+### Bug Fixes
+
+* cast empty functionCall args to object to avoid JSON list serialization ([5f916d0](https://github.com/WebFiori/ai/commit/5f916d0921feea8f8b266757c705fddb69713f2b))
+* merge consecutive tool messages into single function role content for Gemini ([7f66ea3](https://github.com/WebFiori/ai/commit/7f66ea3d6d4d76300ce4d5a6bf763953696b08eb))
+* preserve thought_signature and raw parts for Gemini tool calls ([6e8bad8](https://github.com/WebFiori/ai/commit/6e8bad8920eb7844d9f16b33f0e020e22ee17426))
+* skip thought parts in parseChatResponse for Gemini thinking mode ([bc2a7ff](https://github.com/WebFiori/ai/commit/bc2a7ffdd3384755f12cc01d606d90eb638a6e2d))
+
+
+### Miscellaneous Chores
+
+* release v0.4.3 ([2070fc5](https://github.com/WebFiori/ai/commit/2070fc5373a029349351680edea34a9ccd805d1e))
+
 ## [0.4.0](https://github.com/WebFiori/ai/compare/v0.3.0...v0.4.0) (2026-07-26)
 
 
