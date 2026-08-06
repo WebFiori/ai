@@ -34,3 +34,4 @@ export GCP_ACCESS_TOKEN="ya29...."
 | 07 | [Tool Calling](07-tool-calling/) | AI-invoked functions with a live demo |
 | 08 | [Error Handling](08-error-handling/) | Error handling patterns and retry strategies |
 | 09 | [Testing](09-testing/) | Using FakeHttpClient for unit testing |
+| 10 | [Caching](10-caching/) | Response caching to reduce costs and latency |

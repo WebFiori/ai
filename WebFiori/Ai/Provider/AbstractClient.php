@@ -10,6 +10,10 @@
  */
 namespace WebFiori\Ai\Provider;
 
+use WebFiori\Ai\Cache\CachedResponse;
+use WebFiori\Ai\Cache\CacheConfig;
+use WebFiori\Ai\Cache\CacheInterface;
+use WebFiori\Ai\Cache\CacheKeyGenerator;
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\EmbeddingResponse;
 use WebFiori\Ai\Exception\InvalidConfigException;
@@ -32,13 +36,34 @@ use WebFiori\Ai\Tool\ToolResult;
  * Base class for AI provider implementations.
  *
  * Provides shared functionality for configuration management, HTTP client
- * handling, logging, and the template for provider-specific operations.
+ * handling, logging, caching, and the template for provider-specific operations.
  * Concrete providers extend this class and implement the abstract methods
  * to handle their specific API formats.
  *
  * @author Ibrahim
  */
 abstract class AbstractClient implements ProviderInterface {
+    /**
+     * Cache implementation for storing responses.
+     *
+     * @var CacheInterface|null
+     */
+    private ?CacheInterface $cache = null;
+
+    /**
+     * Cache configuration.
+     *
+     * @var CacheConfig
+     */
+    private CacheConfig $cacheConfig;
+
+    /**
+     * Cache key generator.
+     *
+     * @var CacheKeyGenerator
+     */
+    private CacheKeyGenerator $cacheKeyGenerator;
+
     /**
      * Provider configuration options.
      *
@@ -69,6 +94,8 @@ abstract class AbstractClient implements ProviderInterface {
             $config['timeout'] ?? 120,
             $config['connect_timeout'] ?? 10
         );
+        $this->cacheConfig = new CacheConfig(enabled: false);
+        $this->cacheKeyGenerator = new CacheKeyGenerator();
         $this->validateConfig($config);
     }
 
@@ -77,6 +104,9 @@ abstract class AbstractClient implements ProviderInterface {
      *
      * Handles logging, request building, HTTP transport, response parsing,
      * and error mapping. Delegates provider-specific logic to abstract methods.
+     *
+     * If caching is enabled and the request is cacheable (based on temperature
+     * settings), cached responses are returned when available.
      *
      * @param Message[] $messages An array of messages forming the conversation.
      * @param array<string, mixed> $options Additional options (e.g., temperature,
@@ -92,6 +122,34 @@ abstract class AbstractClient implements ProviderInterface {
     public function chat(array $messages, array $options = []): ChatResponse {
         $model = $options['model'] ?? $this->getConfig('model');
         $startTime = microtime(true);
+        $autoExecute = $options['auto_execute_tools'] ?? false;
+        $temperature = $options['temperature'] ?? null;
+
+        // Check cache (skip if auto_execute_tools is enabled due to side effects)
+        $cacheKey = null;
+        $shouldCache = !$autoExecute && $this->cache !== null
+            && $this->cacheConfig->shouldCacheChat($temperature);
+
+        if ($shouldCache) {
+            $cacheKey = $this->cacheKeyGenerator->forChat(
+                $this->getName(),
+                $model,
+                $messages,
+                $options
+            );
+
+            $cached = $this->cache->get($cacheKey);
+
+            if ($cached !== null) {
+                $this->logInfo('Chat cache hit', [
+                    'provider' => $this->getName(),
+                    'model' => $model,
+                    'cache_key' => $cacheKey,
+                ]);
+
+                return $cached->getData();
+            }
+        }
 
         $this->logInfo('Chat request started', [
             'provider' => $this->getName(),
@@ -104,7 +162,6 @@ abstract class AbstractClient implements ProviderInterface {
         $this->handleErrorResponse($httpResponse);
         $response = $this->parseChatResponse($httpResponse);
 
-        $autoExecute = $options['auto_execute_tools'] ?? false;
         $tools = $options['tools'] ?? [];
         $maxIterations = $options['max_tool_iterations'] ?? 10;
 
@@ -151,11 +208,28 @@ abstract class AbstractClient implements ProviderInterface {
             'total_tokens' => $response->getUsage()?->getTotalTokens(),
         ]);
 
+        // Store in cache
+        if ($shouldCache && $cacheKey !== null) {
+            $this->cache->set(
+                $cacheKey,
+                new CachedResponse($response, 'chat'),
+                $this->cacheConfig->getDefaultTtl()
+            );
+
+            $this->logDebug('Chat response cached', [
+                'cache_key' => $cacheKey,
+                'ttl' => $this->cacheConfig->getDefaultTtl(),
+            ]);
+        }
+
         return $response;
     }
 
     /**
      * Generates vector embeddings for the given text input.
+     *
+     * If caching is enabled, embeddings are cached since they are deterministic
+     * (same input always produces the same vector).
      *
      * @param string|string[] $input A single text string or an array of strings.
      * @param array<string, mixed> $options Additional provider-specific options.
@@ -166,11 +240,54 @@ abstract class AbstractClient implements ProviderInterface {
      * @throws \WebFiori\Ai\Exception\ProviderException If the provider returns an error.
      */
     public function embed(string|array $input, array $options = []): EmbeddingResponse {
+        $model = $options['model'] ?? $this->getConfig('embedding_model', $this->getConfig('model'));
+
+        // Check cache
+        $cacheKey = null;
+        $shouldCache = $this->cache !== null && $this->cacheConfig->shouldCacheEmbedding();
+
+        if ($shouldCache) {
+            $cacheKey = $this->cacheKeyGenerator->forEmbedding(
+                $this->getName(),
+                $model,
+                $input,
+                $options
+            );
+
+            $cached = $this->cache->get($cacheKey);
+
+            if ($cached !== null) {
+                $this->logInfo('Embedding cache hit', [
+                    'provider' => $this->getName(),
+                    'model' => $model,
+                    'cache_key' => $cacheKey,
+                ]);
+
+                return $cached->getData();
+            }
+        }
+
         $request = $this->buildEmbedRequest($input, $options);
         $httpResponse = $this->sendRequest($request);
         $this->handleErrorResponse($httpResponse);
 
-        return $this->parseEmbedResponse($httpResponse);
+        $response = $this->parseEmbedResponse($httpResponse);
+
+        // Store in cache
+        if ($shouldCache && $cacheKey !== null) {
+            $this->cache->set(
+                $cacheKey,
+                new CachedResponse($response, 'embedding'),
+                $this->cacheConfig->getEmbeddingTtl()
+            );
+
+            $this->logDebug('Embedding response cached', [
+                'cache_key' => $cacheKey,
+                'ttl' => $this->cacheConfig->getEmbeddingTtl(),
+            ]);
+        }
+
+        return $response;
     }
 
     /**
@@ -262,6 +379,66 @@ abstract class AbstractClient implements ProviderInterface {
      */
     public function setHttpClient(HttpClientInterface $client): void {
         $this->httpClient = $client;
+    }
+
+    /**
+     * Sets the cache implementation for storing responses.
+     *
+     * When a cache is set, responses from chat() and embed() calls will be
+     * stored and retrieved based on the cache configuration.
+     *
+     * ```php
+     * $provider->setCache(new InMemoryCache());
+     * $provider->setCacheConfig(new CacheConfig(defaultTtl: 3600));
+     * ```
+     *
+     * @param CacheInterface|null $cache The cache implementation, or null to disable.
+     */
+    public function setCache(?CacheInterface $cache): void {
+        $this->cache = $cache;
+
+        if ($cache !== null && !$this->cacheConfig->isEnabled()) {
+            $this->cacheConfig = new CacheConfig(enabled: true);
+        }
+    }
+
+    /**
+     * Sets the cache configuration.
+     *
+     * Controls TTL values and which requests should be cached based on
+     * parameters like temperature.
+     *
+     * ```php
+     * $provider->setCacheConfig(new CacheConfig(
+     *     enabled: true,
+     *     defaultTtl: 3600,
+     *     embeddingTtl: 86400,
+     *     skipCacheAboveTemperature: 0.0, // Only cache temperature=0
+     * ));
+     * ```
+     *
+     * @param CacheConfig $config The cache configuration.
+     */
+    public function setCacheConfig(CacheConfig $config): void {
+        $this->cacheConfig = $config;
+    }
+
+    /**
+     * Returns the current cache implementation.
+     *
+     * @return CacheInterface|null The cache, or null if not set.
+     */
+    public function getCache(): ?CacheInterface {
+        return $this->cache;
+    }
+
+    /**
+     * Returns the current cache configuration.
+     *
+     * @return CacheConfig The cache configuration.
+     */
+    public function getCacheConfig(): CacheConfig {
+        return $this->cacheConfig;
     }
 
     /**
