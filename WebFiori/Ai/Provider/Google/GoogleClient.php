@@ -782,7 +782,14 @@ class GoogleClient extends AbstractClient {
                 );
                 // Preserve the raw part so thought_signature and any other
                 // provider-specific fields are replayed verbatim in follow-up turns.
-                $toolCall->setRawPart($part);
+                // Ensure args is always an object (never a list) when replaying.
+                $rawPart = $part;
+
+                if (isset($rawPart['functionCall']['args']) && (empty($rawPart['functionCall']['args']) || array_is_list($rawPart['functionCall']['args']))) {
+                    $rawPart['functionCall']['args'] = (object) [];
+                }
+
+                $toolCall->setRawPart($rawPart);
                 $toolCalls[] = $toolCall;
             }
         }
