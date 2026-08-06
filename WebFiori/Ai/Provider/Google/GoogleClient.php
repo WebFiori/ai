@@ -166,6 +166,13 @@ class GoogleClient extends AbstractClient {
 
             if ($message->hasToolCalls()) {
                 foreach ($message->getToolCalls() as $toolCall) {
+                    // Use raw part if available to preserve provider-specific fields
+                    // (e.g. thought_signature required by Gemini 2.5+)
+                    if ($toolCall->getRawPart() !== null) {
+                        $parts[] = $toolCall->getRawPart();
+                        continue;
+                    }
+
                     $args = $toolCall->getArguments();
                     $callData = [
                         'functionCall' => [
@@ -768,11 +775,15 @@ class GoogleClient extends AbstractClient {
             }
 
             if (isset($part['functionCall'])) {
-                $toolCalls[] = new ToolCall(
+                $toolCall = new ToolCall(
                     uniqid('call_'),
                     $part['functionCall']['name'],
                     $part['functionCall']['args'] ?? []
                 );
+                // Preserve the raw part so thought_signature and any other
+                // provider-specific fields are replayed verbatim in follow-up turns.
+                $toolCall->setRawPart($part);
+                $toolCalls[] = $toolCall;
             }
         }
 
