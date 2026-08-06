@@ -770,6 +770,12 @@ class GoogleClient extends AbstractClient {
         $toolCalls = [];
 
         foreach ($parts as $part) {
+            // Skip internal thought parts (Gemini 2.5+ thinking mode)
+            // These contain the model's reasoning, not the final answer.
+            if (!empty($part['thought'])) {
+                continue;
+            }
+
             if (isset($part['text'])) {
                 $content .= $part['text'];
             }
