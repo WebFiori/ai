@@ -753,6 +753,10 @@ class GoogleClient extends AbstractClient {
      */
     protected function parseChatResponse(HttpResponse $response): ChatResponse {
         $data = $response->getJson();
+
+        // Temporary debug: log raw response structure
+        file_put_contents('/tmp/gemini-last-response.json', json_encode($data, JSON_PRETTY_PRINT));
+
         $candidates = $data['candidates'] ?? [];
 
         if (empty($candidates)) {
