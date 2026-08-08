@@ -12,6 +12,7 @@ namespace WebFiori\Ai\Provider;
 
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\EmbeddingResponse;
+use WebFiori\Ai\HealthCheckResult;
 use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
@@ -79,6 +80,18 @@ interface ProviderInterface {
      * @return string A human-readable provider name (e.g., 'openai', 'google').
      */
     public function getName(): string;
+
+    /**
+     * Performs a health check to verify the provider is available.
+     *
+     * This method never throws exceptions. Errors are captured in the result.
+     * The check bypasses caching and retry logic to give real-time status.
+     *
+     * @param int $timeout Timeout in seconds for the health check. Default is 5.
+     *
+     * @return HealthCheckResult The result containing availability, latency, and any errors.
+     */
+    public function healthCheck(int $timeout = 5): HealthCheckResult;
 
     /**
      * Sets the HTTP client used for making API requests.

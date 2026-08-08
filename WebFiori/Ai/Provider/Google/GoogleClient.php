@@ -82,6 +82,73 @@ class GoogleClient extends AbstractClient {
     }
 
     /**
+     * Performs a health check by listing models or making a minimal request.
+     *
+     * @param int $timeout Timeout in seconds for the health check.
+     *
+     * @return \WebFiori\Ai\HealthCheckResult The health check result.
+     */
+    public function healthCheck(int $timeout = 5): \WebFiori\Ai\HealthCheckResult {
+        $startTime = microtime(true);
+        $checkMethod = 'models_list';
+
+        try {
+            // Build models list URL
+            if ($this->isGeminiApi()) {
+                $url = 'https://generativelanguage.googleapis.com/v1beta/models';
+                $apiKey = $this->getConfig('api_key');
+
+                if ($apiKey !== null) {
+                    $url .= '?key='.$apiKey;
+                }
+            } else {
+                $projectId = $this->getConfig('project_id');
+                $location = $this->getConfig('location', 'global');
+
+                if ($location === 'global') {
+                    $url = sprintf(
+                        'https://aiplatform.googleapis.com/v1/projects/%s/locations/global/publishers/google/models',
+                        $projectId
+                    );
+                } else {
+                    $url = sprintf(
+                        'https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models',
+                        $location,
+                        $projectId,
+                        $location
+                    );
+                }
+            }
+
+            $request = new \WebFiori\Ai\Http\HttpRequest(
+                'GET',
+                $url,
+                $this->getHeaders(),
+                ''
+            );
+
+            // Use a fresh HTTP client with short timeout
+            $httpClient = new \WebFiori\Ai\Http\CurlHttpClient($timeout, $timeout);
+            $response = $httpClient->send($request);
+
+            $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
+                return \WebFiori\Ai\HealthCheckResult::success($latencyMs, $checkMethod);
+            }
+
+            $body = $response->getJson();
+            $error = $body['error']['message'] ?? 'HTTP '.$response->getStatusCode();
+
+            return \WebFiori\Ai\HealthCheckResult::failure($error, $latencyMs, $checkMethod);
+        } catch (\Throwable $e) {
+            $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            return \WebFiori\Ai\HealthCheckResult::failure($e->getMessage(), $latencyMs, $checkMethod);
+        }
+    }
+
+    /**
      * Builds the generation config from options.
      *
      * @param array<string, mixed> $options The request options.

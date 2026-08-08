@@ -177,6 +177,45 @@ class BedrockClient extends AbstractClient {
     }
 
     /**
+     * Performs a health check using the ListFoundationModels endpoint.
+     *
+     * @param int $timeout Timeout in seconds for the health check.
+     *
+     * @return \WebFiori\Ai\HealthCheckResult The health check result.
+     */
+    public function healthCheck(int $timeout = 5): \WebFiori\Ai\HealthCheckResult {
+        $startTime = microtime(true);
+        $checkMethod = 'models_list';
+        $region = $this->getConfig('region');
+        $url = "https://bedrock.{$region}.amazonaws.com/foundation-models";
+
+        try {
+            $headers = $this->getBedrockHeaders('GET', $url, '');
+            $headers['Accept'] = 'application/json';
+
+            $request = new \WebFiori\Ai\Http\HttpRequest('GET', $url, $headers, '');
+
+            $httpClient = new \WebFiori\Ai\Http\CurlHttpClient($timeout, $timeout);
+            $response = $httpClient->send($request);
+
+            $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
+                return \WebFiori\Ai\HealthCheckResult::success($latencyMs, $checkMethod);
+            }
+
+            $responseBody = $response->getJson();
+            $error = $responseBody['message'] ?? 'HTTP '.$response->getStatusCode();
+
+            return \WebFiori\Ai\HealthCheckResult::failure($error, $latencyMs, $checkMethod);
+        } catch (\Throwable $e) {
+            $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            return \WebFiori\Ai\HealthCheckResult::failure($e->getMessage(), $latencyMs, $checkMethod);
+        }
+    }
+
+    /**
      * Creates the invocation strategy for the given API method.
      *
      * @param string $apiMethod One of the {@see ApiMethod} constants.

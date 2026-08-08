@@ -36,3 +36,4 @@ export GCP_ACCESS_TOKEN="ya29...."
 | 09 | [Testing](09-testing/) | Using FakeHttpClient for unit testing |
 | 10 | [Caching](10-caching/) | Response caching to reduce costs and latency |
 | 11 | [Context Window](11-context-window/) | Token counting and context window management |
+| 12 | [Health Checks](12-health-checks/) | Verify provider availability before sending requests |
