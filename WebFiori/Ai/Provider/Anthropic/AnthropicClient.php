@@ -58,6 +58,56 @@ class AnthropicClient extends AbstractClient {
     }
 
     /**
+     * Performs a health check by making a minimal completion request.
+     *
+     * Anthropic doesn't have a free models list endpoint, so we make a
+     * tiny completion request (max_tokens: 1) to verify connectivity.
+     *
+     * @param int $timeout Timeout in seconds for the health check.
+     *
+     * @return \WebFiori\Ai\HealthCheckResult The health check result.
+     */
+    public function healthCheck(int $timeout = 5): \WebFiori\Ai\HealthCheckResult {
+        $startTime = microtime(true);
+        $checkMethod = 'minimal_completion';
+
+        try {
+            $requestBody = [
+                'model' => $this->getConfig('model', 'claude-sonnet-4-20250514'),
+                'max_tokens' => 1,
+                'messages' => [
+                    ['role' => 'user', 'content' => 'Hi'],
+                ],
+            ];
+
+            $request = new \WebFiori\Ai\Http\HttpRequest(
+                'POST',
+                $this->getEndpoint('/v1/messages'),
+                $this->getHeaders(),
+                json_encode($requestBody)
+            );
+
+            $httpClient = new \WebFiori\Ai\Http\CurlHttpClient($timeout, $timeout);
+            $response = $httpClient->send($request);
+
+            $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
+                return \WebFiori\Ai\HealthCheckResult::success($latencyMs, $checkMethod);
+            }
+
+            $responseBody = $response->getJson();
+            $error = $responseBody['error']['message'] ?? 'HTTP '.$response->getStatusCode();
+
+            return \WebFiori\Ai\HealthCheckResult::failure($error, $latencyMs, $checkMethod);
+        } catch (\Throwable $e) {
+            $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            return \WebFiori\Ai\HealthCheckResult::failure($e->getMessage(), $latencyMs, $checkMethod);
+        }
+    }
+
+    /**
      * Applies optional generation parameters to the request body.
      *
      * @param array<string, mixed> &$body The request body to modify.

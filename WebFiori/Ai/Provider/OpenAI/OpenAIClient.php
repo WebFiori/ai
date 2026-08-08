@@ -54,6 +54,48 @@ class OpenAIClient extends AbstractClient {
     }
 
     /**
+     * Performs a health check by calling the models list endpoint.
+     *
+     * This endpoint is free (no token usage) and verifies API key validity.
+     *
+     * @param int $timeout Timeout in seconds for the health check.
+     *
+     * @return \WebFiori\Ai\HealthCheckResult The health check result.
+     */
+    public function healthCheck(int $timeout = 5): \WebFiori\Ai\HealthCheckResult {
+        $startTime = microtime(true);
+        $checkMethod = 'models_list';
+
+        try {
+            $request = new \WebFiori\Ai\Http\HttpRequest(
+                'GET',
+                $this->getEndpoint('/models'),
+                $this->getHeaders(),
+                ''
+            );
+
+            // Use a fresh HTTP client with short timeout, bypassing retry/cache
+            $httpClient = new \WebFiori\Ai\Http\CurlHttpClient($timeout, $timeout);
+            $response = $httpClient->send($request);
+
+            $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
+                return \WebFiori\Ai\HealthCheckResult::success($latencyMs, $checkMethod);
+            }
+
+            $body = $response->getJson();
+            $error = $body['error']['message'] ?? 'HTTP '.$response->getStatusCode();
+
+            return \WebFiori\Ai\HealthCheckResult::failure($error, $latencyMs, $checkMethod);
+        } catch (\Throwable $e) {
+            $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            return \WebFiori\Ai\HealthCheckResult::failure($e->getMessage(), $latencyMs, $checkMethod);
+        }
+    }
+
+    /**
      * Applies optional generation parameters to the request body.
      *
      * @param array<string, mixed> &$body The request body to modify.
