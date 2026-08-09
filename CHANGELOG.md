@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.5](https://github.com/WebFiori/ai/compare/v0.4.3...v0.4.5) (2026-08-08)
+
+
+### Features
+
+* **context:** implement token counting and context window management ([ab164f1](https://github.com/WebFiori/ai/commit/ab164f16df64ab52a63a777002f9328a8d07a7a5))
+* **context:** implement token counting and context window management ([20cc310](https://github.com/WebFiori/ai/commit/20cc310c1d1e484f500962ce2d39d60c6256502b)), closes [#28](https://github.com/WebFiori/ai/issues/28)
+* **health:** implement provider health checks ([40411c7](https://github.com/WebFiori/ai/commit/40411c71103fe15c0c41592446556424a22ca5d0)), closes [#24](https://github.com/WebFiori/ai/issues/24)
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#53](https://github.com/WebFiori/ai/issues/53) from WebFiori/feat/health-checks ([fbdcc01](https://github.com/WebFiori/ai/commit/fbdcc0177267368d96b3d1c71a56ea107d662671))
+
 ## [0.4.3](https://github.com/WebFiori/ai/compare/v0.4.0...v0.4.3) (2026-08-06)
 
 
