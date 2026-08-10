@@ -27,6 +27,13 @@ class EmbeddingResponse {
     private string $model;
 
     /**
+     * Unique identifier for the request that produced this response.
+     *
+     * @var string|null
+     */
+    private ?string $requestId;
+
+    /**
      * Token usage information for this response.
      *
      * @var Usage|null
@@ -43,15 +50,16 @@ class EmbeddingResponse {
     /**
      * Creates a new EmbeddingResponse instance.
      *
-     * @param float[][] $vectors An array of embedding vectors. Each vector is
-     *        an array of floats representing the text in vector space.
+     * @param float[][] $vectors An array of embedding vectors.
      * @param string $model The model identifier that generated the embeddings.
      * @param Usage|null $usage Token usage information, or null if not available.
+     * @param string|null $requestId Unique request identifier for tracing.
      */
-    public function __construct(array $vectors, string $model, ?Usage $usage = null) {
+    public function __construct(array $vectors, string $model, ?Usage $usage = null, ?string $requestId = null) {
         $this->vectors = $vectors;
         $this->model = $model;
         $this->usage = $usage;
+        $this->requestId = $requestId;
     }
 
     /**
@@ -77,6 +85,15 @@ class EmbeddingResponse {
     }
 
     /**
+     * Returns the unique request identifier for tracing and correlation.
+     *
+     * @return string|null The request ID, or null if not set.
+     */
+    public function getRequestId(): ?string {
+        return $this->requestId;
+    }
+
+    /**
      * Returns the token usage information for this response.
      *
      * @return Usage|null The usage data, or null if not reported by the provider.
@@ -87,8 +104,6 @@ class EmbeddingResponse {
 
     /**
      * Returns the first embedding vector.
-     *
-     * Convenience method for single-input embedding requests.
      *
      * @return float[] The first embedding vector.
      *
@@ -104,8 +119,6 @@ class EmbeddingResponse {
 
     /**
      * Returns all embedding vectors.
-     *
-     * For batch requests, this returns one vector per input text.
      *
      * @return float[][] An array of embedding vectors.
      */
