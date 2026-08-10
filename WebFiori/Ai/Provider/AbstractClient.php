@@ -29,6 +29,7 @@ use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\LoggerTrait;
 use WebFiori\Ai\Message;
+use WebFiori\Ai\MetricsTrait;
 use WebFiori\Ai\RateLimitStatus;
 use WebFiori\Ai\RetryConfig;
 use WebFiori\Ai\Tool\ToolInterface;
@@ -147,6 +148,7 @@ abstract class AbstractClient implements ProviderInterface {
         $autoExecute = $options['auto_execute_tools'] ?? false;
         $temperature = $options['temperature'] ?? null;
         $tools = $options['tools'] ?? [];
+        $requestId = $options['request_id'] ?? uniqid('req_', true);
 
         // Apply context window strategy if set
         $messages = $this->applyContextStrategy($messages, $tools);
@@ -173,8 +175,18 @@ abstract class AbstractClient implements ProviderInterface {
                     'cache_key' => $cacheKey,
                 ]);
 
+                $this->emitMetric('cache.hit', array_merge(
+                    $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                    ['key' => $cacheKey]
+                ));
+
                 return $cached->getData();
             }
+
+            $this->emitMetric('cache.miss', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                ['key' => $cacheKey]
+            ));
         }
 
         $this->logInfo('Chat request started', [
@@ -183,72 +195,111 @@ abstract class AbstractClient implements ProviderInterface {
             'message_count' => count($messages),
         ]);
 
-        $request = $this->buildChatRequest($messages, $options);
-        $httpResponse = $this->sendRequest($request);
-        $this->handleErrorResponse($httpResponse);
-        $response = $this->parseChatResponse($httpResponse);
+        $this->emitMetric('request.sent', array_merge(
+            $this->buildBaseMetricData($requestId, $this->getName(), $model),
+            ['endpoint' => 'chat', 'method' => 'POST']
+        ));
 
-        $tools = $options['tools'] ?? [];
-        $maxIterations = $options['max_tool_iterations'] ?? 10;
+        try {
+            $request = $this->buildChatRequest($messages, $options);
+            $httpResponse = $this->sendRequest($request);
+            $this->handleErrorResponse($httpResponse);
+            $response = $this->parseChatResponse($httpResponse);
 
-        if ($autoExecute && count($tools) > 0) {
-            $iteration = 0;
+            $maxIterations = $options['max_tool_iterations'] ?? 10;
 
-            while ($response->hasToolCalls() && $iteration < $maxIterations) {
-                $iteration++;
-                $messages[] = $response->getMessage();
+            if ($autoExecute && count($tools) > 0) {
+                $iteration = 0;
 
-                foreach ($response->getMessage()->getToolCalls() as $toolCall) {
-                    $tool = $this->findTool($tools, $toolCall->getName());
-                    $result = $tool !== null ? $tool->execute($toolCall->getArguments()) : '';
+                while ($response->hasToolCalls() && $iteration < $maxIterations) {
+                    $iteration++;
+                    $messages[] = $response->getMessage();
 
-                    $this->logDebug('Tool executed', [
-                        'tool' => $toolCall->getName(),
-                        'iteration' => $iteration,
-                    ]);
+                    foreach ($response->getMessage()->getToolCalls() as $toolCall) {
+                        $tool = $this->findTool($tools, $toolCall->getName());
+                        $result = $tool !== null ? $tool->execute($toolCall->getArguments()) : '';
 
-                    $messages[] = new Message(
-                        'tool',
-                        '',
-                        [],
-                        new ToolResult($toolCall->getId(), $result)
-                    );
+                        $this->logDebug('Tool executed', [
+                            'tool' => $toolCall->getName(),
+                            'iteration' => $iteration,
+                        ]);
+
+                        $messages[] = new Message(
+                            'tool',
+                            '',
+                            [],
+                            new ToolResult($toolCall->getId(), $result)
+                        );
+                    }
+
+                    $request = $this->buildChatRequest($messages, $options);
+                    $httpResponse = $this->sendRequest($request);
+                    $this->handleErrorResponse($httpResponse);
+                    $response = $this->parseChatResponse($httpResponse);
                 }
-
-                $request = $this->buildChatRequest($messages, $options);
-                $httpResponse = $this->sendRequest($request);
-                $this->handleErrorResponse($httpResponse);
-                $response = $this->parseChatResponse($httpResponse);
             }
-        }
 
-        $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
 
-        $this->logInfo('Chat request completed', [
-            'provider' => $this->getName(),
-            'model' => $response->getModel(),
-            'finish_reason' => $response->getFinishReason(),
-            'duration_ms' => $durationMs,
-            'prompt_tokens' => $response->getUsage()?->getPromptTokens(),
-            'completion_tokens' => $response->getUsage()?->getCompletionTokens(),
-            'total_tokens' => $response->getUsage()?->getTotalTokens(),
-        ]);
+            $this->logInfo('Chat request completed', [
+                'provider' => $this->getName(),
+                'model' => $response->getModel(),
+                'finish_reason' => $response->getFinishReason(),
+                'duration_ms' => $durationMs,
+                'prompt_tokens' => $response->getUsage()?->getPromptTokens(),
+                'completion_tokens' => $response->getUsage()?->getCompletionTokens(),
+                'total_tokens' => $response->getUsage()?->getTotalTokens(),
+            ]);
 
-        // Store in cache
-        if ($shouldCache && $cacheKey !== null) {
-            $this->cache->set(
-                $cacheKey,
-                new CachedResponse($response, 'chat'),
-                $this->cacheConfig->getDefaultTtl()
+            $this->emitMetric('request.completed', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $response->getModel()),
+                [
+                    'status_code' => $httpResponse->getStatusCode(),
+                    'latency_ms' => $durationMs,
+                    'prompt_tokens' => $response->getUsage()?->getPromptTokens(),
+                    'completion_tokens' => $response->getUsage()?->getCompletionTokens(),
+                    'total_tokens' => $response->getUsage()?->getTotalTokens(),
+                ]
+            ));
+
+            // Attach request ID to response
+            $response = new ChatResponse(
+                $response->getMessage(),
+                $response->getModel(),
+                $response->getUsage(),
+                $response->getFinishReason(),
+                $requestId
             );
 
-            $this->logDebug('Chat response cached', [
-                'cache_key' => $cacheKey,
-                'ttl' => $this->cacheConfig->getDefaultTtl(),
-            ]);
-        }
+            // Store in cache
+            if ($shouldCache && $cacheKey !== null) {
+                $this->cache->set(
+                    $cacheKey,
+                    new CachedResponse($response, 'chat'),
+                    $this->cacheConfig->getDefaultTtl()
+                );
 
-        return $response;
+                $this->logDebug('Chat response cached', [
+                    'cache_key' => $cacheKey,
+                    'ttl' => $this->cacheConfig->getDefaultTtl(),
+                ]);
+            }
+
+            return $response;
+        } catch (\Throwable $e) {
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->emitMetric('request.failed', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                [
+                    'error_type' => get_class($e),
+                    'error_message' => $e->getMessage(),
+                    'latency_ms' => $durationMs,
+                ]
+            ));
+
+            throw $e;
+        }
     }
 
     /**
@@ -267,6 +318,8 @@ abstract class AbstractClient implements ProviderInterface {
      */
     public function embed(string|array $input, array $options = []): EmbeddingResponse {
         $model = $options['model'] ?? $this->getConfig('embedding_model', $this->getConfig('model'));
+        $requestId = $options['request_id'] ?? uniqid('req_', true);
+        $startTime = microtime(true);
 
         // Check cache
         $cacheKey = null;
@@ -289,31 +342,81 @@ abstract class AbstractClient implements ProviderInterface {
                     'cache_key' => $cacheKey,
                 ]);
 
+                $this->emitMetric('cache.hit', array_merge(
+                    $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                    ['key' => $cacheKey]
+                ));
+
                 return $cached->getData();
             }
+
+            $this->emitMetric('cache.miss', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                ['key' => $cacheKey]
+            ));
         }
 
-        $request = $this->buildEmbedRequest($input, $options);
-        $httpResponse = $this->sendRequest($request);
-        $this->handleErrorResponse($httpResponse);
+        $this->emitMetric('request.sent', array_merge(
+            $this->buildBaseMetricData($requestId, $this->getName(), $model),
+            ['endpoint' => 'embeddings', 'method' => 'POST']
+        ));
 
-        $response = $this->parseEmbedResponse($httpResponse);
+        try {
+            $request = $this->buildEmbedRequest($input, $options);
+            $httpResponse = $this->sendRequest($request);
+            $this->handleErrorResponse($httpResponse);
 
-        // Store in cache
-        if ($shouldCache && $cacheKey !== null) {
-            $this->cache->set(
-                $cacheKey,
-                new CachedResponse($response, 'embedding'),
-                $this->cacheConfig->getEmbeddingTtl()
+            $response = $this->parseEmbedResponse($httpResponse);
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->emitMetric('request.completed', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $response->getModel()),
+                [
+                    'status_code' => $httpResponse->getStatusCode(),
+                    'latency_ms' => $durationMs,
+                    'prompt_tokens' => $response->getUsage()?->getPromptTokens(),
+                    'completion_tokens' => null,
+                    'total_tokens' => $response->getUsage()?->getPromptTokens(),
+                ]
+            ));
+
+            // Attach request ID to response
+            $response = new EmbeddingResponse(
+                $response->getVectors(),
+                $response->getModel(),
+                $response->getUsage(),
+                $requestId
             );
 
-            $this->logDebug('Embedding response cached', [
-                'cache_key' => $cacheKey,
-                'ttl' => $this->cacheConfig->getEmbeddingTtl(),
-            ]);
-        }
+            // Store in cache
+            if ($shouldCache && $cacheKey !== null) {
+                $this->cache->set(
+                    $cacheKey,
+                    new CachedResponse($response, 'embedding'),
+                    $this->cacheConfig->getEmbeddingTtl()
+                );
 
-        return $response;
+                $this->logDebug('Embedding response cached', [
+                    'cache_key' => $cacheKey,
+                    'ttl' => $this->cacheConfig->getEmbeddingTtl(),
+                ]);
+            }
+
+            return $response;
+        } catch (\Throwable $e) {
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->emitMetric('request.failed', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                [
+                    'error_type' => get_class($e),
+                    'error_message' => $e->getMessage(),
+                    'latency_ms' => $durationMs,
+                ]
+            ));
+
+            throw $e;
+        }
     }
 
     /**
@@ -354,11 +457,49 @@ abstract class AbstractClient implements ProviderInterface {
      * @throws \WebFiori\Ai\Exception\ProviderException If the provider returns an error.
      */
     public function generateImage(ImageRequest $request): ImageResponse {
-        $httpRequest = $this->buildImageRequest($request);
-        $httpResponse = $this->sendRequest($httpRequest);
-        $this->handleErrorResponse($httpResponse);
+        $requestId = uniqid('req_', true);
+        $startTime = microtime(true);
+        $model = $this->getConfig('image_model', $this->getConfig('model'));
 
-        return $this->parseImageResponse($httpResponse);
+        $this->emitMetric('request.sent', array_merge(
+            $this->buildBaseMetricData($requestId, $this->getName(), $model),
+            ['endpoint' => 'images', 'method' => 'POST']
+        ));
+
+        try {
+            $httpRequest = $this->buildImageRequest($request);
+            $httpResponse = $this->sendRequest($httpRequest);
+            $this->handleErrorResponse($httpResponse);
+
+            $response = $this->parseImageResponse($httpResponse);
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->emitMetric('request.completed', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $response->getModel()),
+                [
+                    'status_code' => $httpResponse->getStatusCode(),
+                    'latency_ms' => $durationMs,
+                    'prompt_tokens' => null,
+                    'completion_tokens' => null,
+                    'total_tokens' => null,
+                ]
+            ));
+
+            return new ImageResponse($response->getImages(), $response->getModel(), $requestId);
+        } catch (\Throwable $e) {
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->emitMetric('request.failed', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                [
+                    'error_type' => get_class($e),
+                    'error_message' => $e->getMessage(),
+                    'latency_ms' => $durationMs,
+                ]
+            ));
+
+            throw $e;
+        }
     }
 
     /**
@@ -598,6 +739,9 @@ abstract class AbstractClient implements ProviderInterface {
     ): void {
         $model = $options['model'] ?? $this->getConfig('model');
         $tools = $options['tools'] ?? [];
+        $requestId = $options['request_id'] ?? uniqid('req_', true);
+        $startTime = microtime(true);
+        $tokenCount = 0;
 
         // Apply context window strategy if set
         $messages = $this->applyContextStrategy($messages, $tools);
@@ -608,8 +752,42 @@ abstract class AbstractClient implements ProviderInterface {
             'message_count' => count($messages),
         ]);
 
+        $this->emitMetric('stream.started', $this->buildBaseMetricData($requestId, $this->getName(), $model));
+
+        // Wrap onToken to count tokens
+        $wrappedOnToken = function (string $token) use ($onToken, &$tokenCount): void {
+            $tokenCount++;
+            $onToken($token);
+        };
+
+        // Wrap onComplete to emit stream.completed
+        $wrappedOnComplete = function ($response) use ($onComplete, $requestId, $startTime, &$tokenCount): void {
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->emitMetric('stream.completed', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $response?->getModel()),
+                ['duration_ms' => $durationMs, 'tokens' => $tokenCount]
+            ));
+
+            if ($onComplete !== null) {
+                $onComplete($response);
+            }
+        };
+
+        // Wrap onError to emit stream.error
+        $wrappedOnError = function ($e) use ($onError, $requestId): void {
+            $this->emitMetric('stream.error', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), null),
+                ['error' => $e->getMessage()]
+            ));
+
+            if ($onError !== null) {
+                $onError($e);
+            }
+        };
+
         $request = $this->buildStreamChatRequest($messages, $options);
-        $this->doStreamChat($request, $onToken, $onComplete, $onError);
+        $this->doStreamChat($request, $wrappedOnToken, $wrappedOnComplete, $wrappedOnError);
     }
 
     /**
@@ -733,6 +911,7 @@ abstract class AbstractClient implements ProviderInterface {
      */
     abstract protected function handleErrorResponse(HttpResponse $response): void;
     use LoggerTrait;
+    use MetricsTrait;
 
     /**
      * Parses an HTTP response into a ChatResponse.

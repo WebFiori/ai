@@ -74,24 +74,39 @@ class OpenAIClient extends AbstractClient {
                 ''
             );
 
-            // Use a fresh HTTP client with short timeout, bypassing retry/cache
             $httpClient = new \WebFiori\Ai\Http\CurlHttpClient($timeout, $timeout);
             $response = $httpClient->send($request);
 
             $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
 
             if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
-                return \WebFiori\Ai\HealthCheckResult::success($latencyMs, $checkMethod);
+                $result = \WebFiori\Ai\HealthCheckResult::success($latencyMs, $checkMethod);
+                $this->emitMetric('health_check.completed', array_merge(
+                    $this->buildBaseMetricData('hc_'.uniqid(), $this->getName(), null),
+                    ['latency_ms' => $latencyMs, 'check_method' => $checkMethod]
+                ));
+
+                return $result;
             }
 
             $body = $response->getJson();
             $error = $body['error']['message'] ?? 'HTTP '.$response->getStatusCode();
+            $result = \WebFiori\Ai\HealthCheckResult::failure($error, $latencyMs, $checkMethod);
+            $this->emitMetric('health_check.failed', array_merge(
+                $this->buildBaseMetricData('hc_'.uniqid(), $this->getName(), null),
+                ['error' => $error, 'latency_ms' => $latencyMs, 'check_method' => $checkMethod]
+            ));
 
-            return \WebFiori\Ai\HealthCheckResult::failure($error, $latencyMs, $checkMethod);
+            return $result;
         } catch (\Throwable $e) {
             $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
+            $result = \WebFiori\Ai\HealthCheckResult::failure($e->getMessage(), $latencyMs, $checkMethod);
+            $this->emitMetric('health_check.failed', array_merge(
+                $this->buildBaseMetricData('hc_'.uniqid(), $this->getName(), null),
+                ['error' => $e->getMessage(), 'latency_ms' => $latencyMs, 'check_method' => $checkMethod]
+            ));
 
-            return \WebFiori\Ai\HealthCheckResult::failure($e->getMessage(), $latencyMs, $checkMethod);
+            return $result;
         }
     }
 

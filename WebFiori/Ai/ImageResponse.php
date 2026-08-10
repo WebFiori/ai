@@ -33,14 +33,23 @@ class ImageResponse {
     private string $model;
 
     /**
+     * Unique identifier for the request that produced this response.
+     *
+     * @var string|null
+     */
+    private ?string $requestId;
+
+    /**
      * Creates a new ImageResponse instance.
      *
      * @param GeneratedImage[] $images The generated images.
      * @param string $model The model identifier that generated the images.
+     * @param string|null $requestId Unique request identifier for tracing.
      */
-    public function __construct(array $images, string $model) {
+    public function __construct(array $images, string $model, ?string $requestId = null) {
         $this->images = $images;
         $this->model = $model;
+        $this->requestId = $requestId;
     }
 
     /**
@@ -59,5 +68,14 @@ class ImageResponse {
      */
     public function getModel(): string {
         return $this->model;
+    }
+
+    /**
+     * Returns the unique request identifier for tracing and correlation.
+     *
+     * @return string|null The request ID, or null if not set.
+     */
+    public function getRequestId(): ?string {
+        return $this->requestId;
     }
 }
