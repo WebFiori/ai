@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.7](https://github.com/WebFiori/ai/compare/v0.4.6...v0.4.7) (2026-08-10)
+
+
+### Features
+
+* **redaction:** implement PII redaction for logs and metrics ([e0a6b42](https://github.com/WebFiori/ai/commit/e0a6b42f7977ab57bb614e3802146de90fbcb36d)), closes [#26](https://github.com/WebFiori/ai/issues/26)
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#56](https://github.com/WebFiori/ai/issues/56) from WebFiori/feat/pii-redaction ([5ce187b](https://github.com/WebFiori/ai/commit/5ce187b315dddeef1224a215f379fb060b51c4f5))
+
 ## [0.4.6](https://github.com/WebFiori/ai/compare/v0.4.5...v0.4.6) (2026-08-10)
 
 
