@@ -39,3 +39,4 @@ export GCP_ACCESS_TOKEN="ya29...."
 | 12 | [Health Checks](12-health-checks/) | Verify provider availability before sending requests |
 | 13 | [Metrics](13-metrics/) | Emit structured metrics for monitoring (DataDog, Prometheus, etc.) |
 | 14 | [PII Redaction](14-pii-redaction/) | Redact sensitive data from logs and metrics for GDPR/HIPAA compliance |
+| 15 | [Audit Logging](15-audit-logging/) | Structured audit trail of all AI operations for compliance |

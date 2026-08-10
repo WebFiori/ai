@@ -14,6 +14,8 @@ use WebFiori\Ai\Cache\CachedResponse;
 use WebFiori\Ai\Cache\CacheConfig;
 use WebFiori\Ai\Cache\CacheInterface;
 use WebFiori\Ai\Cache\CacheKeyGenerator;
+use WebFiori\Ai\Audit\AuditConfig;
+use WebFiori\Ai\Audit\AuditTrait;
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\Context\ContextWindowStrategyInterface;
 use WebFiori\Ai\Context\TokenEstimator;
@@ -116,6 +118,7 @@ abstract class AbstractClient implements ProviderInterface {
         $this->cacheConfig = new CacheConfig(enabled: false);
         $this->cacheKeyGenerator = new CacheKeyGenerator();
         $this->tokenEstimator = new TokenEstimator();
+        $this->initAuditTrait();
         $this->validateConfig($config);
     }
 
@@ -287,6 +290,37 @@ abstract class AbstractClient implements ProviderInterface {
                 ]);
             }
 
+            // Emit audit entry
+            $auditEntry = array_merge(
+                $this->buildBaseAuditEntry(
+                    $requestId,
+                    'chat',
+                    $this->getName(),
+                    $response->getModel(),
+                    $options['audit_context'] ?? []
+                ),
+                [
+                    'status' => 'success',
+                    'duration_ms' => $durationMs,
+                    'tokens' => [
+                        'prompt' => $response->getUsage()?->getPromptTokens(),
+                        'completion' => $response->getUsage()?->getCompletionTokens(),
+                        'total' => $response->getUsage()?->getTotalTokens(),
+                    ],
+                    'error' => null,
+                ]
+            );
+
+            if ($this->auditConfig->isIncludeMessages()) {
+                $auditEntry['messages'] = $this->serializeMessagesForAudit($messages);
+            }
+
+            if ($this->auditConfig->isIncludeResponse()) {
+                $auditEntry['response'] = $response->getMessage()->getContent();
+            }
+
+            $this->emitAudit($auditEntry);
+
             return $response;
         } catch (\Throwable $e) {
             $durationMs = (int) ((microtime(true) - $startTime) * 1000);
@@ -297,6 +331,16 @@ abstract class AbstractClient implements ProviderInterface {
                     'error_type' => get_class($e),
                     'error_message' => $e->getMessage(),
                     'latency_ms' => $durationMs,
+                ]
+            ));
+
+            $this->emitAudit(array_merge(
+                $this->buildBaseAuditEntry($requestId, 'chat', $this->getName(), $model, $options['audit_context'] ?? []),
+                [
+                    'status' => 'error',
+                    'duration_ms' => $durationMs,
+                    'tokens' => ['prompt' => null, 'completion' => null, 'total' => null],
+                    'error' => ['type' => get_class($e), 'message' => $e->getMessage()],
                 ]
             ));
 
@@ -404,6 +448,20 @@ abstract class AbstractClient implements ProviderInterface {
                 ]);
             }
 
+            $this->emitAudit(array_merge(
+                $this->buildBaseAuditEntry($requestId, 'embed', $this->getName(), $response->getModel(), $options['audit_context'] ?? []),
+                [
+                    'status' => 'success',
+                    'duration_ms' => $durationMs,
+                    'tokens' => [
+                        'prompt' => $response->getUsage()?->getPromptTokens(),
+                        'completion' => null,
+                        'total' => $response->getUsage()?->getPromptTokens(),
+                    ],
+                    'error' => null,
+                ]
+            ));
+
             return $response;
         } catch (\Throwable $e) {
             $durationMs = (int) ((microtime(true) - $startTime) * 1000);
@@ -414,6 +472,16 @@ abstract class AbstractClient implements ProviderInterface {
                     'error_type' => get_class($e),
                     'error_message' => $e->getMessage(),
                     'latency_ms' => $durationMs,
+                ]
+            ));
+
+            $this->emitAudit(array_merge(
+                $this->buildBaseAuditEntry($requestId, 'embed', $this->getName(), $model, $options['audit_context'] ?? []),
+                [
+                    'status' => 'error',
+                    'duration_ms' => $durationMs,
+                    'tokens' => ['prompt' => null, 'completion' => null, 'total' => null],
+                    'error' => ['type' => get_class($e), 'message' => $e->getMessage()],
                 ]
             ));
 
@@ -487,7 +555,19 @@ abstract class AbstractClient implements ProviderInterface {
                 ]
             ));
 
-            return new ImageResponse($response->getImages(), $response->getModel(), $requestId);
+            $imageResponse = new ImageResponse($response->getImages(), $response->getModel(), $requestId);
+
+            $this->emitAudit(array_merge(
+                $this->buildBaseAuditEntry($requestId, 'generateImage', $this->getName(), $response->getModel()),
+                [
+                    'status' => 'success',
+                    'duration_ms' => $durationMs,
+                    'tokens' => ['prompt' => null, 'completion' => null, 'total' => null],
+                    'error' => null,
+                ]
+            ));
+
+            return $imageResponse;
         } catch (\Throwable $e) {
             $durationMs = (int) ((microtime(true) - $startTime) * 1000);
 
@@ -497,6 +577,16 @@ abstract class AbstractClient implements ProviderInterface {
                     'error_type' => get_class($e),
                     'error_message' => $e->getMessage(),
                     'latency_ms' => $durationMs,
+                ]
+            ));
+
+            $this->emitAudit(array_merge(
+                $this->buildBaseAuditEntry($requestId, 'generateImage', $this->getName(), $model),
+                [
+                    'status' => 'error',
+                    'duration_ms' => $durationMs,
+                    'tokens' => ['prompt' => null, 'completion' => null, 'total' => null],
+                    'error' => ['type' => get_class($e), 'message' => $e->getMessage()],
                 ]
             ));
 
@@ -634,6 +724,7 @@ abstract class AbstractClient implements ProviderInterface {
         $service = $config !== null ? new RedactionService($config) : null;
         $this->setLogRedactionService($service);
         $this->setMetricsRedactionService($service);
+        $this->setAuditRedactionService($service);
     }
 
     /**
@@ -788,8 +879,8 @@ abstract class AbstractClient implements ProviderInterface {
             $onToken($token);
         };
 
-        // Wrap onComplete to emit stream.completed
-        $wrappedOnComplete = function ($response) use ($onComplete, $requestId, $startTime, &$tokenCount): void {
+        // Wrap onComplete to emit stream.completed + audit entry
+        $wrappedOnComplete = function ($response) use ($onComplete, $requestId, $startTime, &$tokenCount, $messages, $options): void {
             $durationMs = (int) ((microtime(true) - $startTime) * 1000);
 
             $this->emitMetric('stream.completed', array_merge(
@@ -797,16 +888,54 @@ abstract class AbstractClient implements ProviderInterface {
                 ['duration_ms' => $durationMs, 'tokens' => $tokenCount]
             ));
 
+            $auditEntry = array_merge(
+                $this->buildBaseAuditEntry(
+                    $requestId,
+                    'streamChat',
+                    $this->getName(),
+                    $response?->getModel(),
+                    $options['audit_context'] ?? []
+                ),
+                [
+                    'status' => 'success',
+                    'duration_ms' => $durationMs,
+                    'tokens' => ['prompt' => null, 'completion' => $tokenCount, 'total' => $tokenCount],
+                    'error' => null,
+                ]
+            );
+
+            if ($this->auditConfig->isIncludeMessages()) {
+                $auditEntry['messages'] = $this->serializeMessagesForAudit($messages);
+            }
+
+            if ($this->auditConfig->isIncludeResponse() && $response !== null) {
+                $auditEntry['response'] = $response->getMessage()->getContent();
+            }
+
+            $this->emitAudit($auditEntry);
+
             if ($onComplete !== null) {
                 $onComplete($response);
             }
         };
 
-        // Wrap onError to emit stream.error
-        $wrappedOnError = function ($e) use ($onError, $requestId): void {
+        // Wrap onError to emit stream.error + audit entry
+        $wrappedOnError = function ($e) use ($onError, $requestId, $startTime, $model, $options): void {
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
             $this->emitMetric('stream.error', array_merge(
                 $this->buildBaseMetricData($requestId, $this->getName(), null),
                 ['error' => $e->getMessage()]
+            ));
+
+            $this->emitAudit(array_merge(
+                $this->buildBaseAuditEntry($requestId, 'streamChat', $this->getName(), $model, $options['audit_context'] ?? []),
+                [
+                    'status' => 'error',
+                    'duration_ms' => $durationMs,
+                    'tokens' => ['prompt' => null, 'completion' => null, 'total' => null],
+                    'error' => ['type' => get_class($e), 'message' => $e->getMessage()],
+                ]
             ));
 
             if ($onError !== null) {
@@ -938,6 +1067,7 @@ abstract class AbstractClient implements ProviderInterface {
      * @throws \WebFiori\Ai\Exception\ProviderException If status indicates a server error.
      */
     abstract protected function handleErrorResponse(HttpResponse $response): void;
+    use AuditTrait;
     use LoggerTrait;
     use MetricsTrait;
 
