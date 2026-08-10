@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.6](https://github.com/WebFiori/ai/compare/v0.4.5...v0.4.6) (2026-08-10)
+
+
+### Features
+
+* **metrics:** implement metrics collection via callback ([f1e117f](https://github.com/WebFiori/ai/commit/f1e117f73574bf923da50e9a4872f384df9147c7)), closes [#25](https://github.com/WebFiori/ai/issues/25)
+
+
+### Bug Fixes
+
+* remove debug file_put_contents from parseChatResponse ([094fdec](https://github.com/WebFiori/ai/commit/094fdecf817637f30c5a8a00adee8c87517f3918))
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#55](https://github.com/WebFiori/ai/issues/55) from WebFiori/feat/metrics ([b38e830](https://github.com/WebFiori/ai/commit/b38e830e348a2d8b8a69407043b27e3f0a459eb6))
+
 ## [0.4.5](https://github.com/WebFiori/ai/compare/v0.4.3...v0.4.5) (2026-08-08)
 
 
