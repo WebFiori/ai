@@ -31,6 +31,8 @@ use WebFiori\Ai\LoggerTrait;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\MetricsTrait;
 use WebFiori\Ai\RateLimitStatus;
+use WebFiori\Ai\Redaction\RedactionConfig;
+use WebFiori\Ai\Redaction\RedactionService;
 use WebFiori\Ai\RetryConfig;
 use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Tool\ToolResult;
@@ -606,6 +608,32 @@ abstract class AbstractClient implements ProviderInterface {
      */
     public function getCacheConfig(): CacheConfig {
         return $this->cacheConfig;
+    }
+
+    /**
+     * Configures PII redaction for logs and metrics.
+     *
+     * When set, sensitive data is redacted before reaching log and metrics
+     * callbacks. API keys and Bearer tokens are always redacted regardless
+     * of configuration.
+     *
+     * ```php
+     * $provider->setRedactionConfig(new RedactionConfig(
+     *     redactRequestBodies: true,
+     *     redactResponseBodies: false,
+     *     disabledRules: ['phone'],
+     *     customRules: [
+     *         new RedactionRule('ssn', '/\b\d{3}-\d{2}-\d{4}\b/', '[SSN]'),
+     *     ],
+     * ));
+     * ```
+     *
+     * @param RedactionConfig|null $config The redaction config, or null to disable.
+     */
+    public function setRedactionConfig(?RedactionConfig $config): void {
+        $service = $config !== null ? new RedactionService($config) : null;
+        $this->setLogRedactionService($service);
+        $this->setMetricsRedactionService($service);
     }
 
     /**

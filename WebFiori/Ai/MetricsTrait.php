@@ -10,12 +10,13 @@
  */
 namespace WebFiori\Ai;
 
+use WebFiori\Ai\Redaction\RedactionService;
+
 /**
  * Provides metrics emission functionality to AI provider classes.
  *
- * Classes using this trait can emit structured metrics events to a
- * developer-supplied callback for routing to monitoring systems
- * (Prometheus, DataDog, CloudWatch, etc.).
+ * If a RedactionService is configured, event data is redacted before
+ * being passed to the callback.
  *
  * @author Ibrahim
  */
@@ -26,6 +27,13 @@ trait MetricsTrait {
      * @var callable|null
      */
     private $metricsCallback = null;
+
+    /**
+     * The redaction service for sanitizing metric data.
+     *
+     * @var RedactionService|null
+     */
+    private ?RedactionService $metricsRedactionService = null;
 
     /**
      * Returns the current metrics callback.
@@ -39,20 +47,19 @@ trait MetricsTrait {
     /**
      * Sets the callback for emitting metrics events.
      *
-     * The callback receives an event name and structured data array.
-     * All events include 'timestamp', 'request_id', 'provider', and 'model'.
-     *
-     * ```php
-     * $provider->setMetricsCallback(function (string $event, array $data) {
-     *     // Send to Prometheus, DataDog, CloudWatch, etc.
-     *     MyMonitoring::record($event, $data);
-     * });
-     * ```
-     *
      * @param callable|null $callback The metrics callback, or null to disable.
      */
     public function setMetricsCallback(?callable $callback): void {
         $this->metricsCallback = $callback;
+    }
+
+    /**
+     * Sets the redaction service for metric data sanitization.
+     *
+     * @param RedactionService|null $service The redaction service, or null to disable.
+     */
+    protected function setMetricsRedactionService(?RedactionService $service): void {
+        $this->metricsRedactionService = $service;
     }
 
     /**
@@ -64,6 +71,10 @@ trait MetricsTrait {
     protected function emitMetric(string $event, array $data): void {
         if ($this->metricsCallback === null) {
             return;
+        }
+
+        if ($this->metricsRedactionService !== null) {
+            $data = $this->metricsRedactionService->redactContext($data);
         }
 
         ($this->metricsCallback)($event, $data);
