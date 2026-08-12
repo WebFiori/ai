@@ -174,6 +174,17 @@ class GoogleClient extends AbstractClient {
             $config['stopSequences'] = is_array($options['stop']) ? $options['stop'] : [$options['stop']];
         }
 
+        // Structured output / JSON mode
+        // Options:
+        //   'json_mode' => true                        → plain JSON output
+        //   'json_schema' => ['type' => 'object', ...] → JSON with schema validation
+        if (isset($options['json_schema'])) {
+            $config['responseMimeType'] = 'application/json';
+            $config['responseSchema'] = $options['json_schema'];
+        } elseif (!empty($options['json_mode'])) {
+            $config['responseMimeType'] = 'application/json';
+        }
+
         return $config;
     }
 

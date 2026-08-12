@@ -131,6 +131,19 @@ class OpenAIClient extends AbstractClient {
         if (isset($options['tools']) && count($options['tools']) > 0) {
             $body['tools'] = $this->formatTools($options['tools']);
         }
+
+        // Structured output / JSON mode
+        // Options:
+        //   'json_mode' => true                          → plain JSON output
+        //   'json_schema' => ['name' => '...', 'schema' => [...]] → strict JSON schema
+        if (isset($options['json_schema'])) {
+            $body['response_format'] = [
+                'type' => 'json_schema',
+                'json_schema' => $options['json_schema'],
+            ];
+        } elseif (!empty($options['json_mode'])) {
+            $body['response_format'] = ['type' => 'json_object'];
+        }
     }
 
     /**
