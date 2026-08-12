@@ -206,29 +206,74 @@ class GoogleClient extends AbstractClient {
      * @return array{mime_type: string, data: string}|null The file data or null on failure.
      */
     private function fetchFileFromUrl(string $url): ?array {
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 30,
-                'user_agent' => 'WebFiori-AI/1.0',
-            ],
-        ]);
+        $results = $this->fetchFilesFromUrls([$url]);
 
-        $content = @file_get_contents($url, false, $context);
+        return $results[0] ?? null;
+    }
 
-        if ($content === false) {
-            $this->logWarning('Failed to fetch file from URL', ['url' => $url]);
-
-            return null;
+    /**
+     * Fetches multiple files from URLs concurrently using curl_multi.
+     *
+     * For a single URL, this is equivalent to a sequential fetch.
+     * For multiple URLs, requests are executed in parallel, reducing
+     * total fetch time from O(n) to O(1) (time of slowest request).
+     *
+     * @param string[] $urls The URLs to fetch.
+     *
+     * @return array<int, array{mime_type: string, data: string}|null> Results indexed by input order.
+     */
+    private function fetchFilesFromUrls(array $urls): array {
+        if (empty($urls)) {
+            return [];
         }
 
-        // Detect MIME type from content
-        $finfo = new \finfo(FILEINFO_MIME_TYPE);
-        $mimeType = $finfo->buffer($content);
+        $multiHandle = curl_multi_init();
+        $handles = [];
 
-        return [
-            'mime_type' => $mimeType,
-            'data' => base64_encode($content),
-        ];
+        // Initialize all cURL handles
+        foreach ($urls as $index => $url) {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            curl_setopt($ch, CURLOPT_USERAGENT, 'WebFiori-AI/1.0');
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_multi_add_handle($multiHandle, $ch);
+            $handles[$index] = $ch;
+        }
+
+        // Execute all requests concurrently
+        do {
+            $status = curl_multi_exec($multiHandle, $active);
+
+            if ($active) {
+                curl_multi_select($multiHandle);
+            }
+        } while ($active && $status === CURLM_OK);
+
+        // Collect results
+        $results = [];
+
+        foreach ($handles as $index => $ch) {
+            $content = curl_multi_getcontent($ch);
+
+            if ($content !== false && $content !== '') {
+                $finfo = new \finfo(FILEINFO_MIME_TYPE);
+                $results[$index] = [
+                    'mime_type' => $finfo->buffer($content),
+                    'data' => base64_encode($content),
+                ];
+            } else {
+                $this->logWarning('Failed to fetch file from URL', ['url' => $urls[$index]]);
+                $results[$index] = null;
+            }
+
+            curl_multi_remove_handle($multiHandle, $ch);
+            curl_close($ch);
+        }
+
+        curl_multi_close($multiHandle);
+
+        return $results;
     }
 
     /**
@@ -241,7 +286,30 @@ class GoogleClient extends AbstractClient {
     private function formatContentParts(array $contentParts): array {
         $parts = [];
 
-        foreach ($contentParts as $part) {
+        // Collect all image URLs first for concurrent fetching
+        $urlIndexes = [];
+
+        foreach ($contentParts as $index => $part) {
+            if ($part->getType() === \WebFiori\Ai\ContentPart::TYPE_IMAGE_URL) {
+                $urlIndexes[$index] = $part->getData()['url'];
+            }
+        }
+
+        // Fetch all URLs concurrently
+        $fetchedFiles = !empty($urlIndexes)
+            ? $this->fetchFilesFromUrls(array_values($urlIndexes))
+            : [];
+
+        // Map fetched results back to original indexes
+        $urlKeys = array_keys($urlIndexes);
+        $fetchedByIndex = [];
+
+        foreach ($fetchedFiles as $i => $fileData) {
+            $fetchedByIndex[$urlKeys[$i]] = $fileData;
+        }
+
+        // Build parts array
+        foreach ($contentParts as $index => $part) {
             switch ($part->getType()) {
                 case \WebFiori\Ai\ContentPart::TYPE_TEXT:
                     $parts[] = ['text' => $part->getData()['text']];
@@ -249,10 +317,7 @@ class GoogleClient extends AbstractClient {
                     break;
 
                 case \WebFiori\Ai\ContentPart::TYPE_IMAGE_URL:
-                    // Google requires fetching the image and sending as inline data
-                    // or using fileData for GCS URIs. For HTTP URLs, we fetch and encode.
-                    $url = $part->getData()['url'];
-                    $fileData = $this->fetchFileFromUrl($url);
+                    $fileData = $fetchedByIndex[$index] ?? null;
 
                     if ($fileData !== null) {
                         $parts[] = [
@@ -757,6 +822,40 @@ class GoogleClient extends AbstractClient {
     }
 
     /**
+     * Builds an incremental chat request by appending only new messages.
+     *
+     * Decodes the previous request body and appends only the newly added
+     * messages, avoiding re-formatting the entire conversation history.
+     *
+     * @param HttpRequest $previousRequest The previous HTTP request.
+     * @param Message[] $allMessages All conversation messages.
+     * @param Message[] $newMessages Only the new messages since last request.
+     * @param array<string, mixed> $options Additional options.
+     *
+     * @return HttpRequest The updated HTTP request with new messages appended.
+     */
+    protected function buildIncrementalChatRequest(
+        HttpRequest $previousRequest,
+        array $allMessages,
+        array $newMessages,
+        array $options
+    ): HttpRequest {
+        $body = json_decode($previousRequest->getBody(), true) ?? [];
+        $formattedNew = $this->formatMessagesForIncremental($newMessages);
+
+        if (!empty($formattedNew)) {
+            $body['contents'] = array_merge($body['contents'] ?? [], $formattedNew);
+        }
+
+        return new HttpRequest(
+            $previousRequest->getMethod(),
+            $previousRequest->getUrl(),
+            $previousRequest->getHeaders(),
+            json_encode($body)
+        );
+    }
+
+    /**
      * Builds the HTTP request for a streaming chat completion call.
      *
      * @param Message[] $messages The conversation messages.
@@ -870,6 +969,20 @@ class GoogleClient extends AbstractClient {
                 throw $e;
             }
         }
+    }
+
+    /**
+     * Formats new messages for incremental request building.
+     *
+     * Overrides the default to format only new messages in Google's contents format,
+     * avoiding re-formatting the entire conversation on each tool loop iteration.
+     *
+     * @param Message[] $messages The new messages to format.
+     *
+     * @return array<int, array<string, mixed>> Formatted contents.
+     */
+    protected function formatMessagesForIncremental(array $messages): array {
+        return $this->formatContents($messages);
     }
 
     /**
