@@ -216,6 +216,7 @@ abstract class AbstractClient implements ProviderInterface {
             if ($autoExecute && count($tools) > 0) {
                 $iteration = 0;
                 $parallelTools = $options['parallel_tool_execution'] ?? true;
+                $formattedCount = count($messages); // Track how many messages are already formatted
 
                 while ($response->hasToolCalls() && $iteration < $maxIterations) {
                     $iteration++;
@@ -239,7 +240,11 @@ abstract class AbstractClient implements ProviderInterface {
                         );
                     }
 
-                    $request = $this->buildChatRequest($messages, $options);
+                    // Build next request: pass all messages but hint provider about
+                    // how many were already formatted so it can optimize
+                    $newMessages = array_slice($messages, $formattedCount);
+                    $request = $this->buildIncrementalChatRequest($request, $messages, $newMessages, $options);
+                    $formattedCount = count($messages);
                     $httpResponse = $this->sendRequest($request);
                     $this->handleErrorResponse($httpResponse);
                     $response = $this->parseChatResponse($httpResponse);
@@ -1120,6 +1125,30 @@ abstract class AbstractClient implements ProviderInterface {
     abstract protected function buildImageRequest(ImageRequest $request): HttpRequest;
 
     /**
+     * Builds an incremental chat request by appending new messages to an existing request.
+     *
+     * Default implementation rebuilds from scratch using all messages.
+     * Providers can override for optimized incremental building that avoids
+     * re-formatting existing messages using only newMessages.
+     *
+     * @param HttpRequest $previousRequest The previous HTTP request.
+     * @param Message[] $allMessages All messages in the conversation.
+     * @param Message[] $newMessages Only the new messages added since last request.
+     * @param array<string, mixed> $options Additional options.
+     *
+     * @return HttpRequest The updated HTTP request.
+     */
+    protected function buildIncrementalChatRequest(
+        HttpRequest $previousRequest,
+        array $allMessages,
+        array $newMessages,
+        array $options
+    ): HttpRequest {
+        // Default: full rebuild using all messages
+        return $this->buildChatRequest($allMessages, $options);
+    }
+
+    /**
      * Builds the HTTP request for a streaming chat completion call.
      *
      * @param Message[] $messages The conversation messages.
@@ -1143,6 +1172,19 @@ abstract class AbstractClient implements ProviderInterface {
         ?callable $onComplete,
         ?callable $onError
     ): void;
+
+    /**
+     * Formats new messages for incremental request building.
+     *
+     * Override in providers to format messages in their specific format.
+     *
+     * @param Message[] $messages The new messages to format.
+     *
+     * @return array<int, array<string, mixed>> Formatted messages.
+     */
+    protected function formatMessagesForIncremental(array $messages): array {
+        return [];
+    }
 
     /**
      * Inspects an HTTP response and throws the appropriate exception for errors.
