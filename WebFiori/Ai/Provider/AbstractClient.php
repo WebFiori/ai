@@ -36,6 +36,7 @@ use WebFiori\Ai\RateLimitStatus;
 use WebFiori\Ai\Redaction\RedactionConfig;
 use WebFiori\Ai\Redaction\RedactionService;
 use WebFiori\Ai\RetryConfig;
+use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Tool\ToolResult;
 
@@ -215,25 +216,27 @@ abstract class AbstractClient implements ProviderInterface {
 
             if ($autoExecute && count($tools) > 0) {
                 $iteration = 0;
+                $parallelTools = $options['parallel_tool_execution'] ?? true;
 
                 while ($response->hasToolCalls() && $iteration < $maxIterations) {
                     $iteration++;
                     $messages[] = $response->getMessage();
 
-                    foreach ($response->getMessage()->getToolCalls() as $toolCall) {
-                        $tool = $this->findTool($tools, $toolCall->getName());
-                        $result = $tool !== null ? $tool->execute($toolCall->getArguments()) : '';
+                    $toolCalls = $response->getMessage()->getToolCalls();
+                    $toolResults = $this->executeTools($tools, $toolCalls, $parallelTools);
 
+                    foreach ($toolResults as $toolCallId => $result) {
                         $this->logDebug('Tool executed', [
-                            'tool' => $toolCall->getName(),
+                            'tool' => $result['name'],
                             'iteration' => $iteration,
+                            'duration_ms' => $result['duration_ms'],
                         ]);
 
                         $messages[] = new Message(
                             'tool',
                             '',
                             [],
-                            new ToolResult($toolCall->getId(), $result)
+                            new ToolResult($toolCallId, $result['output'])
                         );
                     }
 
@@ -641,6 +644,45 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Enables HTTP connection reuse for improved performance.
+     *
+     * When enabled, TCP connections are kept alive and reused across multiple
+     * requests to the same host. This significantly improves performance in
+     * scenarios with sequential requests, such as tool calling loops.
+     *
+     * Connection reuse avoids the overhead of:
+     * - TCP handshake (~1 RTT)
+     * - TLS handshake (~2 RTT)
+     * - TCP slow start
+     *
+     * ```php
+     * $client->enableConnectionReuse();
+     * $response = $client->chat($messages, [
+     *     'tools' => $tools,
+     *     'auto_execute_tools' => true,
+     * ]);
+     * ```
+     *
+     * @param bool $enable True to enable connection reuse, false to disable.
+     *
+     * @return self Returns the instance for method chaining.
+     */
+    public function enableConnectionReuse(bool $enable = true): self {
+        // Get the innermost CurlHttpClient
+        $client = $this->httpClient;
+
+        while ($client instanceof RateLimitAwareHttpClient || $client instanceof RetryableHttpClient) {
+            $client = $client->getInner();
+        }
+
+        if ($client instanceof CurlHttpClient) {
+            $client->enableConnectionReuse($enable);
+        }
+
+        return $this;
+    }
+
+    /**
      * Sets the cache implementation for storing responses.
      *
      * When a cache is set, responses from chat() and embed() calls will be
@@ -1001,6 +1043,48 @@ abstract class AbstractClient implements ProviderInterface {
         }
 
         return null;
+    }
+
+    /**
+     * Executes multiple tool calls.
+     *
+     * Currently executes tools sequentially. The `parallel` option is reserved
+     * for future implementation with async I/O support.
+     *
+     * @param ToolInterface[] $tools The available tools.
+     * @param ToolCall[] $toolCalls The tool calls to execute.
+     * @param bool $parallel Reserved for future parallel execution support.
+     *
+     * @return array<string, array{name: string, output: string, duration_ms: int}> Results keyed by tool call ID.
+     */
+    private function executeTools(array $tools, array $toolCalls, bool $parallel): array {
+        $results = [];
+        $overallStart = microtime(true);
+
+        foreach ($toolCalls as $toolCall) {
+            $tool = $this->findTool($tools, $toolCall->getName());
+
+            $start = microtime(true);
+            $output = $tool !== null ? $tool->execute($toolCall->getArguments()) : '';
+            $duration = (int) ((microtime(true) - $start) * 1000);
+
+            $results[$toolCall->getId()] = [
+                'name' => $toolCall->getName(),
+                'output' => $output,
+                'duration_ms' => $duration,
+            ];
+        }
+
+        // Log total tool execution time if multiple tools
+        if (count($toolCalls) > 1) {
+            $totalDuration = (int) ((microtime(true) - $overallStart) * 1000);
+            $this->logDebug('Multiple tools executed', [
+                'tool_count' => count($toolCalls),
+                'total_duration_ms' => $totalDuration,
+            ]);
+        }
+
+        return $results;
     }
 
     /**
