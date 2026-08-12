@@ -142,8 +142,10 @@ class AnthropicClient extends AbstractClient {
             if ($message->hasToolCalls()) {
                 $content = [];
 
-                // Add text content if present
-                if (!empty($message->getContent())) {
+                // Add text content if present (handle multi-modal)
+                if ($message->isMultiModal()) {
+                    $content = array_merge($content, $this->formatContentParts($message->getContentParts()));
+                } elseif (!empty($message->getContent())) {
                     $content[] = [
                         'type' => 'text',
                         'text' => $message->getContent(),
@@ -168,6 +170,16 @@ class AnthropicClient extends AbstractClient {
                 continue;
             }
 
+            // Handle multi-modal messages
+            if ($message->isMultiModal()) {
+                $formatted[] = [
+                    'role' => $message->getRole(),
+                    'content' => $this->formatContentParts($message->getContentParts()),
+                ];
+
+                continue;
+            }
+
             // Regular user/assistant message
             $formatted[] = [
                 'role' => $message->getRole(),
@@ -176,6 +188,123 @@ class AnthropicClient extends AbstractClient {
         }
 
         return $formatted;
+    }
+
+    /**
+     * Formats ContentPart objects into Anthropic content array format.
+     *
+     * @param \WebFiori\Ai\ContentPart[] $parts The content parts.
+     *
+     * @return array<int, array<string, mixed>> The formatted content array.
+     */
+    private function formatContentParts(array $parts): array {
+        $formatted = [];
+
+        foreach ($parts as $part) {
+            switch ($part->getType()) {
+                case \WebFiori\Ai\ContentPart::TYPE_TEXT:
+                    $formatted[] = [
+                        'type' => 'text',
+                        'text' => $part->getData()['text'],
+                    ];
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_URL:
+                    // Anthropic requires base64 data, fetch the image
+                    $url = $part->getData()['url'];
+                    $imageData = $this->fetchImageFromUrl($url);
+
+                    if ($imageData !== null) {
+                        $formatted[] = [
+                            'type' => 'image',
+                            'source' => [
+                                'type' => 'base64',
+                                'media_type' => $imageData['mime_type'],
+                                'data' => $imageData['data'],
+                            ],
+                        ];
+                    }
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_BASE64:
+                    $data = $part->getData();
+                    $formatted[] = [
+                        'type' => 'image',
+                        'source' => [
+                            'type' => 'base64',
+                            'media_type' => $data['mime_type'],
+                            'data' => $data['data'],
+                        ],
+                    ];
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_GCS:
+                    // Anthropic doesn't support GCS URIs, need to fetch the image
+                    $this->logWarning('Anthropic does not support GCS URIs directly. Attempting to fetch via HTTPS.');
+                    $data = $part->getData();
+                    // Convert gs://bucket/path to https://storage.googleapis.com/bucket/path
+                    $gcsPath = substr($data['uri'], 5); // Remove 'gs://'
+                    $httpsUrl = 'https://storage.googleapis.com/'.$gcsPath;
+                    $imageData = $this->fetchImageFromUrl($httpsUrl);
+
+                    if ($imageData !== null) {
+                        $formatted[] = [
+                            'type' => 'image',
+                            'source' => [
+                                'type' => 'base64',
+                                'media_type' => $imageData['mime_type'],
+                                'data' => $imageData['data'],
+                            ],
+                        ];
+                    }
+
+                    break;
+            }
+        }
+
+        return $formatted;
+    }
+
+    /**
+     * Fetches an image from a URL and returns base64-encoded data.
+     *
+     * @param string $url The image URL.
+     *
+     * @return array{mime_type: string, data: string}|null The image data or null on failure.
+     */
+    private function fetchImageFromUrl(string $url): ?array {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 30,
+                'user_agent' => 'WebFiori-AI/1.0',
+            ],
+        ]);
+
+        $content = @file_get_contents($url, false, $context);
+
+        if ($content === false) {
+            $this->logWarning('Failed to fetch image from URL', ['url' => $url]);
+
+            return null;
+        }
+
+        // Detect MIME type from content
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo->buffer($content);
+
+        if (!in_array($mimeType, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
+            $this->logWarning('Unsupported image MIME type from URL', ['url' => $url, 'mime_type' => $mimeType]);
+
+            return null;
+        }
+
+        return [
+            'mime_type' => $mimeType,
+            'data' => base64_encode($content),
+        ];
     }
 
     /**

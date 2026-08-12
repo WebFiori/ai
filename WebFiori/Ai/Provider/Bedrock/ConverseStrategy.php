@@ -336,7 +336,10 @@ class ConverseStrategy implements InvocationStrategyInterface {
             if ($message->hasToolCalls()) {
                 $content = [];
 
-                if (!empty($message->getContent())) {
+                // Handle multi-modal content
+                if ($message->isMultiModal()) {
+                    $content = array_merge($content, $this->formatContentParts($message->getContentParts()));
+                } elseif (!empty($message->getContent())) {
                     $content[] = ['text' => $message->getContent()];
                 }
 
@@ -355,6 +358,16 @@ class ConverseStrategy implements InvocationStrategyInterface {
                 continue;
             }
 
+            // Handle multi-modal messages
+            if ($message->isMultiModal()) {
+                $formatted[] = [
+                    'role' => $message->getRole(),
+                    'content' => $this->formatContentParts($message->getContentParts()),
+                ];
+
+                continue;
+            }
+
             $formatted[] = [
                 'role' => $message->getRole(),
                 'content' => [['text' => $message->getContent()]],
@@ -362,6 +375,132 @@ class ConverseStrategy implements InvocationStrategyInterface {
         }
 
         return $formatted;
+    }
+
+    /**
+     * Formats ContentPart objects into Bedrock Converse API content format.
+     *
+     * @param \WebFiori\Ai\ContentPart[] $parts The content parts.
+     *
+     * @return array<int, array<string, mixed>> The formatted content array.
+     */
+    private function formatContentParts(array $parts): array {
+        $formatted = [];
+
+        foreach ($parts as $part) {
+            switch ($part->getType()) {
+                case \WebFiori\Ai\ContentPart::TYPE_TEXT:
+                    $formatted[] = ['text' => $part->getData()['text']];
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_URL:
+                    // Bedrock requires base64 data, fetch the image
+                    $url = $part->getData()['url'];
+                    $imageData = $this->fetchImageFromUrl($url);
+
+                    if ($imageData !== null) {
+                        $formatted[] = [
+                            'image' => [
+                                'format' => $this->mimeToFormat($imageData['mime_type']),
+                                'source' => [
+                                    'bytes' => $imageData['data'],
+                                ],
+                            ],
+                        ];
+                    }
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_BASE64:
+                    $data = $part->getData();
+                    $formatted[] = [
+                        'image' => [
+                            'format' => $this->mimeToFormat($data['mime_type']),
+                            'source' => [
+                                'bytes' => $data['data'],
+                            ],
+                        ],
+                    ];
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_GCS:
+                    // Bedrock doesn't support GCS URIs, need to fetch the image
+                    $data = $part->getData();
+                    // Convert gs://bucket/path to https://storage.googleapis.com/bucket/path
+                    $gcsPath = substr($data['uri'], 5); // Remove 'gs://'
+                    $httpsUrl = 'https://storage.googleapis.com/'.$gcsPath;
+                    $imageData = $this->fetchImageFromUrl($httpsUrl);
+
+                    if ($imageData !== null) {
+                        $formatted[] = [
+                            'image' => [
+                                'format' => $this->mimeToFormat($imageData['mime_type']),
+                                'source' => [
+                                    'bytes' => $imageData['data'],
+                                ],
+                            ],
+                        ];
+                    }
+
+                    break;
+            }
+        }
+
+        return $formatted;
+    }
+
+    /**
+     * Converts MIME type to Bedrock image format.
+     *
+     * @param string $mimeType The MIME type.
+     *
+     * @return string The Bedrock format string.
+     */
+    private function mimeToFormat(string $mimeType): string {
+        return match ($mimeType) {
+            'image/jpeg' => 'jpeg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+            default => 'jpeg',
+        };
+    }
+
+    /**
+     * Fetches an image from a URL and returns base64-encoded data.
+     *
+     * @param string $url The image URL.
+     *
+     * @return array{mime_type: string, data: string}|null The image data or null on failure.
+     */
+    private function fetchImageFromUrl(string $url): ?array {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 30,
+                'user_agent' => 'WebFiori-AI/1.0',
+            ],
+        ]);
+
+        $content = @file_get_contents($url, false, $context);
+
+        if ($content === false) {
+            return null;
+        }
+
+        // Detect MIME type from content
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo->buffer($content);
+
+        if (!in_array($mimeType, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
+            return null;
+        }
+
+        return [
+            'mime_type' => $mimeType,
+            'data' => base64_encode($content),
+        ];
     }
 
     /**

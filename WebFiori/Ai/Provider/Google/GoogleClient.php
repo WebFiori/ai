@@ -158,7 +158,10 @@ class GoogleClient extends AbstractClient {
 
             $parts = [];
 
-            if ($message->getContent() !== '') {
+            // Handle multi-modal content
+            if ($message->isMultiModal()) {
+                $parts = array_merge($parts, $this->formatContentParts($message->getContentParts()));
+            } elseif ($message->getContent() !== '') {
                 $parts[] = ['text' => $message->getContent()];
             }
 
@@ -204,6 +207,106 @@ class GoogleClient extends AbstractClient {
         }
 
         return $contents;
+    }
+
+    /**
+     * Formats ContentPart objects into Google parts format.
+     *
+     * @param \WebFiori\Ai\ContentPart[] $contentParts The content parts.
+     *
+     * @return array<int, array<string, mixed>> The formatted parts array.
+     */
+    private function formatContentParts(array $contentParts): array {
+        $parts = [];
+
+        foreach ($contentParts as $part) {
+            switch ($part->getType()) {
+                case \WebFiori\Ai\ContentPart::TYPE_TEXT:
+                    $parts[] = ['text' => $part->getData()['text']];
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_URL:
+                    // Google requires fetching the image and sending as inline data
+                    // or using fileData for GCS URIs. For HTTP URLs, we fetch and encode.
+                    $url = $part->getData()['url'];
+                    $imageData = $this->fetchImageFromUrl($url);
+
+                    if ($imageData !== null) {
+                        $parts[] = [
+                            'inlineData' => [
+                                'mimeType' => $imageData['mime_type'],
+                                'data' => $imageData['data'],
+                            ],
+                        ];
+                    }
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_BASE64:
+                    $data = $part->getData();
+                    $parts[] = [
+                        'inlineData' => [
+                            'mimeType' => $data['mime_type'],
+                            'data' => $data['data'],
+                        ],
+                    ];
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_GCS:
+                    $data = $part->getData();
+                    $parts[] = [
+                        'fileData' => [
+                            'mimeType' => $data['mime_type'],
+                            'fileUri' => $data['uri'],
+                        ],
+                    ];
+
+                    break;
+            }
+        }
+
+        return $parts;
+    }
+
+    /**
+     * Fetches an image from a URL and returns base64-encoded data.
+     *
+     * @param string $url The image URL.
+     *
+     * @return array{mime_type: string, data: string}|null The image data or null on failure.
+     */
+    private function fetchImageFromUrl(string $url): ?array {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 30,
+                'user_agent' => 'WebFiori-AI/1.0',
+            ],
+        ]);
+
+        $content = @file_get_contents($url, false, $context);
+
+        if ($content === false) {
+            $this->logWarning('Failed to fetch image from URL', ['url' => $url]);
+
+            return null;
+        }
+
+        // Detect MIME type from content
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo->buffer($content);
+
+        if (!in_array($mimeType, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
+            $this->logWarning('Unsupported image MIME type from URL', ['url' => $url, 'mime_type' => $mimeType]);
+
+            return null;
+        }
+
+        return [
+            'mime_type' => $mimeType,
+            'data' => base64_encode($content),
+        ];
     }
 
     /**

@@ -34,3 +34,10 @@ export GCP_ACCESS_TOKEN="ya29...."
 | 07 | [Tool Calling](07-tool-calling/) | AI-invoked functions with a live demo |
 | 08 | [Error Handling](08-error-handling/) | Error handling patterns and retry strategies |
 | 09 | [Testing](09-testing/) | Using FakeHttpClient for unit testing |
+| 10 | [Caching](10-caching/) | Response caching to reduce costs and latency |
+| 11 | [Context Window](11-context-window/) | Token counting and context window management |
+| 12 | [Health Checks](12-health-checks/) | Verify provider availability before sending requests |
+| 13 | [Metrics](13-metrics/) | Emit structured metrics for monitoring (DataDog, Prometheus, etc.) |
+| 14 | [PII Redaction](14-pii-redaction/) | Redact sensitive data from logs and metrics for GDPR/HIPAA compliance |
+| 15 | [Audit Logging](15-audit-logging/) | Structured audit trail of all AI operations for compliance |
+| 16 | [Multi-Modal](16-multi-modal/) | Send images with text to vision models (GPT-4o, Gemini, Claude 3) |

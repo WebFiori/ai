@@ -80,17 +80,25 @@ class OpenAIClient extends AbstractClient {
      * Formats Message objects into the OpenAI messages format.
      *
      * @param Message[] $messages The messages to format.
+     * @param array<string, mixed> $options Request options (may contain 'detail' for images).
      *
      * @return array<int, array<string, mixed>> The formatted messages array.
      */
-    private function formatMessages(array $messages): array {
+    private function formatMessages(array $messages, array $options = []): array {
         $formatted = [];
+        $imageDetail = $options['detail'] ?? 'auto';
 
         foreach ($messages as $message) {
             $entry = [
                 'role' => $message->getRole(),
-                'content' => $message->getContent(),
             ];
+
+            // Handle multi-modal content
+            if ($message->isMultiModal()) {
+                $entry['content'] = $this->formatContentParts($message->getContentParts(), $imageDetail);
+            } else {
+                $entry['content'] = $message->getContent();
+            }
 
             if ($message->hasToolCalls()) {
                 $entry['tool_calls'] = [];
@@ -113,6 +121,75 @@ class OpenAIClient extends AbstractClient {
             }
 
             $formatted[] = $entry;
+        }
+
+        return $formatted;
+    }
+
+    /**
+     * Formats ContentPart objects into the OpenAI content array format.
+     *
+     * @param \WebFiori\Ai\ContentPart[] $parts The content parts.
+     * @param string $imageDetail The detail level for images ('auto', 'low', 'high').
+     *
+     * @return array<int, array<string, mixed>> The formatted content array.
+     */
+    private function formatContentParts(array $parts, string $imageDetail): array {
+        $formatted = [];
+
+        foreach ($parts as $part) {
+            switch ($part->getType()) {
+                case \WebFiori\Ai\ContentPart::TYPE_TEXT:
+                    $formatted[] = [
+                        'type' => 'text',
+                        'text' => $part->getData()['text'],
+                    ];
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_URL:
+                    $formatted[] = [
+                        'type' => 'image_url',
+                        'image_url' => [
+                            'url' => $part->getData()['url'],
+                            'detail' => $imageDetail,
+                        ],
+                    ];
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_BASE64:
+                    $data = $part->getData();
+                    $dataUrl = 'data:'.$data['mime_type'].';base64,'.$data['data'];
+                    $formatted[] = [
+                        'type' => 'image_url',
+                        'image_url' => [
+                            'url' => $dataUrl,
+                            'detail' => $imageDetail,
+                        ],
+                    ];
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_GCS:
+                    // OpenAI doesn't support GCS URIs directly, convert to regular URL
+                    // This won't work unless the GCS object is publicly accessible
+                    // via its HTTPS URL. Log a warning but attempt anyway.
+                    $this->logWarning('OpenAI does not natively support GCS URIs. The image must be publicly accessible.');
+                    $data = $part->getData();
+                    // Convert gs://bucket/path to https://storage.googleapis.com/bucket/path
+                    $gcsPath = substr($data['uri'], 5); // Remove 'gs://'
+                    $httpsUrl = 'https://storage.googleapis.com/'.$gcsPath;
+                    $formatted[] = [
+                        'type' => 'image_url',
+                        'image_url' => [
+                            'url' => $httpsUrl,
+                            'detail' => $imageDetail,
+                        ],
+                    ];
+
+                    break;
+            }
         }
 
         return $formatted;
@@ -187,7 +264,7 @@ class OpenAIClient extends AbstractClient {
         $model = $options['model'] ?? $this->getConfig('model', 'gpt-4o');
         $body = [
             'model' => $model,
-            'messages' => $this->formatMessages($messages),
+            'messages' => $this->formatMessages($messages, $options),
         ];
 
         $this->applyOptions($body, $options);
@@ -268,7 +345,7 @@ class OpenAIClient extends AbstractClient {
         $model = $options['model'] ?? $this->getConfig('model', 'gpt-4o');
         $body = [
             'model' => $model,
-            'messages' => $this->formatMessages($messages),
+            'messages' => $this->formatMessages($messages, $options),
             'stream' => true,
         ];
 
