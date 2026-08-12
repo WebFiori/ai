@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.8](https://github.com/WebFiori/ai/compare/v0.4.7...v0.4.8) (2026-08-12)
+
+
+### Features
+
+* **chat:** expand multi-modal to support documents, audio, and video ([a73b3db](https://github.com/WebFiori/ai/commit/a73b3dbf0b752dfc31af38c4667471b4145a5fe1))
+* **chat:** implement multi-modal support (images in chat) ([caa36e4](https://github.com/WebFiori/ai/commit/caa36e48edfceb71b9b856cc797afe69ad905ac6))
+* **chat:** implement multi-modal support (images in chat) ([e12006d](https://github.com/WebFiori/ai/commit/e12006d82ee40b65ad7885c15c01437008db376e)), closes [#29](https://github.com/WebFiori/ai/issues/29)
+* merge health checks into main ([eba9bed](https://github.com/WebFiori/ai/commit/eba9bed5bc5c99b0efc39f5ef32058de7ced8e61))
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#58](https://github.com/WebFiori/ai/issues/58) from WebFiori/feat/audit-logging ([9d459c5](https://github.com/WebFiori/ai/commit/9d459c5495ef81e7b67771dd0cb6ce7e2d9bb15c))
+
 ## [0.4.7](https://github.com/WebFiori/ai/compare/v0.4.6...v0.4.7) (2026-08-10)
 
 
