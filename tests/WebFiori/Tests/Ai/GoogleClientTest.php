@@ -271,14 +271,52 @@ class GoogleClientTest extends TestCase {
     /**
      * @test
      */
-    public function testMissingLocationThrows() {
-        $this->expectException(InvalidConfigException::class);
-        $this->expectExceptionMessage('location');
-        new GoogleClient([
+    public function testLocationDefaultsToGlobal() {
+        $client = new GoogleClient([
             'api' => 'vertex_ai',
             'project_id' => 'my-project',
             'access_token' => 'token',
         ]);
+
+        $fakeHttp = new FakeHttpClient();
+        $fakeHttp->addResponse(new HttpResponse(200, [], json_encode([
+            'candidates' => [['content' => ['parts' => [['text' => 'Hello']], 'role' => 'model']]],
+        ])));
+        $client->setHttpClient($fakeHttp);
+
+        $client->chat([new Message('user', 'Hi')]);
+        $request = $fakeHttp->getLastRequest();
+
+        $this->assertStringContainsString(
+            'https://aiplatform.googleapis.com/v1/projects/my-project/locations/global/',
+            $request->getUrl()
+        );
+    }
+
+    /**
+     * @test
+     */
+    public function testRegionalLocationUsesRegionalEndpoint() {
+        $client = new GoogleClient([
+            'api' => 'vertex_ai',
+            'project_id' => 'my-project',
+            'location' => 'us-central1',
+            'access_token' => 'token',
+        ]);
+
+        $fakeHttp = new FakeHttpClient();
+        $fakeHttp->addResponse(new HttpResponse(200, [], json_encode([
+            'candidates' => [['content' => ['parts' => [['text' => 'Hello']], 'role' => 'model']]],
+        ])));
+        $client->setHttpClient($fakeHttp);
+
+        $client->chat([new Message('user', 'Hi')]);
+        $request = $fakeHttp->getLastRequest();
+
+        $this->assertStringContainsString(
+            'https://us-central1-aiplatform.googleapis.com/v1/projects/my-project/locations/us-central1/',
+            $request->getUrl()
+        );
     }
 
     /**

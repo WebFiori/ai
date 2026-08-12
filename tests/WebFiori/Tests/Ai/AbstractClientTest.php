@@ -297,6 +297,10 @@ class AbstractClientTest extends TestCase {
             protected function parseImageResponse(HttpResponse $response): ImageResponse {
                 return new ImageResponse([], 'test-model');
             }
+
+            public function healthCheck(int $timeout = 5): \WebFiori\Ai\HealthCheckResult {
+                return \WebFiori\Ai\HealthCheckResult::success(1, 'test');
+            }
         };
     }
 }

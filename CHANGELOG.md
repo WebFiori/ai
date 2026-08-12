@@ -1,5 +1,100 @@
 # Changelog
 
+## [0.4.7](https://github.com/WebFiori/ai/compare/v0.4.6...v0.4.7) (2026-08-10)
+
+
+### Features
+
+* **redaction:** implement PII redaction for logs and metrics ([e0a6b42](https://github.com/WebFiori/ai/commit/e0a6b42f7977ab57bb614e3802146de90fbcb36d)), closes [#26](https://github.com/WebFiori/ai/issues/26)
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#56](https://github.com/WebFiori/ai/issues/56) from WebFiori/feat/pii-redaction ([5ce187b](https://github.com/WebFiori/ai/commit/5ce187b315dddeef1224a215f379fb060b51c4f5))
+
+## [0.4.6](https://github.com/WebFiori/ai/compare/v0.4.5...v0.4.6) (2026-08-10)
+
+
+### Features
+
+* **metrics:** implement metrics collection via callback ([f1e117f](https://github.com/WebFiori/ai/commit/f1e117f73574bf923da50e9a4872f384df9147c7)), closes [#25](https://github.com/WebFiori/ai/issues/25)
+
+
+### Bug Fixes
+
+* remove debug file_put_contents from parseChatResponse ([094fdec](https://github.com/WebFiori/ai/commit/094fdecf817637f30c5a8a00adee8c87517f3918))
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#55](https://github.com/WebFiori/ai/issues/55) from WebFiori/feat/metrics ([b38e830](https://github.com/WebFiori/ai/commit/b38e830e348a2d8b8a69407043b27e3f0a459eb6))
+
+## [0.4.5](https://github.com/WebFiori/ai/compare/v0.4.3...v0.4.5) (2026-08-08)
+
+
+### Features
+
+* **context:** implement token counting and context window management ([ab164f1](https://github.com/WebFiori/ai/commit/ab164f16df64ab52a63a777002f9328a8d07a7a5))
+* **context:** implement token counting and context window management ([20cc310](https://github.com/WebFiori/ai/commit/20cc310c1d1e484f500962ce2d39d60c6256502b)), closes [#28](https://github.com/WebFiori/ai/issues/28)
+* **health:** implement provider health checks ([40411c7](https://github.com/WebFiori/ai/commit/40411c71103fe15c0c41592446556424a22ca5d0)), closes [#24](https://github.com/WebFiori/ai/issues/24)
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#53](https://github.com/WebFiori/ai/issues/53) from WebFiori/feat/health-checks ([fbdcc01](https://github.com/WebFiori/ai/commit/fbdcc0177267368d96b3d1c71a56ea107d662671))
+
+## [0.4.3](https://github.com/WebFiori/ai/compare/v0.4.0...v0.4.3) (2026-08-06)
+
+
+### Features
+
+* **cache:** implement response caching interface ([7efc501](https://github.com/WebFiori/ai/commit/7efc5016ec4dc5c34dc859a61e7e725bc1160a72)), closes [#23](https://github.com/WebFiori/ai/issues/23)
+* **google:** support global location endpoint for Vertex AI ([fcf0322](https://github.com/WebFiori/ai/commit/fcf0322a816373b3b047458f4c9b46502ba42d27))
+* **resilience:** rate limit header tracking ([2cc8b38](https://github.com/WebFiori/ai/commit/2cc8b38329456d07418cfe306a54feb30b283e40))
+* **resilience:** rate limit tracking release trigger ([3ba16ad](https://github.com/WebFiori/ai/commit/3ba16adfe8ee543fb69f839047389042f2606661)), closes [#22](https://github.com/WebFiori/ai/issues/22)
+
+
+### Bug Fixes
+
+* cast empty functionCall args to object to avoid JSON list serialization ([5f916d0](https://github.com/WebFiori/ai/commit/5f916d0921feea8f8b266757c705fddb69713f2b))
+* merge consecutive tool messages into single function role content for Gemini ([7f66ea3](https://github.com/WebFiori/ai/commit/7f66ea3d6d4d76300ce4d5a6bf763953696b08eb))
+* preserve thought_signature and raw parts for Gemini tool calls ([6e8bad8](https://github.com/WebFiori/ai/commit/6e8bad8920eb7844d9f16b33f0e020e22ee17426))
+* skip thought parts in parseChatResponse for Gemini thinking mode ([bc2a7ff](https://github.com/WebFiori/ai/commit/bc2a7ffdd3384755f12cc01d606d90eb638a6e2d))
+
+
+### Miscellaneous Chores
+
+* release v0.4.3 ([2070fc5](https://github.com/WebFiori/ai/commit/2070fc5373a029349351680edea34a9ccd805d1e))
+
+## [0.4.0](https://github.com/WebFiori/ai/compare/v0.3.0...v0.4.0) (2026-07-26)
+
+
+### Features
+
+* **resilience:** implement retry with exponential backoff ([59bcb97](https://github.com/WebFiori/ai/commit/59bcb9716c60c83d1a40a13e3ed6f4525b2b70bd)), closes [#21](https://github.com/WebFiori/ai/issues/21)
+* **resilience:** retry with exponential backoff ([c9d644f](https://github.com/WebFiori/ai/commit/c9d644fa0164e240bb5c447a48830c38120d2e6d))
+
+## [0.3.0](https://github.com/WebFiori/ai/compare/v0.2.0...v0.3.0) (2026-07-26)
+
+
+### Features
+
+* **bedrock:** add API key authentication support ([f0da558](https://github.com/WebFiori/ai/commit/f0da5589e45c1dc1da899e85cd3a01198d670e87))
+* **provider:** implement Anthropic Claude provider ([f6b0c62](https://github.com/WebFiori/ai/commit/f6b0c62c58d8fe355f535c9a571376d8f5c7b61e)), closes [#19](https://github.com/WebFiori/ai/issues/19)
+* **provider:** implement AWS Bedrock provider ([1a27193](https://github.com/WebFiori/ai/commit/1a27193463d1400f7b377cf91050da64132f17b8)), closes [#20](https://github.com/WebFiori/ai/issues/20)
+
+
+### Bug Fixes
+
+* **bedrock:** implement EventStreamParser for Converse streaming ([9b8858d](https://github.com/WebFiori/ai/commit/9b8858da4121ebfe2cf52372061faca014788840))
+* **google:** cast empty tool call args to object for valid JSON ([27b7a29](https://github.com/WebFiori/ai/commit/27b7a294102cbfde3858211bbd3ac183f6c0a951))
+* **google:** ensure functionCall.args and functionResponse.response are always JSON objects ([922a517](https://github.com/WebFiori/ai/commit/922a517083142a4574bd884bd1c3711c654fcb6f))
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#46](https://github.com/WebFiori/ai/issues/46) from WebFiori/dev ([c9ab008](https://github.com/WebFiori/ai/commit/c9ab008aa73511ad1decb0f74ab4df1246e09f48))
+
 ## [0.2.0](https://github.com/WebFiori/ai/compare/v0.1.0...v0.2.0) (2026-07-15)
 
 

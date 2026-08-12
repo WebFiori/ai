@@ -41,6 +41,16 @@ class ToolCall {
     private string $name;
 
     /**
+     * Raw provider-specific part data to preserve when replaying messages.
+     *
+     * Used by providers (e.g. Google) to retain fields like thought_signature
+     * that must be echoed back verbatim in subsequent requests.
+     *
+     * @var array<string, mixed>|null
+     */
+    private ?array $rawPart = null;
+
+    /**
      * Creates a new ToolCall instance.
      *
      * @param string $id The unique identifier for this tool call.
@@ -78,5 +88,23 @@ class ToolCall {
      */
     public function getName(): string {
         return $this->name;
+    }
+
+    /**
+     * Sets the raw provider-specific part data for this tool call.
+     *
+     * @param array<string, mixed> $part The raw part from the provider response.
+     */
+    public function setRawPart(array $part): void {
+        $this->rawPart = $part;
+    }
+
+    /**
+     * Returns the raw provider-specific part data, or null if not set.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getRawPart(): ?array {
+        return $this->rawPart;
     }
 }

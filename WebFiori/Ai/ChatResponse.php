@@ -22,9 +22,6 @@ class ChatResponse {
     /**
      * The reason the AI stopped generating.
      *
-     * Common values: 'stop' (natural end), 'length' (max tokens reached),
-     * 'tool_calls' (tool invocation requested).
-     *
      * @var string|null
      */
     private ?string $finishReason;
@@ -44,6 +41,13 @@ class ChatResponse {
     private string $model;
 
     /**
+     * Unique identifier for the request that produced this response.
+     *
+     * @var string|null
+     */
+    private ?string $requestId;
+
+    /**
      * Token usage information for this response.
      *
      * @var Usage|null
@@ -57,24 +61,26 @@ class ChatResponse {
      * @param string $model The model identifier that generated this response.
      * @param Usage|null $usage Token usage information, or null if not available.
      * @param string|null $finishReason The reason generation stopped.
+     * @param string|null $requestId Unique request identifier for tracing.
      */
     public function __construct(
         Message $message,
         string $model,
         ?Usage $usage = null,
-        ?string $finishReason = null
+        ?string $finishReason = null,
+        ?string $requestId = null
     ) {
         $this->message = $message;
         $this->model = $model;
         $this->usage = $usage;
         $this->finishReason = $finishReason;
+        $this->requestId = $requestId;
     }
 
     /**
      * Returns the reason the AI stopped generating.
      *
      * @return string|null The finish reason, or null if not available.
-     *         Common values: 'stop', 'length', 'tool_calls'.
      */
     public function getFinishReason(): ?string {
         return $this->finishReason;
@@ -96,6 +102,18 @@ class ChatResponse {
      */
     public function getModel(): string {
         return $this->model;
+    }
+
+    /**
+     * Returns the unique request identifier for tracing and correlation.
+     *
+     * Use this to correlate the response with metrics events emitted
+     * during the request lifecycle.
+     *
+     * @return string|null The request ID, or null if not set.
+     */
+    public function getRequestId(): ?string {
+        return $this->requestId;
     }
 
     /**

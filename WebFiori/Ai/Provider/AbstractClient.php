@@ -10,7 +10,15 @@
  */
 namespace WebFiori\Ai\Provider;
 
+use WebFiori\Ai\Cache\CachedResponse;
+use WebFiori\Ai\Cache\CacheConfig;
+use WebFiori\Ai\Cache\CacheInterface;
+use WebFiori\Ai\Cache\CacheKeyGenerator;
+use WebFiori\Ai\Audit\AuditConfig;
+use WebFiori\Ai\Audit\AuditTrait;
 use WebFiori\Ai\ChatResponse;
+use WebFiori\Ai\Context\ContextWindowStrategyInterface;
+use WebFiori\Ai\Context\TokenEstimator;
 use WebFiori\Ai\EmbeddingResponse;
 use WebFiori\Ai\Exception\InvalidConfigException;
 use WebFiori\Ai\Http\CurlHttpClient;
@@ -23,7 +31,10 @@ use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\LoggerTrait;
 use WebFiori\Ai\Message;
+use WebFiori\Ai\MetricsTrait;
 use WebFiori\Ai\RateLimitStatus;
+use WebFiori\Ai\Redaction\RedactionConfig;
+use WebFiori\Ai\Redaction\RedactionService;
 use WebFiori\Ai\RetryConfig;
 use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Tool\ToolResult;
@@ -32,13 +43,48 @@ use WebFiori\Ai\Tool\ToolResult;
  * Base class for AI provider implementations.
  *
  * Provides shared functionality for configuration management, HTTP client
- * handling, logging, and the template for provider-specific operations.
+ * handling, logging, caching, and the template for provider-specific operations.
  * Concrete providers extend this class and implement the abstract methods
  * to handle their specific API formats.
  *
  * @author Ibrahim
  */
 abstract class AbstractClient implements ProviderInterface {
+    /**
+     * Cache implementation for storing responses.
+     *
+     * @var CacheInterface|null
+     */
+    private ?CacheInterface $cache = null;
+
+    /**
+     * Cache configuration.
+     *
+     * @var CacheConfig
+     */
+    private CacheConfig $cacheConfig;
+
+    /**
+     * Cache key generator.
+     *
+     * @var CacheKeyGenerator
+     */
+    private CacheKeyGenerator $cacheKeyGenerator;
+
+    /**
+     * Context window management strategy.
+     *
+     * @var ContextWindowStrategyInterface|null
+     */
+    private ?ContextWindowStrategyInterface $contextStrategy = null;
+
+    /**
+     * Token estimator for counting tokens.
+     *
+     * @var TokenEstimator
+     */
+    private TokenEstimator $tokenEstimator;
+
     /**
      * Provider configuration options.
      *
@@ -69,6 +115,10 @@ abstract class AbstractClient implements ProviderInterface {
             $config['timeout'] ?? 120,
             $config['connect_timeout'] ?? 10
         );
+        $this->cacheConfig = new CacheConfig(enabled: false);
+        $this->cacheKeyGenerator = new CacheKeyGenerator();
+        $this->tokenEstimator = new TokenEstimator();
+        $this->initAuditTrait();
         $this->validateConfig($config);
     }
 
@@ -77,6 +127,12 @@ abstract class AbstractClient implements ProviderInterface {
      *
      * Handles logging, request building, HTTP transport, response parsing,
      * and error mapping. Delegates provider-specific logic to abstract methods.
+     *
+     * If caching is enabled and the request is cacheable (based on temperature
+     * settings), cached responses are returned when available.
+     *
+     * If a context window strategy is set, messages are automatically truncated
+     * to fit within the configured token limit.
      *
      * @param Message[] $messages An array of messages forming the conversation.
      * @param array<string, mixed> $options Additional options (e.g., temperature,
@@ -88,10 +144,55 @@ abstract class AbstractClient implements ProviderInterface {
      * @throws \WebFiori\Ai\Exception\RateLimitException If the rate limit is exceeded.
      * @throws \WebFiori\Ai\Exception\ProviderException If the provider returns an error.
      * @throws \WebFiori\Ai\Exception\HttpException If a transport error occurs.
+     * @throws \WebFiori\Ai\Exception\ContextOverflowException If using NoTruncationStrategy
+     *         and context exceeds the limit.
      */
     public function chat(array $messages, array $options = []): ChatResponse {
         $model = $options['model'] ?? $this->getConfig('model');
         $startTime = microtime(true);
+        $autoExecute = $options['auto_execute_tools'] ?? false;
+        $temperature = $options['temperature'] ?? null;
+        $tools = $options['tools'] ?? [];
+        $requestId = $options['request_id'] ?? uniqid('req_', true);
+
+        // Apply context window strategy if set
+        $messages = $this->applyContextStrategy($messages, $tools);
+
+        // Check cache (skip if auto_execute_tools is enabled due to side effects)
+        $cacheKey = null;
+        $shouldCache = !$autoExecute && $this->cache !== null
+            && $this->cacheConfig->shouldCacheChat($temperature);
+
+        if ($shouldCache) {
+            $cacheKey = $this->cacheKeyGenerator->forChat(
+                $this->getName(),
+                $model,
+                $messages,
+                $options
+            );
+
+            $cached = $this->cache->get($cacheKey);
+
+            if ($cached !== null) {
+                $this->logInfo('Chat cache hit', [
+                    'provider' => $this->getName(),
+                    'model' => $model,
+                    'cache_key' => $cacheKey,
+                ]);
+
+                $this->emitMetric('cache.hit', array_merge(
+                    $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                    ['key' => $cacheKey]
+                ));
+
+                return $cached->getData();
+            }
+
+            $this->emitMetric('cache.miss', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                ['key' => $cacheKey]
+            ));
+        }
 
         $this->logInfo('Chat request started', [
             'provider' => $this->getName(),
@@ -99,63 +200,159 @@ abstract class AbstractClient implements ProviderInterface {
             'message_count' => count($messages),
         ]);
 
-        $request = $this->buildChatRequest($messages, $options);
-        $httpResponse = $this->sendRequest($request);
-        $this->handleErrorResponse($httpResponse);
-        $response = $this->parseChatResponse($httpResponse);
+        $this->emitMetric('request.sent', array_merge(
+            $this->buildBaseMetricData($requestId, $this->getName(), $model),
+            ['endpoint' => 'chat', 'method' => 'POST']
+        ));
 
-        $autoExecute = $options['auto_execute_tools'] ?? false;
-        $tools = $options['tools'] ?? [];
-        $maxIterations = $options['max_tool_iterations'] ?? 10;
+        try {
+            $request = $this->buildChatRequest($messages, $options);
+            $httpResponse = $this->sendRequest($request);
+            $this->handleErrorResponse($httpResponse);
+            $response = $this->parseChatResponse($httpResponse);
 
-        if ($autoExecute && count($tools) > 0) {
-            $iteration = 0;
+            $maxIterations = $options['max_tool_iterations'] ?? 10;
 
-            while ($response->hasToolCalls() && $iteration < $maxIterations) {
-                $iteration++;
-                $messages[] = $response->getMessage();
+            if ($autoExecute && count($tools) > 0) {
+                $iteration = 0;
 
-                foreach ($response->getMessage()->getToolCalls() as $toolCall) {
-                    $tool = $this->findTool($tools, $toolCall->getName());
-                    $result = $tool !== null ? $tool->execute($toolCall->getArguments()) : '';
+                while ($response->hasToolCalls() && $iteration < $maxIterations) {
+                    $iteration++;
+                    $messages[] = $response->getMessage();
 
-                    $this->logDebug('Tool executed', [
-                        'tool' => $toolCall->getName(),
-                        'iteration' => $iteration,
-                    ]);
+                    foreach ($response->getMessage()->getToolCalls() as $toolCall) {
+                        $tool = $this->findTool($tools, $toolCall->getName());
+                        $result = $tool !== null ? $tool->execute($toolCall->getArguments()) : '';
 
-                    $messages[] = new Message(
-                        'tool',
-                        '',
-                        [],
-                        new ToolResult($toolCall->getId(), $result)
-                    );
+                        $this->logDebug('Tool executed', [
+                            'tool' => $toolCall->getName(),
+                            'iteration' => $iteration,
+                        ]);
+
+                        $messages[] = new Message(
+                            'tool',
+                            '',
+                            [],
+                            new ToolResult($toolCall->getId(), $result)
+                        );
+                    }
+
+                    $request = $this->buildChatRequest($messages, $options);
+                    $httpResponse = $this->sendRequest($request);
+                    $this->handleErrorResponse($httpResponse);
+                    $response = $this->parseChatResponse($httpResponse);
                 }
-
-                $request = $this->buildChatRequest($messages, $options);
-                $httpResponse = $this->sendRequest($request);
-                $this->handleErrorResponse($httpResponse);
-                $response = $this->parseChatResponse($httpResponse);
             }
+
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->logInfo('Chat request completed', [
+                'provider' => $this->getName(),
+                'model' => $response->getModel(),
+                'finish_reason' => $response->getFinishReason(),
+                'duration_ms' => $durationMs,
+                'prompt_tokens' => $response->getUsage()?->getPromptTokens(),
+                'completion_tokens' => $response->getUsage()?->getCompletionTokens(),
+                'total_tokens' => $response->getUsage()?->getTotalTokens(),
+            ]);
+
+            $this->emitMetric('request.completed', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $response->getModel()),
+                [
+                    'status_code' => $httpResponse->getStatusCode(),
+                    'latency_ms' => $durationMs,
+                    'prompt_tokens' => $response->getUsage()?->getPromptTokens(),
+                    'completion_tokens' => $response->getUsage()?->getCompletionTokens(),
+                    'total_tokens' => $response->getUsage()?->getTotalTokens(),
+                ]
+            ));
+
+            // Attach request ID to response
+            $response = new ChatResponse(
+                $response->getMessage(),
+                $response->getModel(),
+                $response->getUsage(),
+                $response->getFinishReason(),
+                $requestId
+            );
+
+            // Store in cache
+            if ($shouldCache && $cacheKey !== null) {
+                $this->cache->set(
+                    $cacheKey,
+                    new CachedResponse($response, 'chat'),
+                    $this->cacheConfig->getDefaultTtl()
+                );
+
+                $this->logDebug('Chat response cached', [
+                    'cache_key' => $cacheKey,
+                    'ttl' => $this->cacheConfig->getDefaultTtl(),
+                ]);
+            }
+
+            // Emit audit entry
+            $auditEntry = array_merge(
+                $this->buildBaseAuditEntry(
+                    $requestId,
+                    'chat',
+                    $this->getName(),
+                    $response->getModel(),
+                    $options['audit_context'] ?? []
+                ),
+                [
+                    'status' => 'success',
+                    'duration_ms' => $durationMs,
+                    'tokens' => [
+                        'prompt' => $response->getUsage()?->getPromptTokens(),
+                        'completion' => $response->getUsage()?->getCompletionTokens(),
+                        'total' => $response->getUsage()?->getTotalTokens(),
+                    ],
+                    'error' => null,
+                ]
+            );
+
+            if ($this->auditConfig->isIncludeMessages()) {
+                $auditEntry['messages'] = $this->serializeMessagesForAudit($messages);
+            }
+
+            if ($this->auditConfig->isIncludeResponse()) {
+                $auditEntry['response'] = $response->getMessage()->getContent();
+            }
+
+            $this->emitAudit($auditEntry);
+
+            return $response;
+        } catch (\Throwable $e) {
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->emitMetric('request.failed', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                [
+                    'error_type' => get_class($e),
+                    'error_message' => $e->getMessage(),
+                    'latency_ms' => $durationMs,
+                ]
+            ));
+
+            $this->emitAudit(array_merge(
+                $this->buildBaseAuditEntry($requestId, 'chat', $this->getName(), $model, $options['audit_context'] ?? []),
+                [
+                    'status' => 'error',
+                    'duration_ms' => $durationMs,
+                    'tokens' => ['prompt' => null, 'completion' => null, 'total' => null],
+                    'error' => ['type' => get_class($e), 'message' => $e->getMessage()],
+                ]
+            ));
+
+            throw $e;
         }
-
-        $durationMs = (int) ((microtime(true) - $startTime) * 1000);
-
-        $this->logInfo('Chat request completed', [
-            'provider' => $this->getName(),
-            'model' => $response->getModel(),
-            'finish_reason' => $response->getFinishReason(),
-            'duration_ms' => $durationMs,
-            'prompt_tokens' => $response->getUsage()?->getPromptTokens(),
-            'completion_tokens' => $response->getUsage()?->getCompletionTokens(),
-            'total_tokens' => $response->getUsage()?->getTotalTokens(),
-        ]);
-
-        return $response;
     }
 
     /**
      * Generates vector embeddings for the given text input.
+     *
+     * If caching is enabled, embeddings are cached since they are deterministic
+     * (same input always produces the same vector).
      *
      * @param string|string[] $input A single text string or an array of strings.
      * @param array<string, mixed> $options Additional provider-specific options.
@@ -166,11 +363,130 @@ abstract class AbstractClient implements ProviderInterface {
      * @throws \WebFiori\Ai\Exception\ProviderException If the provider returns an error.
      */
     public function embed(string|array $input, array $options = []): EmbeddingResponse {
-        $request = $this->buildEmbedRequest($input, $options);
-        $httpResponse = $this->sendRequest($request);
-        $this->handleErrorResponse($httpResponse);
+        $model = $options['model'] ?? $this->getConfig('embedding_model', $this->getConfig('model'));
+        $requestId = $options['request_id'] ?? uniqid('req_', true);
+        $startTime = microtime(true);
 
-        return $this->parseEmbedResponse($httpResponse);
+        // Check cache
+        $cacheKey = null;
+        $shouldCache = $this->cache !== null && $this->cacheConfig->shouldCacheEmbedding();
+
+        if ($shouldCache) {
+            $cacheKey = $this->cacheKeyGenerator->forEmbedding(
+                $this->getName(),
+                $model,
+                $input,
+                $options
+            );
+
+            $cached = $this->cache->get($cacheKey);
+
+            if ($cached !== null) {
+                $this->logInfo('Embedding cache hit', [
+                    'provider' => $this->getName(),
+                    'model' => $model,
+                    'cache_key' => $cacheKey,
+                ]);
+
+                $this->emitMetric('cache.hit', array_merge(
+                    $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                    ['key' => $cacheKey]
+                ));
+
+                return $cached->getData();
+            }
+
+            $this->emitMetric('cache.miss', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                ['key' => $cacheKey]
+            ));
+        }
+
+        $this->emitMetric('request.sent', array_merge(
+            $this->buildBaseMetricData($requestId, $this->getName(), $model),
+            ['endpoint' => 'embeddings', 'method' => 'POST']
+        ));
+
+        try {
+            $request = $this->buildEmbedRequest($input, $options);
+            $httpResponse = $this->sendRequest($request);
+            $this->handleErrorResponse($httpResponse);
+
+            $response = $this->parseEmbedResponse($httpResponse);
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->emitMetric('request.completed', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $response->getModel()),
+                [
+                    'status_code' => $httpResponse->getStatusCode(),
+                    'latency_ms' => $durationMs,
+                    'prompt_tokens' => $response->getUsage()?->getPromptTokens(),
+                    'completion_tokens' => null,
+                    'total_tokens' => $response->getUsage()?->getPromptTokens(),
+                ]
+            ));
+
+            // Attach request ID to response
+            $response = new EmbeddingResponse(
+                $response->getVectors(),
+                $response->getModel(),
+                $response->getUsage(),
+                $requestId
+            );
+
+            // Store in cache
+            if ($shouldCache && $cacheKey !== null) {
+                $this->cache->set(
+                    $cacheKey,
+                    new CachedResponse($response, 'embedding'),
+                    $this->cacheConfig->getEmbeddingTtl()
+                );
+
+                $this->logDebug('Embedding response cached', [
+                    'cache_key' => $cacheKey,
+                    'ttl' => $this->cacheConfig->getEmbeddingTtl(),
+                ]);
+            }
+
+            $this->emitAudit(array_merge(
+                $this->buildBaseAuditEntry($requestId, 'embed', $this->getName(), $response->getModel(), $options['audit_context'] ?? []),
+                [
+                    'status' => 'success',
+                    'duration_ms' => $durationMs,
+                    'tokens' => [
+                        'prompt' => $response->getUsage()?->getPromptTokens(),
+                        'completion' => null,
+                        'total' => $response->getUsage()?->getPromptTokens(),
+                    ],
+                    'error' => null,
+                ]
+            ));
+
+            return $response;
+        } catch (\Throwable $e) {
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->emitMetric('request.failed', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                [
+                    'error_type' => get_class($e),
+                    'error_message' => $e->getMessage(),
+                    'latency_ms' => $durationMs,
+                ]
+            ));
+
+            $this->emitAudit(array_merge(
+                $this->buildBaseAuditEntry($requestId, 'embed', $this->getName(), $model, $options['audit_context'] ?? []),
+                [
+                    'status' => 'error',
+                    'duration_ms' => $durationMs,
+                    'tokens' => ['prompt' => null, 'completion' => null, 'total' => null],
+                    'error' => ['type' => get_class($e), 'message' => $e->getMessage()],
+                ]
+            ));
+
+            throw $e;
+        }
     }
 
     /**
@@ -211,11 +527,71 @@ abstract class AbstractClient implements ProviderInterface {
      * @throws \WebFiori\Ai\Exception\ProviderException If the provider returns an error.
      */
     public function generateImage(ImageRequest $request): ImageResponse {
-        $httpRequest = $this->buildImageRequest($request);
-        $httpResponse = $this->sendRequest($httpRequest);
-        $this->handleErrorResponse($httpResponse);
+        $requestId = uniqid('req_', true);
+        $startTime = microtime(true);
+        $model = $this->getConfig('image_model', $this->getConfig('model'));
 
-        return $this->parseImageResponse($httpResponse);
+        $this->emitMetric('request.sent', array_merge(
+            $this->buildBaseMetricData($requestId, $this->getName(), $model),
+            ['endpoint' => 'images', 'method' => 'POST']
+        ));
+
+        try {
+            $httpRequest = $this->buildImageRequest($request);
+            $httpResponse = $this->sendRequest($httpRequest);
+            $this->handleErrorResponse($httpResponse);
+
+            $response = $this->parseImageResponse($httpResponse);
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->emitMetric('request.completed', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $response->getModel()),
+                [
+                    'status_code' => $httpResponse->getStatusCode(),
+                    'latency_ms' => $durationMs,
+                    'prompt_tokens' => null,
+                    'completion_tokens' => null,
+                    'total_tokens' => null,
+                ]
+            ));
+
+            $imageResponse = new ImageResponse($response->getImages(), $response->getModel(), $requestId);
+
+            $this->emitAudit(array_merge(
+                $this->buildBaseAuditEntry($requestId, 'generateImage', $this->getName(), $response->getModel()),
+                [
+                    'status' => 'success',
+                    'duration_ms' => $durationMs,
+                    'tokens' => ['prompt' => null, 'completion' => null, 'total' => null],
+                    'error' => null,
+                ]
+            ));
+
+            return $imageResponse;
+        } catch (\Throwable $e) {
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->emitMetric('request.failed', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                [
+                    'error_type' => get_class($e),
+                    'error_message' => $e->getMessage(),
+                    'latency_ms' => $durationMs,
+                ]
+            ));
+
+            $this->emitAudit(array_merge(
+                $this->buildBaseAuditEntry($requestId, 'generateImage', $this->getName(), $model),
+                [
+                    'status' => 'error',
+                    'duration_ms' => $durationMs,
+                    'tokens' => ['prompt' => null, 'completion' => null, 'total' => null],
+                    'error' => ['type' => get_class($e), 'message' => $e->getMessage()],
+                ]
+            ));
+
+            throw $e;
+        }
     }
 
     /**
@@ -265,6 +641,170 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Sets the cache implementation for storing responses.
+     *
+     * When a cache is set, responses from chat() and embed() calls will be
+     * stored and retrieved based on the cache configuration.
+     *
+     * ```php
+     * $provider->setCache(new InMemoryCache());
+     * $provider->setCacheConfig(new CacheConfig(defaultTtl: 3600));
+     * ```
+     *
+     * @param CacheInterface|null $cache The cache implementation, or null to disable.
+     */
+    public function setCache(?CacheInterface $cache): void {
+        $this->cache = $cache;
+
+        if ($cache !== null && !$this->cacheConfig->isEnabled()) {
+            $this->cacheConfig = new CacheConfig(enabled: true);
+        }
+    }
+
+    /**
+     * Sets the cache configuration.
+     *
+     * Controls TTL values and which requests should be cached based on
+     * parameters like temperature.
+     *
+     * ```php
+     * $provider->setCacheConfig(new CacheConfig(
+     *     enabled: true,
+     *     defaultTtl: 3600,
+     *     embeddingTtl: 86400,
+     *     skipCacheAboveTemperature: 0.0, // Only cache temperature=0
+     * ));
+     * ```
+     *
+     * @param CacheConfig $config The cache configuration.
+     */
+    public function setCacheConfig(CacheConfig $config): void {
+        $this->cacheConfig = $config;
+    }
+
+    /**
+     * Returns the current cache implementation.
+     *
+     * @return CacheInterface|null The cache, or null if not set.
+     */
+    public function getCache(): ?CacheInterface {
+        return $this->cache;
+    }
+
+    /**
+     * Returns the current cache configuration.
+     *
+     * @return CacheConfig The cache configuration.
+     */
+    public function getCacheConfig(): CacheConfig {
+        return $this->cacheConfig;
+    }
+
+    /**
+     * Configures PII redaction for logs and metrics.
+     *
+     * When set, sensitive data is redacted before reaching log and metrics
+     * callbacks. API keys and Bearer tokens are always redacted regardless
+     * of configuration.
+     *
+     * ```php
+     * $provider->setRedactionConfig(new RedactionConfig(
+     *     redactRequestBodies: true,
+     *     redactResponseBodies: false,
+     *     disabledRules: ['phone'],
+     *     customRules: [
+     *         new RedactionRule('ssn', '/\b\d{3}-\d{2}-\d{4}\b/', '[SSN]'),
+     *     ],
+     * ));
+     * ```
+     *
+     * @param RedactionConfig|null $config The redaction config, or null to disable.
+     */
+    public function setRedactionConfig(?RedactionConfig $config): void {
+        $service = $config !== null ? new RedactionService($config) : null;
+        $this->setLogRedactionService($service);
+        $this->setMetricsRedactionService($service);
+        $this->setAuditRedactionService($service);
+    }
+
+    /**
+     * Sets the context window management strategy.
+     *
+     * When set, messages are automatically truncated to fit within the
+     * configured token limit before being sent to the AI provider.
+     *
+     * ```php
+     * $provider->setContextWindowStrategy(new SlidingWindowStrategy(
+     *     maxTokens: 128000,
+     *     reserveForCompletion: 4096,
+     *     preserveSystemMessage: true,
+     * ));
+     * ```
+     *
+     * @param ContextWindowStrategyInterface|null $strategy The strategy, or null to disable.
+     */
+    public function setContextWindowStrategy(?ContextWindowStrategyInterface $strategy): void {
+        $this->contextStrategy = $strategy;
+    }
+
+    /**
+     * Returns the current context window strategy.
+     *
+     * @return ContextWindowStrategyInterface|null The strategy, or null if not set.
+     */
+    public function getContextWindowStrategy(): ?ContextWindowStrategyInterface {
+        return $this->contextStrategy;
+    }
+
+    /**
+     * Estimates the token count for messages and optionally tools.
+     *
+     * Uses character-ratio estimation (~4 characters ≈ 1 token).
+     * Accuracy is typically within 5-10% of actual token count.
+     *
+     * ```php
+     * $tokens = $provider->countTokens($messages);
+     * $tokens = $provider->countTokens($messages, $tools);
+     * ```
+     *
+     * @param Message[] $messages The messages to count.
+     * @param ToolInterface[] $tools Optional tools to include in count.
+     *
+     * @return int Estimated token count.
+     */
+    public function countTokens(array $messages, array $tools = []): int {
+        return $this->tokenEstimator->count($messages, $tools);
+    }
+
+    /**
+     * Returns the estimated remaining tokens available for completion.
+     *
+     * Requires a context window strategy to be set.
+     *
+     * @param Message[] $messages The messages to count.
+     * @param ToolInterface[] $tools Optional tools to include in count.
+     *
+     * @return int|null Remaining tokens, or null if no strategy is set.
+     */
+    public function getRemainingTokens(array $messages, array $tools = []): ?int {
+        if ($this->contextStrategy === null) {
+            return null;
+        }
+
+        $used = $this->tokenEstimator->count($messages, $tools);
+        $reserved = $this->contextStrategy->getReservedTokens();
+
+        // Get max tokens from strategy if it has a getter
+        if (method_exists($this->contextStrategy, 'getMaxTokens')) {
+            $max = $this->contextStrategy->getMaxTokens();
+
+            return max(0, $max - $reserved - $used);
+        }
+
+        return null;
+    }
+
+    /**
      * Configures automatic retry with exponential backoff for failed requests.
      *
      * Wraps the current HTTP client in a RetryableHttpClient decorator. Must
@@ -291,6 +831,9 @@ abstract class AbstractClient implements ProviderInterface {
     /**
      * Sends a chat completion request with streaming response.
      *
+     * If a context window strategy is set, messages are automatically truncated
+     * to fit within the configured token limit.
+     *
      * @param Message[] $messages An array of messages forming the conversation.
      * @param callable $onToken Callback invoked for each token received.
      *        Signature: function(string $token): void
@@ -303,6 +846,8 @@ abstract class AbstractClient implements ProviderInterface {
      * @throws \WebFiori\Ai\Exception\AuthenticationException If credentials are invalid.
      * @throws \WebFiori\Ai\Exception\RateLimitException If the rate limit is exceeded.
      * @throws \WebFiori\Ai\Exception\ProviderException If the provider returns an error.
+     * @throws \WebFiori\Ai\Exception\ContextOverflowException If using NoTruncationStrategy
+     *         and context exceeds the limit.
      */
     public function streamChat(
         array $messages,
@@ -312,6 +857,13 @@ abstract class AbstractClient implements ProviderInterface {
         array $options = []
     ): void {
         $model = $options['model'] ?? $this->getConfig('model');
+        $tools = $options['tools'] ?? [];
+        $requestId = $options['request_id'] ?? uniqid('req_', true);
+        $startTime = microtime(true);
+        $tokenCount = 0;
+
+        // Apply context window strategy if set
+        $messages = $this->applyContextStrategy($messages, $tools);
 
         $this->logInfo('Stream chat request started', [
             'provider' => $this->getName(),
@@ -319,8 +871,118 @@ abstract class AbstractClient implements ProviderInterface {
             'message_count' => count($messages),
         ]);
 
+        $this->emitMetric('stream.started', $this->buildBaseMetricData($requestId, $this->getName(), $model));
+
+        // Wrap onToken to count tokens
+        $wrappedOnToken = function (string $token) use ($onToken, &$tokenCount): void {
+            $tokenCount++;
+            $onToken($token);
+        };
+
+        // Wrap onComplete to emit stream.completed + audit entry
+        $wrappedOnComplete = function ($response) use ($onComplete, $requestId, $startTime, &$tokenCount, $messages, $options): void {
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->emitMetric('stream.completed', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $response?->getModel()),
+                ['duration_ms' => $durationMs, 'tokens' => $tokenCount]
+            ));
+
+            $auditEntry = array_merge(
+                $this->buildBaseAuditEntry(
+                    $requestId,
+                    'streamChat',
+                    $this->getName(),
+                    $response?->getModel(),
+                    $options['audit_context'] ?? []
+                ),
+                [
+                    'status' => 'success',
+                    'duration_ms' => $durationMs,
+                    'tokens' => ['prompt' => null, 'completion' => $tokenCount, 'total' => $tokenCount],
+                    'error' => null,
+                ]
+            );
+
+            if ($this->auditConfig->isIncludeMessages()) {
+                $auditEntry['messages'] = $this->serializeMessagesForAudit($messages);
+            }
+
+            if ($this->auditConfig->isIncludeResponse() && $response !== null) {
+                $auditEntry['response'] = $response->getMessage()->getContent();
+            }
+
+            $this->emitAudit($auditEntry);
+
+            if ($onComplete !== null) {
+                $onComplete($response);
+            }
+        };
+
+        // Wrap onError to emit stream.error + audit entry
+        $wrappedOnError = function ($e) use ($onError, $requestId, $startTime, $model, $options): void {
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->emitMetric('stream.error', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), null),
+                ['error' => $e->getMessage()]
+            ));
+
+            $this->emitAudit(array_merge(
+                $this->buildBaseAuditEntry($requestId, 'streamChat', $this->getName(), $model, $options['audit_context'] ?? []),
+                [
+                    'status' => 'error',
+                    'duration_ms' => $durationMs,
+                    'tokens' => ['prompt' => null, 'completion' => null, 'total' => null],
+                    'error' => ['type' => get_class($e), 'message' => $e->getMessage()],
+                ]
+            ));
+
+            if ($onError !== null) {
+                $onError($e);
+            }
+        };
+
         $request = $this->buildStreamChatRequest($messages, $options);
-        $this->doStreamChat($request, $onToken, $onComplete, $onError);
+        $this->doStreamChat($request, $wrappedOnToken, $wrappedOnComplete, $wrappedOnError);
+    }
+
+    /**
+     * Applies the context window strategy to truncate messages if needed.
+     *
+     * @param Message[] $messages The original messages.
+     * @param ToolInterface[] $tools The tools being used.
+     *
+     * @return Message[] The potentially truncated messages.
+     */
+    private function applyContextStrategy(array $messages, array $tools): array {
+        if ($this->contextStrategy === null) {
+            return $messages;
+        }
+
+        $originalCount = count($messages);
+        $originalTokens = $this->tokenEstimator->count($messages, $tools);
+
+        $truncated = $this->contextStrategy->truncate($messages, 0, $tools);
+
+        $newCount = count($truncated);
+
+        if ($newCount < $originalCount) {
+            $removedCount = $originalCount - $newCount;
+            $newTokens = $this->tokenEstimator->count($truncated, $tools);
+            $removedTokens = $originalTokens - $newTokens;
+
+            $this->logWarning('Context window truncation applied', [
+                'original_messages' => $originalCount,
+                'truncated_messages' => $newCount,
+                'removed_messages' => $removedCount,
+                'original_tokens' => $originalTokens,
+                'new_tokens' => $newTokens,
+                'removed_tokens' => $removedTokens,
+            ]);
+        }
+
+        return $truncated;
     }
 
     /**
@@ -405,7 +1067,9 @@ abstract class AbstractClient implements ProviderInterface {
      * @throws \WebFiori\Ai\Exception\ProviderException If status indicates a server error.
      */
     abstract protected function handleErrorResponse(HttpResponse $response): void;
+    use AuditTrait;
     use LoggerTrait;
+    use MetricsTrait;
 
     /**
      * Parses an HTTP response into a ChatResponse.

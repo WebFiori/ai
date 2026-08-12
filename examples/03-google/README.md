@@ -43,8 +43,9 @@ The example supports two API modes via the `GCP_API` environment variable:
 # Gemini API (default, simpler, free tier)
 export GCP_API=gemini
 
-# Gemini Enterprise Agent Platform (previously Vertex AI, requires project_id and location)
+# Gemini Enterprise Agent Platform (previously Vertex AI, requires project_id)
 export GCP_API=vertex_ai
 export GCP_PROJECT_ID=my-project
-export GCP_LOCATION=us-central1
+# Location defaults to 'global'; set for regional data residency requirements
+# export GCP_LOCATION=us-central1
 ```

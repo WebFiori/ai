@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['message'])) {
             $google = new GoogleClient([
                 'api' => getenv('GCP_API') ?: 'gemini',
                 'project_id' => getenv('GCP_PROJECT_ID') ?: null,
-                'location' => getenv('GCP_LOCATION') ?: 'us-central1',
+                'location' => getenv('GCP_LOCATION') ?: null, // defaults to 'global'
                 'model' => getenv('GCP_MODEL') ?: 'gemini-2.5-flash',
                 'credentials' => getenv('GCP_CREDENTIALS') ?: $credentialsFile,
                 'access_token' => getenv('GCP_ACCESS_TOKEN') ?: null,

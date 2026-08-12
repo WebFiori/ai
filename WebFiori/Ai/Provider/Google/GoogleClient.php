@@ -40,11 +40,13 @@ use WebFiori\Ai\Usage;
  *   or 'vertex_ai'. The Gemini API (generativelanguage.googleapis.com) is simpler
  *   and works with the free tier. Gemini Enterprise Agent Platform (previously
  *   Vertex AI) at aiplatform.googleapis.com is the enterprise endpoint requiring
- *   project_id and location.
+ *   project_id.
  * - 'api_key' (optional): Gemini API key from Google AI Studio. Simplest auth
  *   method for the Gemini API. The key is passed as a query parameter.
  * - 'project_id' (required for vertex_ai API): GCP project ID.
- * - 'location' (required for vertex_ai API): GCP region (e.g., 'us-central1').
+ * - 'location' (optional for vertex_ai API): GCP region (e.g., 'us-central1').
+ *   Defaults to 'global' which uses Google's global endpoint and automatic routing.
+ *   Use a specific region if you have data residency requirements.
  * - 'model' (optional): Default model. Defaults to 'gemini-2.5-flash'.
  * - 'credentials' (optional): Path to service account JSON file, or an array
  *   with the credentials.
@@ -77,6 +79,73 @@ class GoogleClient extends AbstractClient {
      */
     public function getName(): string {
         return 'google';
+    }
+
+    /**
+     * Performs a health check by listing models or making a minimal request.
+     *
+     * @param int $timeout Timeout in seconds for the health check.
+     *
+     * @return \WebFiori\Ai\HealthCheckResult The health check result.
+     */
+    public function healthCheck(int $timeout = 5): \WebFiori\Ai\HealthCheckResult {
+        $startTime = microtime(true);
+        $checkMethod = 'models_list';
+
+        try {
+            // Build models list URL
+            if ($this->isGeminiApi()) {
+                $url = 'https://generativelanguage.googleapis.com/v1beta/models';
+                $apiKey = $this->getConfig('api_key');
+
+                if ($apiKey !== null) {
+                    $url .= '?key='.$apiKey;
+                }
+            } else {
+                $projectId = $this->getConfig('project_id');
+                $location = $this->getConfig('location', 'global');
+
+                if ($location === 'global') {
+                    $url = sprintf(
+                        'https://aiplatform.googleapis.com/v1/projects/%s/locations/global/publishers/google/models',
+                        $projectId
+                    );
+                } else {
+                    $url = sprintf(
+                        'https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models',
+                        $location,
+                        $projectId,
+                        $location
+                    );
+                }
+            }
+
+            $request = new \WebFiori\Ai\Http\HttpRequest(
+                'GET',
+                $url,
+                $this->getHeaders(),
+                ''
+            );
+
+            // Use a fresh HTTP client with short timeout
+            $httpClient = new \WebFiori\Ai\Http\CurlHttpClient($timeout, $timeout);
+            $response = $httpClient->send($request);
+
+            $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
+                return \WebFiori\Ai\HealthCheckResult::success($latencyMs, $checkMethod);
+            }
+
+            $body = $response->getJson();
+            $error = $body['error']['message'] ?? 'HTTP '.$response->getStatusCode();
+
+            return \WebFiori\Ai\HealthCheckResult::failure($error, $latencyMs, $checkMethod);
+        } catch (\Throwable $e) {
+            $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            return \WebFiori\Ai\HealthCheckResult::failure($e->getMessage(), $latencyMs, $checkMethod);
+        }
     }
 
     /**
@@ -167,6 +236,13 @@ class GoogleClient extends AbstractClient {
 
             if ($message->hasToolCalls()) {
                 foreach ($message->getToolCalls() as $toolCall) {
+                    // Use raw part if available to preserve provider-specific fields
+                    // (e.g. thought_signature required by Gemini 2.5+)
+                    if ($toolCall->getRawPart() !== null) {
+                        $parts[] = $toolCall->getRawPart();
+                        continue;
+                    }
+
                     $args = $toolCall->getArguments();
                     $callData = [
                         'functionCall' => [
@@ -190,12 +266,24 @@ class GoogleClient extends AbstractClient {
                     $decoded = ['result' => $result->getContent()];
                 }
 
-                $parts[] = [
+                $part = [
                     'functionResponse' => [
                         'name' => $result->getToolCallId(),
                         'response' => (object) $decoded,
                     ],
                 ];
+
+                // Gemini requires all functionResponse parts for a single model turn
+                // to be in one 'function' role content entry. Merge consecutive tool
+                // messages into the last content entry instead of creating a new one.
+                $last = end($contents);
+
+                if ($last !== false && $last['role'] === 'function') {
+                    $contents[count($contents) - 1]['parts'][] = $part;
+                    continue;
+                }
+
+                $parts[] = $part;
             }
 
             if (!empty($parts)) {
@@ -469,8 +557,19 @@ class GoogleClient extends AbstractClient {
         }
 
         $projectId = $this->getConfig('project_id');
-        $location = $this->getConfig('location');
+        $location = $this->getConfig('location', 'global');
 
+        // Global location uses a single endpoint without regional subdomain
+        if ($location === 'global') {
+            return sprintf(
+                'https://aiplatform.googleapis.com/v1/projects/%s/locations/global/publishers/google/models/%s:%s',
+                $projectId,
+                $model,
+                $action
+            );
+        }
+
+        // Regional locations use region-prefixed subdomain
         return sprintf(
             'https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:%s',
             $location,
@@ -819,6 +918,7 @@ class GoogleClient extends AbstractClient {
      */
     protected function parseChatResponse(HttpResponse $response): ChatResponse {
         $data = $response->getJson();
+
         $candidates = $data['candidates'] ?? [];
 
         if (empty($candidates)) {
@@ -836,16 +936,33 @@ class GoogleClient extends AbstractClient {
         $toolCalls = [];
 
         foreach ($parts as $part) {
+            // Skip internal thought parts (Gemini 2.5+ thinking mode)
+            // These contain the model's reasoning, not the final answer.
+            if (!empty($part['thought'])) {
+                continue;
+            }
+
             if (isset($part['text'])) {
                 $content .= $part['text'];
             }
 
             if (isset($part['functionCall'])) {
-                $toolCalls[] = new ToolCall(
+                $toolCall = new ToolCall(
                     uniqid('call_'),
                     $part['functionCall']['name'],
                     $part['functionCall']['args'] ?? []
                 );
+                // Preserve the raw part so thought_signature and any other
+                // provider-specific fields are replayed verbatim in follow-up turns.
+                // Ensure args is always an object (never a list) when replaying.
+                $rawPart = $part;
+
+                if (isset($rawPart['functionCall']['args']) && (empty($rawPart['functionCall']['args']) || array_is_list($rawPart['functionCall']['args']))) {
+                    $rawPart['functionCall']['args'] = (object) [];
+                }
+
+                $toolCall->setRawPart($rawPart);
+                $toolCalls[] = $toolCall;
             }
         }
 
@@ -943,13 +1060,6 @@ class GoogleClient extends AbstractClient {
                 throw new InvalidConfigException(
                     'The "project_id" configuration option is required for Google provider.',
                     'project_id'
-                );
-            }
-
-            if (empty($config['location'])) {
-                throw new InvalidConfigException(
-                    'The "location" configuration option is required for Google provider.',
-                    'location'
                 );
             }
         }
