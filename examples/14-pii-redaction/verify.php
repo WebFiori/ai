@@ -147,8 +147,8 @@ $context = [
 ];
 
 $result = $service->redactContext($context);
-echo '   '.(  $result['body'] === '[REDACTED]' ? '✅' : '❌')." Request body fully redacted\n";
-echo '   '.(  $result['response'] === '[REDACTED]' ? '✅' : '❌')." Response body fully redacted\n";
+echo '   '.($result['body'] === '[REDACTED]' ? '✅' : '❌')." Request body fully redacted\n";
+echo '   '.($result['response'] === '[REDACTED]' ? '✅' : '❌')." Response body fully redacted\n";
 echo '   '.($result['provider'] === 'openai' ? '✅' : '❌')." Metadata (provider) preserved\n";
 echo '   '.($result['model'] === 'gpt-4o' ? '✅' : '❌')." Metadata (model) preserved\n";
 echo '   '.($result['latency_ms'] === 250 ? '✅' : '❌')." Numeric values preserved\n";
@@ -166,7 +166,8 @@ $client->setRedactionConfig(new RedactionConfig(
 ));
 
 $logContext = [];
-$client->setLogCallback(function ($level, $message, $context) use (&$logContext) {
+$client->setLogCallback(function ($level, $message, $context) use (&$logContext)
+{
     $logContext[] = json_encode($context);
 });
 
@@ -178,7 +179,8 @@ $client->setHttpClient($fakeHttp);
 
 try {
     $client->chat([new Message('user', 'Hello')]);
-} catch (\Throwable $e) {}
+} catch (Throwable $e) {
+}
 
 $allLogs = implode(' ', $logContext);
 echo '   '.(!str_contains($allLogs, 'user@secret.com') ? '✅' : '❌')." Email not in logs\n";

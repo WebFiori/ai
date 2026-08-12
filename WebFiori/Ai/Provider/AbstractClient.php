@@ -10,12 +10,11 @@
  */
 namespace WebFiori\Ai\Provider;
 
-use WebFiori\Ai\Cache\CachedResponse;
+use WebFiori\Ai\Audit\AuditTrait;
 use WebFiori\Ai\Cache\CacheConfig;
+use WebFiori\Ai\Cache\CachedResponse;
 use WebFiori\Ai\Cache\CacheInterface;
 use WebFiori\Ai\Cache\CacheKeyGenerator;
-use WebFiori\Ai\Audit\AuditConfig;
-use WebFiori\Ai\Audit\AuditTrait;
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\Context\ContextWindowStrategyInterface;
 use WebFiori\Ai\Context\TokenEstimator;
@@ -36,6 +35,7 @@ use WebFiori\Ai\RateLimitStatus;
 use WebFiori\Ai\Redaction\RedactionConfig;
 use WebFiori\Ai\Redaction\RedactionService;
 use WebFiori\Ai\RetryConfig;
+use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Tool\ToolResult;
 
@@ -72,20 +72,6 @@ abstract class AbstractClient implements ProviderInterface {
     private CacheKeyGenerator $cacheKeyGenerator;
 
     /**
-     * Context window management strategy.
-     *
-     * @var ContextWindowStrategyInterface|null
-     */
-    private ?ContextWindowStrategyInterface $contextStrategy = null;
-
-    /**
-     * Token estimator for counting tokens.
-     *
-     * @var TokenEstimator
-     */
-    private TokenEstimator $tokenEstimator;
-
-    /**
      * Provider configuration options.
      *
      * @var array<string, mixed>
@@ -93,11 +79,25 @@ abstract class AbstractClient implements ProviderInterface {
     private array $config;
 
     /**
+     * Context window management strategy.
+     *
+     * @var ContextWindowStrategyInterface|null
+     */
+    private ?ContextWindowStrategyInterface $contextStrategy = null;
+
+    /**
      * The HTTP client used for making API requests.
      *
      * @var HttpClientInterface
      */
     private HttpClientInterface $httpClient;
+
+    /**
+     * Token estimator for counting tokens.
+     *
+     * @var TokenEstimator
+     */
+    private TokenEstimator $tokenEstimator;
 
     /**
      * Creates a new provider instance.
@@ -215,25 +215,27 @@ abstract class AbstractClient implements ProviderInterface {
 
             if ($autoExecute && count($tools) > 0) {
                 $iteration = 0;
+                $parallelTools = $options['parallel_tool_execution'] ?? true;
 
                 while ($response->hasToolCalls() && $iteration < $maxIterations) {
                     $iteration++;
                     $messages[] = $response->getMessage();
 
-                    foreach ($response->getMessage()->getToolCalls() as $toolCall) {
-                        $tool = $this->findTool($tools, $toolCall->getName());
-                        $result = $tool !== null ? $tool->execute($toolCall->getArguments()) : '';
+                    $toolCalls = $response->getMessage()->getToolCalls();
+                    $toolResults = $this->executeTools($tools, $toolCalls, $parallelTools);
 
+                    foreach ($toolResults as $toolCallId => $result) {
                         $this->logDebug('Tool executed', [
-                            'tool' => $toolCall->getName(),
+                            'tool' => $result['name'],
                             'iteration' => $iteration,
+                            'duration_ms' => $result['duration_ms'],
                         ]);
 
                         $messages[] = new Message(
                             'tool',
                             '',
                             [],
-                            new ToolResult($toolCall->getId(), $result)
+                            new ToolResult($toolCallId, $result['output'])
                         );
                     }
 
@@ -346,6 +348,26 @@ abstract class AbstractClient implements ProviderInterface {
 
             throw $e;
         }
+    }
+
+    /**
+     * Estimates the token count for messages and optionally tools.
+     *
+     * Uses character-ratio estimation (~4 characters ≈ 1 token).
+     * Accuracy is typically within 5-10% of actual token count.
+     *
+     * ```php
+     * $tokens = $provider->countTokens($messages);
+     * $tokens = $provider->countTokens($messages, $tools);
+     * ```
+     *
+     * @param Message[] $messages The messages to count.
+     * @param ToolInterface[] $tools Optional tools to include in count.
+     *
+     * @return int Estimated token count.
+     */
+    public function countTokens(array $messages, array $tools = []): int {
+        return $this->tokenEstimator->count($messages, $tools);
     }
 
     /**
@@ -490,6 +512,45 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Enables HTTP connection reuse for improved performance.
+     *
+     * When enabled, TCP connections are kept alive and reused across multiple
+     * requests to the same host. This significantly improves performance in
+     * scenarios with sequential requests, such as tool calling loops.
+     *
+     * Connection reuse avoids the overhead of:
+     * - TCP handshake (~1 RTT)
+     * - TLS handshake (~2 RTT)
+     * - TCP slow start
+     *
+     * ```php
+     * $client->enableConnectionReuse();
+     * $response = $client->chat($messages, [
+     *     'tools' => $tools,
+     *     'auto_execute_tools' => true,
+     * ]);
+     * ```
+     *
+     * @param bool $enable True to enable connection reuse, false to disable.
+     *
+     * @return self Returns the instance for method chaining.
+     */
+    public function enableConnectionReuse(bool $enable = true): self {
+        // Get the innermost CurlHttpClient
+        $client = $this->httpClient;
+
+        while ($client instanceof RateLimitAwareHttpClient || $client instanceof RetryableHttpClient) {
+            $client = $client->getInner();
+        }
+
+        if ($client instanceof CurlHttpClient) {
+            $client->enableConnectionReuse($enable);
+        }
+
+        return $this;
+    }
+
+    /**
      * Enables rate limit header tracking on this provider.
      *
      * Wraps the current HTTP client in a RateLimitAwareHttpClient decorator.
@@ -595,6 +656,24 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Returns the current cache implementation.
+     *
+     * @return CacheInterface|null The cache, or null if not set.
+     */
+    public function getCache(): ?CacheInterface {
+        return $this->cache;
+    }
+
+    /**
+     * Returns the current cache configuration.
+     *
+     * @return CacheConfig The cache configuration.
+     */
+    public function getCacheConfig(): CacheConfig {
+        return $this->cacheConfig;
+    }
+
+    /**
      * Returns a configuration value by key.
      *
      * @param string $key The configuration key.
@@ -604,6 +683,15 @@ abstract class AbstractClient implements ProviderInterface {
      */
     public function getConfig(string $key, mixed $default = null): mixed {
         return $this->config[$key] ?? $default;
+    }
+
+    /**
+     * Returns the current context window strategy.
+     *
+     * @return ContextWindowStrategyInterface|null The strategy, or null if not set.
+     */
+    public function getContextWindowStrategy(): ?ContextWindowStrategyInterface {
+        return $this->contextStrategy;
     }
 
     /**
@@ -632,12 +720,31 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
-     * Sets the HTTP client used for making API requests.
+     * Returns the estimated remaining tokens available for completion.
      *
-     * @param HttpClientInterface $client The HTTP client to use.
+     * Requires a context window strategy to be set.
+     *
+     * @param Message[] $messages The messages to count.
+     * @param ToolInterface[] $tools Optional tools to include in count.
+     *
+     * @return int|null Remaining tokens, or null if no strategy is set.
      */
-    public function setHttpClient(HttpClientInterface $client): void {
-        $this->httpClient = $client;
+    public function getRemainingTokens(array $messages, array $tools = []): ?int {
+        if ($this->contextStrategy === null) {
+            return null;
+        }
+
+        $used = $this->tokenEstimator->count($messages, $tools);
+        $reserved = $this->contextStrategy->getReservedTokens();
+
+        // Get max tokens from strategy if it has a getter
+        if (method_exists($this->contextStrategy, 'getMaxTokens')) {
+            $max = $this->contextStrategy->getMaxTokens();
+
+            return max(0, $max - $reserved - $used);
+        }
+
+        return null;
     }
 
     /**
@@ -683,21 +790,32 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
-     * Returns the current cache implementation.
+     * Sets the context window management strategy.
      *
-     * @return CacheInterface|null The cache, or null if not set.
+     * When set, messages are automatically truncated to fit within the
+     * configured token limit before being sent to the AI provider.
+     *
+     * ```php
+     * $provider->setContextWindowStrategy(new SlidingWindowStrategy(
+     *     maxTokens: 128000,
+     *     reserveForCompletion: 4096,
+     *     preserveSystemMessage: true,
+     * ));
+     * ```
+     *
+     * @param ContextWindowStrategyInterface|null $strategy The strategy, or null to disable.
      */
-    public function getCache(): ?CacheInterface {
-        return $this->cache;
+    public function setContextWindowStrategy(?ContextWindowStrategyInterface $strategy): void {
+        $this->contextStrategy = $strategy;
     }
 
     /**
-     * Returns the current cache configuration.
+     * Sets the HTTP client used for making API requests.
      *
-     * @return CacheConfig The cache configuration.
+     * @param HttpClientInterface $client The HTTP client to use.
      */
-    public function getCacheConfig(): CacheConfig {
-        return $this->cacheConfig;
+    public function setHttpClient(HttpClientInterface $client): void {
+        $this->httpClient = $client;
     }
 
     /**
@@ -725,83 +843,6 @@ abstract class AbstractClient implements ProviderInterface {
         $this->setLogRedactionService($service);
         $this->setMetricsRedactionService($service);
         $this->setAuditRedactionService($service);
-    }
-
-    /**
-     * Sets the context window management strategy.
-     *
-     * When set, messages are automatically truncated to fit within the
-     * configured token limit before being sent to the AI provider.
-     *
-     * ```php
-     * $provider->setContextWindowStrategy(new SlidingWindowStrategy(
-     *     maxTokens: 128000,
-     *     reserveForCompletion: 4096,
-     *     preserveSystemMessage: true,
-     * ));
-     * ```
-     *
-     * @param ContextWindowStrategyInterface|null $strategy The strategy, or null to disable.
-     */
-    public function setContextWindowStrategy(?ContextWindowStrategyInterface $strategy): void {
-        $this->contextStrategy = $strategy;
-    }
-
-    /**
-     * Returns the current context window strategy.
-     *
-     * @return ContextWindowStrategyInterface|null The strategy, or null if not set.
-     */
-    public function getContextWindowStrategy(): ?ContextWindowStrategyInterface {
-        return $this->contextStrategy;
-    }
-
-    /**
-     * Estimates the token count for messages and optionally tools.
-     *
-     * Uses character-ratio estimation (~4 characters ≈ 1 token).
-     * Accuracy is typically within 5-10% of actual token count.
-     *
-     * ```php
-     * $tokens = $provider->countTokens($messages);
-     * $tokens = $provider->countTokens($messages, $tools);
-     * ```
-     *
-     * @param Message[] $messages The messages to count.
-     * @param ToolInterface[] $tools Optional tools to include in count.
-     *
-     * @return int Estimated token count.
-     */
-    public function countTokens(array $messages, array $tools = []): int {
-        return $this->tokenEstimator->count($messages, $tools);
-    }
-
-    /**
-     * Returns the estimated remaining tokens available for completion.
-     *
-     * Requires a context window strategy to be set.
-     *
-     * @param Message[] $messages The messages to count.
-     * @param ToolInterface[] $tools Optional tools to include in count.
-     *
-     * @return int|null Remaining tokens, or null if no strategy is set.
-     */
-    public function getRemainingTokens(array $messages, array $tools = []): ?int {
-        if ($this->contextStrategy === null) {
-            return null;
-        }
-
-        $used = $this->tokenEstimator->count($messages, $tools);
-        $reserved = $this->contextStrategy->getReservedTokens();
-
-        // Get max tokens from strategy if it has a getter
-        if (method_exists($this->contextStrategy, 'getMaxTokens')) {
-            $max = $this->contextStrategy->getMaxTokens();
-
-            return max(0, $max - $reserved - $used);
-        }
-
-        return null;
     }
 
     /**
@@ -874,13 +915,15 @@ abstract class AbstractClient implements ProviderInterface {
         $this->emitMetric('stream.started', $this->buildBaseMetricData($requestId, $this->getName(), $model));
 
         // Wrap onToken to count tokens
-        $wrappedOnToken = function (string $token) use ($onToken, &$tokenCount): void {
+        $wrappedOnToken = function (string $token) use ($onToken, &$tokenCount): void
+        {
             $tokenCount++;
             $onToken($token);
         };
 
         // Wrap onComplete to emit stream.completed + audit entry
-        $wrappedOnComplete = function ($response) use ($onComplete, $requestId, $startTime, &$tokenCount, $messages, $options): void {
+        $wrappedOnComplete = function ($response) use ($onComplete, $requestId, $startTime, &$tokenCount, $messages, $options): void
+        {
             $durationMs = (int) ((microtime(true) - $startTime) * 1000);
 
             $this->emitMetric('stream.completed', array_merge(
@@ -920,7 +963,8 @@ abstract class AbstractClient implements ProviderInterface {
         };
 
         // Wrap onError to emit stream.error + audit entry
-        $wrappedOnError = function ($e) use ($onError, $requestId, $startTime, $model, $options): void {
+        $wrappedOnError = function ($e) use ($onError, $requestId, $startTime, $model, $options): void
+        {
             $durationMs = (int) ((microtime(true) - $startTime) * 1000);
 
             $this->emitMetric('stream.error', array_merge(
@@ -986,6 +1030,48 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Executes multiple tool calls.
+     *
+     * Currently executes tools sequentially. The `parallel` option is reserved
+     * for future implementation with async I/O support.
+     *
+     * @param ToolInterface[] $tools The available tools.
+     * @param ToolCall[] $toolCalls The tool calls to execute.
+     * @param bool $parallel Reserved for future parallel execution support.
+     *
+     * @return array<string, array{name: string, output: string, duration_ms: int}> Results keyed by tool call ID.
+     */
+    private function executeTools(array $tools, array $toolCalls, bool $parallel): array {
+        $results = [];
+        $overallStart = microtime(true);
+
+        foreach ($toolCalls as $toolCall) {
+            $tool = $this->findTool($tools, $toolCall->getName());
+
+            $start = microtime(true);
+            $output = $tool !== null ? $tool->execute($toolCall->getArguments()) : '';
+            $duration = (int) ((microtime(true) - $start) * 1000);
+
+            $results[$toolCall->getId()] = [
+                'name' => $toolCall->getName(),
+                'output' => $output,
+                'duration_ms' => $duration,
+            ];
+        }
+
+        // Log total tool execution time if multiple tools
+        if (count($toolCalls) > 1) {
+            $totalDuration = (int) ((microtime(true) - $overallStart) * 1000);
+            $this->logDebug('Multiple tools executed', [
+                'tool_count' => count($toolCalls),
+                'total_duration_ms' => $totalDuration,
+            ]);
+        }
+
+        return $results;
+    }
+
+    /**
      * Finds a tool by name from an array of tools.
      *
      * @param ToolInterface[] $tools The available tools.
@@ -1002,6 +1088,7 @@ abstract class AbstractClient implements ProviderInterface {
 
         return null;
     }
+    use AuditTrait;
 
     /**
      * Builds the HTTP request for a chat completion call.
@@ -1067,7 +1154,6 @@ abstract class AbstractClient implements ProviderInterface {
      * @throws \WebFiori\Ai\Exception\ProviderException If status indicates a server error.
      */
     abstract protected function handleErrorResponse(HttpResponse $response): void;
-    use AuditTrait;
     use LoggerTrait;
     use MetricsTrait;
 

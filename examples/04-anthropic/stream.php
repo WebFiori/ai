@@ -24,11 +24,13 @@ $client->streamChat(
         new Message('system', 'You are a helpful assistant.'),
         new Message('user', 'Write a haiku about programming.'),
     ],
-    onToken: function (string $token) {
+    onToken: function (string $token)
+    {
         echo $token;
         flush();
     },
-    onComplete: function ($response) {
+    onComplete: function ($response)
+    {
         echo PHP_EOL.PHP_EOL;
         echo 'Model: '.$response->getModel().PHP_EOL;
         echo 'Finish reason: '.$response->getFinishReason().PHP_EOL;

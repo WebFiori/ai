@@ -80,7 +80,7 @@ class AnthropicClient extends AbstractClient {
                 ],
             ];
 
-            $request = new \WebFiori\Ai\Http\HttpRequest(
+            $request = new HttpRequest(
                 'POST',
                 $this->getEndpoint('/v1/messages'),
                 $this->getHeaders(),
@@ -156,88 +156,36 @@ class AnthropicClient extends AbstractClient {
     }
 
     /**
-     * Formats Message objects into the Anthropic messages format.
+     * Fetches a file from a URL and returns base64-encoded data.
      *
-     * Filters out system messages (handled separately) and formats
-     * tool calls and results according to Anthropic's schema.
+     * @param string $url The file URL.
      *
-     * @param Message[] $messages The messages to format.
-     *
-     * @return array<int, array<string, mixed>> The formatted messages array.
+     * @return array{mime_type: string, data: string}|null The file data or null on failure.
      */
-    private function formatMessages(array $messages): array {
-        $formatted = [];
+    private function fetchFileFromUrl(string $url): ?array {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 30,
+                'user_agent' => 'WebFiori-AI/1.0',
+            ],
+        ]);
 
-        foreach ($messages as $message) {
-            // Skip system messages - they're handled separately
-            if ($message->getRole() === 'system') {
-                continue;
-            }
+        $content = @file_get_contents($url, false, $context);
 
-            // Handle tool result messages
-            if ($message->getToolResult() !== null) {
-                $formatted[] = [
-                    'role' => 'user',
-                    'content' => [[
-                        'type' => 'tool_result',
-                        'tool_use_id' => $message->getToolResult()->getToolCallId(),
-                        'content' => $message->getToolResult()->getContent(),
-                    ]],
-                ];
+        if ($content === false) {
+            $this->logWarning('Failed to fetch file from URL', ['url' => $url]);
 
-                continue;
-            }
-
-            // Handle assistant messages with tool calls
-            if ($message->hasToolCalls()) {
-                $content = [];
-
-                // Add text content if present (handle multi-modal)
-                if ($message->isMultiModal()) {
-                    $content = array_merge($content, $this->formatContentParts($message->getContentParts()));
-                } elseif (!empty($message->getContent())) {
-                    $content[] = [
-                        'type' => 'text',
-                        'text' => $message->getContent(),
-                    ];
-                }
-
-                // Add tool use blocks
-                foreach ($message->getToolCalls() as $toolCall) {
-                    $content[] = [
-                        'type' => 'tool_use',
-                        'id' => $toolCall->getId(),
-                        'name' => $toolCall->getName(),
-                        'input' => $toolCall->getArguments(),
-                    ];
-                }
-
-                $formatted[] = [
-                    'role' => 'assistant',
-                    'content' => $content,
-                ];
-
-                continue;
-            }
-
-            // Handle multi-modal messages
-            if ($message->isMultiModal()) {
-                $formatted[] = [
-                    'role' => $message->getRole(),
-                    'content' => $this->formatContentParts($message->getContentParts()),
-                ];
-
-                continue;
-            }
-
-            // Regular user/assistant message
-            $formatted[] = [
-                'role' => $message->getRole(),
-                'content' => $message->getContent(),
-            ];
+            return null;
         }
 
-        return $formatted;
+        // Detect MIME type from content
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo->buffer($content);
+
+        return [
+            'mime_type' => $mimeType,
+            'data' => base64_encode($content),
+        ];
     }
 
     /**
@@ -367,36 +315,88 @@ class AnthropicClient extends AbstractClient {
     }
 
     /**
-     * Fetches a file from a URL and returns base64-encoded data.
+     * Formats Message objects into the Anthropic messages format.
      *
-     * @param string $url The file URL.
+     * Filters out system messages (handled separately) and formats
+     * tool calls and results according to Anthropic's schema.
      *
-     * @return array{mime_type: string, data: string}|null The file data or null on failure.
+     * @param Message[] $messages The messages to format.
+     *
+     * @return array<int, array<string, mixed>> The formatted messages array.
      */
-    private function fetchFileFromUrl(string $url): ?array {
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 30,
-                'user_agent' => 'WebFiori-AI/1.0',
-            ],
-        ]);
+    private function formatMessages(array $messages): array {
+        $formatted = [];
 
-        $content = @file_get_contents($url, false, $context);
+        foreach ($messages as $message) {
+            // Skip system messages - they're handled separately
+            if ($message->getRole() === 'system') {
+                continue;
+            }
 
-        if ($content === false) {
-            $this->logWarning('Failed to fetch file from URL', ['url' => $url]);
+            // Handle tool result messages
+            if ($message->getToolResult() !== null) {
+                $formatted[] = [
+                    'role' => 'user',
+                    'content' => [[
+                        'type' => 'tool_result',
+                        'tool_use_id' => $message->getToolResult()->getToolCallId(),
+                        'content' => $message->getToolResult()->getContent(),
+                    ]],
+                ];
 
-            return null;
+                continue;
+            }
+
+            // Handle assistant messages with tool calls
+            if ($message->hasToolCalls()) {
+                $content = [];
+
+                // Add text content if present (handle multi-modal)
+                if ($message->isMultiModal()) {
+                    $content = array_merge($content, $this->formatContentParts($message->getContentParts()));
+                } elseif (!empty($message->getContent())) {
+                    $content[] = [
+                        'type' => 'text',
+                        'text' => $message->getContent(),
+                    ];
+                }
+
+                // Add tool use blocks
+                foreach ($message->getToolCalls() as $toolCall) {
+                    $content[] = [
+                        'type' => 'tool_use',
+                        'id' => $toolCall->getId(),
+                        'name' => $toolCall->getName(),
+                        'input' => $toolCall->getArguments(),
+                    ];
+                }
+
+                $formatted[] = [
+                    'role' => 'assistant',
+                    'content' => $content,
+                ];
+
+                continue;
+            }
+
+            // Handle multi-modal messages
+            if ($message->isMultiModal()) {
+                $formatted[] = [
+                    'role' => $message->getRole(),
+                    'content' => $this->formatContentParts($message->getContentParts()),
+                ];
+
+                continue;
+            }
+
+            // Regular user/assistant message
+            $formatted[] = [
+                'role' => $message->getRole(),
+                'content' => $message->getContent(),
+            ];
         }
 
-        // Detect MIME type from content
-        $finfo = new \finfo(FILEINFO_MIME_TYPE);
-        $mimeType = $finfo->buffer($content);
-
-        return [
-            'mime_type' => $mimeType,
-            'data' => base64_encode($content),
-        ];
+        return $formatted;
     }
 
     /**

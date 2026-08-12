@@ -120,7 +120,7 @@ class GoogleClient extends AbstractClient {
                 }
             }
 
-            $request = new \WebFiori\Ai\Http\HttpRequest(
+            $request = new HttpRequest(
                 'GET',
                 $url,
                 $this->getHeaders(),
@@ -196,6 +196,101 @@ class GoogleClient extends AbstractClient {
         }
 
         return null;
+    }
+
+    /**
+     * Fetches a file from a URL and returns base64-encoded data.
+     *
+     * @param string $url The file URL.
+     *
+     * @return array{mime_type: string, data: string}|null The file data or null on failure.
+     */
+    private function fetchFileFromUrl(string $url): ?array {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 30,
+                'user_agent' => 'WebFiori-AI/1.0',
+            ],
+        ]);
+
+        $content = @file_get_contents($url, false, $context);
+
+        if ($content === false) {
+            $this->logWarning('Failed to fetch file from URL', ['url' => $url]);
+
+            return null;
+        }
+
+        // Detect MIME type from content
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo->buffer($content);
+
+        return [
+            'mime_type' => $mimeType,
+            'data' => base64_encode($content),
+        ];
+    }
+
+    /**
+     * Formats ContentPart objects into Google parts format.
+     *
+     * @param \WebFiori\Ai\ContentPart[] $contentParts The content parts.
+     *
+     * @return array<int, array<string, mixed>> The formatted parts array.
+     */
+    private function formatContentParts(array $contentParts): array {
+        $parts = [];
+
+        foreach ($contentParts as $part) {
+            switch ($part->getType()) {
+                case \WebFiori\Ai\ContentPart::TYPE_TEXT:
+                    $parts[] = ['text' => $part->getData()['text']];
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_URL:
+                    // Google requires fetching the image and sending as inline data
+                    // or using fileData for GCS URIs. For HTTP URLs, we fetch and encode.
+                    $url = $part->getData()['url'];
+                    $fileData = $this->fetchFileFromUrl($url);
+
+                    if ($fileData !== null) {
+                        $parts[] = [
+                            'inlineData' => [
+                                'mimeType' => $fileData['mime_type'],
+                                'data' => $fileData['data'],
+                            ],
+                        ];
+                    }
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_BASE64:
+                case \WebFiori\Ai\ContentPart::TYPE_DOCUMENT:
+                    $data = $part->getData();
+                    $parts[] = [
+                        'inlineData' => [
+                            'mimeType' => $data['mime_type'],
+                            'data' => $data['data'],
+                        ],
+                    ];
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_FILE_GCS:
+                    $data = $part->getData();
+                    $parts[] = [
+                        'fileData' => [
+                            'mimeType' => $data['mime_type'],
+                            'fileUri' => $data['uri'],
+                        ],
+                    ];
+
+                    break;
+            }
+        }
+
+        return $parts;
     }
 
     /**
@@ -295,101 +390,6 @@ class GoogleClient extends AbstractClient {
         }
 
         return $contents;
-    }
-
-    /**
-     * Formats ContentPart objects into Google parts format.
-     *
-     * @param \WebFiori\Ai\ContentPart[] $contentParts The content parts.
-     *
-     * @return array<int, array<string, mixed>> The formatted parts array.
-     */
-    private function formatContentParts(array $contentParts): array {
-        $parts = [];
-
-        foreach ($contentParts as $part) {
-            switch ($part->getType()) {
-                case \WebFiori\Ai\ContentPart::TYPE_TEXT:
-                    $parts[] = ['text' => $part->getData()['text']];
-
-                    break;
-
-                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_URL:
-                    // Google requires fetching the image and sending as inline data
-                    // or using fileData for GCS URIs. For HTTP URLs, we fetch and encode.
-                    $url = $part->getData()['url'];
-                    $fileData = $this->fetchFileFromUrl($url);
-
-                    if ($fileData !== null) {
-                        $parts[] = [
-                            'inlineData' => [
-                                'mimeType' => $fileData['mime_type'],
-                                'data' => $fileData['data'],
-                            ],
-                        ];
-                    }
-
-                    break;
-
-                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_BASE64:
-                case \WebFiori\Ai\ContentPart::TYPE_DOCUMENT:
-                    $data = $part->getData();
-                    $parts[] = [
-                        'inlineData' => [
-                            'mimeType' => $data['mime_type'],
-                            'data' => $data['data'],
-                        ],
-                    ];
-
-                    break;
-
-                case \WebFiori\Ai\ContentPart::TYPE_FILE_GCS:
-                    $data = $part->getData();
-                    $parts[] = [
-                        'fileData' => [
-                            'mimeType' => $data['mime_type'],
-                            'fileUri' => $data['uri'],
-                        ],
-                    ];
-
-                    break;
-            }
-        }
-
-        return $parts;
-    }
-
-    /**
-     * Fetches a file from a URL and returns base64-encoded data.
-     *
-     * @param string $url The file URL.
-     *
-     * @return array{mime_type: string, data: string}|null The file data or null on failure.
-     */
-    private function fetchFileFromUrl(string $url): ?array {
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 30,
-                'user_agent' => 'WebFiori-AI/1.0',
-            ],
-        ]);
-
-        $content = @file_get_contents($url, false, $context);
-
-        if ($content === false) {
-            $this->logWarning('Failed to fetch file from URL', ['url' => $url]);
-
-            return null;
-        }
-
-        // Detect MIME type from content
-        $finfo = new \finfo(FILEINFO_MIME_TYPE);
-        $mimeType = $finfo->buffer($content);
-
-        return [
-            'mime_type' => $mimeType,
-            'data' => base64_encode($content),
-        ];
     }
 
     /**

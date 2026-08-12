@@ -9,11 +9,14 @@
  * 1. Defining tools with the Tool class
  * 2. Manual tool calling loop
  * 3. Auto-execute mode (library handles the loop)
+ * 4. Connection reuse for better performance
+ * 5. LazyTool for deferred instantiation
  */
 require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
+use WebFiori\Ai\Tool\LazyTool;
 use WebFiori\Ai\Tool\Tool;
 use WebFiori\Ai\Tool\ToolResult;
 
@@ -22,6 +25,10 @@ $provider = new GoogleClient([
     'credentials' => __DIR__.'/../../vertex-ai-key.json',
     'model' => 'gemini-2.5-flash',
 ]);
+
+// Enable connection reuse for better performance with multiple tool calls
+// This avoids TCP+TLS handshake overhead on subsequent requests (~300ms saved per request)
+$provider->enableConnectionReuse();
 
 // Define tools using the Tool class
 $weatherTool = new Tool(
@@ -67,7 +74,40 @@ $timeTool = new Tool(
     }
 );
 
-$tools = [$weatherTool, $timeTool];
+// LazyTool: Tool is only instantiated when actually called
+// Useful for tools with expensive constructors (DB connections, API clients)
+$databaseTool = new LazyTool(
+    'search_database',
+    'Search the product database',
+    [
+        'type' => 'object',
+        'properties' => [
+            'query' => ['type' => 'string', 'description' => 'Search query'],
+        ],
+        'required' => ['query'],
+    ],
+    function ()
+    {
+        // This closure is only called if the AI decides to use this tool
+        // Expensive initialization would go here (DB connection, etc.)
+        echo "  [LazyTool: Database connection initialized]\n";
+
+        return function (array $args): string
+        {
+            $query = $args['query'] ?? '';
+
+            return json_encode([
+                'results' => [
+                    ['id' => 1, 'name' => 'Product A', 'price' => 29.99],
+                    ['id' => 2, 'name' => 'Product B', 'price' => 49.99],
+                ],
+                'query' => $query,
+            ]);
+        };
+    }
+);
+
+$tools = [$weatherTool, $timeTool, $databaseTool];
 
 // ─── Option A: Auto-Execute Mode ────────────────────────────────────────────
 // The library handles the entire tool call loop automatically.
@@ -132,3 +172,6 @@ if ($response->hasToolCalls()) {
 } else {
     echo 'AI: '.$response->getMessage()->getContent().PHP_EOL;
 }
+
+// Note: The databaseTool (LazyTool) was never instantiated because it wasn't called!
+// This saves initialization overhead for tools that aren't used.

@@ -62,20 +62,20 @@ class ContextOverflowException extends AiException {
     }
 
     /**
-     * Returns the tokens required by the request.
-     *
-     * @return int Required tokens.
-     */
-    public function getRequiredTokens(): int {
-        return $this->requiredTokens;
-    }
-
-    /**
      * Returns the number of tokens over the limit.
      *
      * @return int Overflow amount.
      */
     public function getOverflowTokens(): int {
         return $this->requiredTokens - $this->availableTokens;
+    }
+
+    /**
+     * Returns the tokens required by the request.
+     *
+     * @return int Required tokens.
+     */
+    public function getRequiredTokens(): int {
+        return $this->requiredTokens;
     }
 }

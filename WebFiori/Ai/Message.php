@@ -173,24 +173,6 @@ class Message {
     }
 
     /**
-     * Checks if this message contains tool calls.
-     *
-     * @return bool True if the message has one or more tool calls.
-     */
-    public function hasToolCalls(): bool {
-        return count($this->toolCalls) > 0;
-    }
-
-    /**
-     * Checks if this message has multi-modal content (text + images).
-     *
-     * @return bool True if the message contains ContentPart objects.
-     */
-    public function isMultiModal(): bool {
-        return $this->isMultiModal;
-    }
-
-    /**
      * Checks if this message contains any image content.
      *
      * @return bool True if the message has at least one image part.
@@ -207,6 +189,24 @@ class Message {
         }
 
         return false;
+    }
+
+    /**
+     * Checks if this message contains tool calls.
+     *
+     * @return bool True if the message has one or more tool calls.
+     */
+    public function hasToolCalls(): bool {
+        return count($this->toolCalls) > 0;
+    }
+
+    /**
+     * Checks if this message has multi-modal content (text + images).
+     *
+     * @return bool True if the message contains ContentPart objects.
+     */
+    public function isMultiModal(): bool {
+        return $this->isMultiModal;
     }
 
     /**

@@ -31,18 +31,18 @@ class HealthCheckResult {
     private bool $available;
 
     /**
-     * The method used to perform the health check.
-     *
-     * @var string
-     */
-    private string $checkMethod;
-
-    /**
      * When the check was performed.
      *
      * @var DateTimeInterface
      */
     private DateTimeInterface $checkedAt;
+
+    /**
+     * The method used to perform the health check.
+     *
+     * @var string
+     */
+    private string $checkMethod;
 
     /**
      * Error message if the check failed.
@@ -82,18 +82,6 @@ class HealthCheckResult {
     }
 
     /**
-     * Creates a successful health check result.
-     *
-     * @param int $latencyMs Response latency in milliseconds.
-     * @param string $checkMethod The method used for the check.
-     *
-     * @return self The successful result.
-     */
-    public static function success(int $latencyMs, string $checkMethod): self {
-        return new self(true, $latencyMs, $checkMethod);
-    }
-
-    /**
      * Creates a failed health check result.
      *
      * @param string $error The error message.
@@ -107,6 +95,15 @@ class HealthCheckResult {
     }
 
     /**
+     * Returns when the health check was performed.
+     *
+     * @return DateTimeInterface The timestamp of the check.
+     */
+    public function getCheckedAt(): DateTimeInterface {
+        return $this->checkedAt;
+    }
+
+    /**
      * Returns the method used to perform the health check.
      *
      * Common values:
@@ -117,15 +114,6 @@ class HealthCheckResult {
      */
     public function getCheckMethod(): string {
         return $this->checkMethod;
-    }
-
-    /**
-     * Returns when the health check was performed.
-     *
-     * @return DateTimeInterface The timestamp of the check.
-     */
-    public function getCheckedAt(): DateTimeInterface {
-        return $this->checkedAt;
     }
 
     /**
@@ -153,5 +141,17 @@ class HealthCheckResult {
      */
     public function isAvailable(): bool {
         return $this->available;
+    }
+
+    /**
+     * Creates a successful health check result.
+     *
+     * @param int $latencyMs Response latency in milliseconds.
+     * @param string $checkMethod The method used for the check.
+     *
+     * @return self The successful result.
+     */
+    public static function success(int $latencyMs, string $checkMethod): self {
+        return new self(true, $latencyMs, $checkMethod);
     }
 }

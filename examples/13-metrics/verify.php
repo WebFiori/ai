@@ -21,7 +21,8 @@ echo "=== Metrics Collection Verification ===\n\n";
 $provider = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
 
 $events = [];
-$provider->setMetricsCallback(function (string $event, array $data) use (&$events) {
+$provider->setMetricsCallback(function (string $event, array $data) use (&$events)
+{
     $events[] = compact('event', 'data');
 });
 
@@ -108,7 +109,7 @@ $provider->setCache(null);
 
 try {
     $provider->chat([new Message('user', 'Hi')]);
-} catch (\Throwable $e) {
+} catch (Throwable $e) {
     // Expected
 }
 

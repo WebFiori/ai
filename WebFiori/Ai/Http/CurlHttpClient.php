@@ -19,6 +19,9 @@ use WebFiori\Ai\Exception\StreamingException;
  * Handles standard request/response interactions as well as streaming
  * responses via CURLOPT_WRITEFUNCTION for Server-Sent Events (SSE).
  *
+ * Supports connection reuse (HTTP Keep-Alive) for improved performance
+ * in multi-request scenarios like tool calling loops.
+ *
  * @author Ibrahim
  */
 class CurlHttpClient implements HttpClientInterface {
@@ -28,6 +31,27 @@ class CurlHttpClient implements HttpClientInterface {
      * @var int
      */
     private int $connectTimeout;
+
+    /**
+     * The host of the last request (for connection reuse validation).
+     *
+     * @var string|null
+     */
+    private ?string $lastHost = null;
+
+    /**
+     * Persistent cURL handle for connection reuse.
+     *
+     * @var \CurlHandle|null
+     */
+    private ?\CurlHandle $persistentHandle = null;
+
+    /**
+     * Whether connection reuse is enabled.
+     *
+     * @var bool
+     */
+    private bool $reuseConnection = false;
 
     /**
      * Request timeout in seconds.
@@ -58,6 +82,55 @@ class CurlHttpClient implements HttpClientInterface {
     }
 
     /**
+     * Destructor - closes persistent handle if open.
+     */
+    public function __destruct() {
+        $this->closeConnection();
+    }
+
+    /**
+     * Closes the persistent connection if open.
+     *
+     * Call this when done with multiple requests to release resources.
+     * The connection will be automatically closed when the client is destroyed.
+     */
+    public function closeConnection(): void {
+        if ($this->persistentHandle !== null) {
+            curl_close($this->persistentHandle);
+            $this->persistentHandle = null;
+            $this->lastHost = null;
+        }
+    }
+
+    /**
+     * Enables or disables connection reuse (HTTP Keep-Alive).
+     *
+     * When enabled, the cURL handle is reused across multiple requests,
+     * avoiding TCP and SSL handshake overhead for subsequent requests
+     * to the same host. This significantly improves performance in
+     * scenarios with multiple sequential requests (e.g., tool calling).
+     *
+     * ```php
+     * $client = new CurlHttpClient();
+     * $client->enableConnectionReuse(true);
+     * // Subsequent requests reuse the same connection
+     * ```
+     *
+     * @param bool $enable True to enable connection reuse, false to disable.
+     *
+     * @return self Returns the instance for method chaining.
+     */
+    public function enableConnectionReuse(bool $enable = true): self {
+        $this->reuseConnection = $enable;
+
+        if (!$enable) {
+            $this->closeConnection();
+        }
+
+        return $this;
+    }
+
+    /**
      * Returns the connection timeout in seconds.
      *
      * @return int The connection timeout value.
@@ -85,6 +158,15 @@ class CurlHttpClient implements HttpClientInterface {
     }
 
     /**
+     * Returns whether connection reuse is enabled.
+     *
+     * @return bool True if connection reuse is enabled.
+     */
+    public function isConnectionReuseEnabled(): bool {
+        return $this->reuseConnection;
+    }
+
+    /**
      * Sends an HTTP request and returns the full response.
      *
      * @param HttpRequest $request The request to send.
@@ -94,7 +176,7 @@ class CurlHttpClient implements HttpClientInterface {
      * @throws HttpException If the request fails due to a transport error.
      */
     public function send(HttpRequest $request): HttpResponse {
-        $ch = $this->createCurlHandle($request);
+        $ch = $this->getOrCreateHandle($request);
         $responseHeaders = [];
 
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -114,7 +196,13 @@ class CurlHttpClient implements HttpClientInterface {
         if ($body === false) {
             $errorCode = curl_errno($ch);
             $errorMessage = curl_error($ch);
-            curl_close($ch);
+
+            if (!$this->reuseConnection) {
+                curl_close($ch);
+            } else {
+                // Connection may be broken, reset it
+                $this->closeConnection();
+            }
 
             throw new HttpException(
                 'cURL request failed: '.$errorMessage,
@@ -123,7 +211,10 @@ class CurlHttpClient implements HttpClientInterface {
         }
 
         $statusCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+
+        if (!$this->reuseConnection) {
+            curl_close($ch);
+        }
 
         return new HttpResponse($statusCode, $responseHeaders, $body);
     }
@@ -226,21 +317,12 @@ class CurlHttpClient implements HttpClientInterface {
     }
 
     /**
-     * Creates and configures a cURL handle for the given request.
+     * Configures a cURL handle with the request parameters.
      *
-     * @param HttpRequest $request The HTTP request to configure the handle for.
-     *
-     * @return \CurlHandle The configured cURL handle.
-     *
-     * @throws HttpException If the cURL handle cannot be initialized.
+     * @param \CurlHandle $ch The cURL handle to configure.
+     * @param HttpRequest $request The HTTP request.
      */
-    private function createCurlHandle(HttpRequest $request): \CurlHandle {
-        $ch = curl_init();
-
-        if ($ch === false) {
-            throw new HttpException('Failed to initialize cURL handle.');
-        }
-
+    private function configureHandle(\CurlHandle $ch, HttpRequest $request): void {
         curl_setopt($ch, CURLOPT_URL, $request->getUrl());
         curl_setopt($ch, CURLOPT_TIMEOUT, $this->timeout);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $this->connectTimeout);
@@ -251,7 +333,7 @@ class CurlHttpClient implements HttpClientInterface {
 
         if ($method === 'POST') {
             curl_setopt($ch, CURLOPT_POST, true);
-        } else if ($method !== 'GET') {
+        } elseif ($method !== 'GET') {
             curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         }
 
@@ -270,7 +352,70 @@ class CurlHttpClient implements HttpClientInterface {
         if (!empty($headers)) {
             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         }
+    }
+
+    /**
+     * Creates and configures a cURL handle for the given request.
+     *
+     * @param HttpRequest $request The HTTP request to configure the handle for.
+     *
+     * @return \CurlHandle The configured cURL handle.
+     *
+     * @throws HttpException If the cURL handle cannot be initialized.
+     */
+    private function createCurlHandle(HttpRequest $request): \CurlHandle {
+        $ch = curl_init();
+
+        if ($ch === false) {
+            throw new HttpException('Failed to initialize cURL handle.');
+        }
+
+        $this->configureHandle($ch, $request);
+
+        // Enable TCP Keep-Alive for connection reuse
+        if ($this->reuseConnection) {
+            curl_setopt($ch, CURLOPT_TCP_KEEPALIVE, 1);
+            curl_setopt($ch, CURLOPT_TCP_KEEPIDLE, 60);
+            curl_setopt($ch, CURLOPT_TCP_KEEPINTVL, 30);
+        }
 
         return $ch;
+    }
+
+    /**
+     * Gets an existing handle or creates a new one for connection reuse.
+     *
+     * @param HttpRequest $request The HTTP request.
+     *
+     * @return \CurlHandle The cURL handle.
+     *
+     * @throws HttpException If the handle cannot be created.
+     */
+    private function getOrCreateHandle(HttpRequest $request): \CurlHandle {
+        if (!$this->reuseConnection) {
+            return $this->createCurlHandle($request);
+        }
+
+        // Extract host from URL
+        $parsedUrl = parse_url($request->getUrl());
+        $currentHost = ($parsedUrl['scheme'] ?? 'https').'://'.($parsedUrl['host'] ?? '');
+
+        // If host changed or no handle exists, create new one
+        if ($this->persistentHandle === null || $this->lastHost !== $currentHost) {
+            $this->closeConnection();
+            $this->persistentHandle = $this->createCurlHandle($request);
+            $this->lastHost = $currentHost;
+        } else {
+            // Reuse handle but reconfigure for new request
+            curl_reset($this->persistentHandle);
+            $this->configureHandle($this->persistentHandle, $request);
+
+            // Re-enable Keep-Alive after reset
+            curl_setopt($this->persistentHandle, CURLOPT_TCP_KEEPALIVE, 1);
+            curl_setopt($this->persistentHandle, CURLOPT_TCP_KEEPIDLE, 60);
+            curl_setopt($this->persistentHandle, CURLOPT_TCP_KEEPINTVL, 30);
+        }
+
+        return $this->persistentHandle;
     }
 }

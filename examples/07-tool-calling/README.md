@@ -9,6 +9,39 @@ Demonstrates AI-invoked functions using the `Tool` class. Supports both manual m
 - Manual tool calling loop for fine-grained control
 - Multiple tools in a single conversation
 - Max iteration limit to prevent infinite loops
+- **Connection reuse** for better performance with multiple tool calls
+- **LazyTool** for deferred instantiation of expensive tools
+
+## Performance Features
+
+### Connection Reuse
+
+Enable HTTP connection reuse to avoid TCP+TLS handshake overhead on subsequent requests:
+
+```php
+$client->enableConnectionReuse();
+```
+
+This saves ~300ms per request in multi-tool scenarios.
+
+### LazyTool
+
+Use `LazyTool` for tools with expensive constructors (database connections, API clients):
+
+```php
+use WebFiori\Ai\Tool\LazyTool;
+
+$tool = new LazyTool(
+    'search_database',
+    'Search the product database',
+    $parameters,
+    fn() => new ExpensiveDatabaseTool($connection)  // Only created if AI calls this tool
+);
+```
+
+Benefits:
+- Tools defined but not called = zero initialization overhead
+- Useful when you have many tools but only a few are used per request
 
 ## Files
 

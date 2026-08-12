@@ -89,17 +89,6 @@ class RedactionConfig {
     }
 
     /**
-     * Returns whether a built-in rule is enabled.
-     *
-     * @param string $name The rule name.
-     *
-     * @return bool True if the rule is active.
-     */
-    public function isRuleEnabled(string $name): bool {
-        return !in_array($name, $this->disabledRules, true);
-    }
-
-    /**
      * Returns whether request body content should be redacted.
      *
      * @return bool True if request bodies are redacted.
@@ -115,5 +104,16 @@ class RedactionConfig {
      */
     public function isRedactResponseBodies(): bool {
         return $this->redactResponseBodies;
+    }
+
+    /**
+     * Returns whether a built-in rule is enabled.
+     *
+     * @param string $name The rule name.
+     *
+     * @return bool True if the rule is active.
+     */
+    public function isRuleEnabled(string $name): bool {
+        return !in_array($name, $this->disabledRules, true);
     }
 }

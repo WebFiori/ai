@@ -25,7 +25,8 @@ $provider = new GoogleClient([
 
 // Set up metrics callback
 $events = [];
-$provider->setMetricsCallback(function (string $event, array $data) use (&$events) {
+$provider->setMetricsCallback(function (string $event, array $data) use (&$events)
+{
     $events[] = compact('event', 'data');
     echo "[METRIC] {$event} | request_id={$data['request_id']} | provider={$data['provider']}";
 
@@ -61,7 +62,7 @@ try {
     $embedding = $provider->embed('Hello world', ['model' => 'text-embedding-004']);
     echo "Vector dimensions: ".$embedding->getDimensions()."\n";
     echo "Request ID: ".$embedding->getRequestId()."\n";
-} catch (\Throwable $e) {
+} catch (Throwable $e) {
     echo "Note: Embedding not available with this credentials context\n";
     echo "Error: ".$e->getMessage()."\n";
 }

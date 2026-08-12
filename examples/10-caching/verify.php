@@ -56,13 +56,13 @@ try {
     $response2 = $provider->chat($messages);
     echo "   Response: ".$response2->getMessage()->getContent()."\n";
     echo "   Cache entries: ".$cache->count()."\n";
-    
+
     if ($response1->getMessage()->getContent() === $response2->getMessage()->getContent()) {
         echo "\n✅ SUCCESS: Second request returned cached response!\n";
         echo "   (If cache wasn't working, this would have thrown an exception\n";
         echo "    because no more HTTP responses were queued)\n";
     }
-} catch (\Exception $e) {
+} catch (Exception $e) {
     echo "\n❌ FAILED: ".$e->getMessage()."\n";
     echo "   Cache did not work - tried to make HTTP request but no response queued.\n";
     exit(1);

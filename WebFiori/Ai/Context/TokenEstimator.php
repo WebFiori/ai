@@ -50,20 +50,15 @@ class TokenEstimator {
     private const REQUEST_OVERHEAD = 3;
 
     /**
-     * Estimates the token count for an array of messages.
+     * Estimates the total token count for messages and tools combined.
      *
      * @param Message[] $messages The messages to count.
+     * @param ToolInterface[] $tools The tools to count.
      *
-     * @return int Estimated token count.
+     * @return int Estimated total token count.
      */
-    public function countMessages(array $messages): int {
-        $tokens = self::REQUEST_OVERHEAD;
-
-        foreach ($messages as $message) {
-            $tokens += $this->countMessage($message);
-        }
-
-        return $tokens;
+    public function count(array $messages, array $tools = []): int {
+        return $this->countMessages($messages) + $this->countTools($tools);
     }
 
     /**
@@ -98,35 +93,18 @@ class TokenEstimator {
     }
 
     /**
-     * Estimates the token count for an array of tools.
+     * Estimates the token count for an array of messages.
      *
-     * @param ToolInterface[] $tools The tools to count.
+     * @param Message[] $messages The messages to count.
      *
      * @return int Estimated token count.
      */
-    public function countTools(array $tools): int {
-        $tokens = 0;
+    public function countMessages(array $messages): int {
+        $tokens = self::REQUEST_OVERHEAD;
 
-        foreach ($tools as $tool) {
-            $tokens += $this->countTool($tool);
+        foreach ($messages as $message) {
+            $tokens += $this->countMessage($message);
         }
-
-        return $tokens;
-    }
-
-    /**
-     * Estimates the token count for a single tool definition.
-     *
-     * @param ToolInterface $tool The tool to count.
-     *
-     * @return int Estimated token count.
-     */
-    public function countTool(ToolInterface $tool): int {
-        $tokens = self::MESSAGE_OVERHEAD;
-
-        $tokens += $this->countText($tool->getName());
-        $tokens += $this->countText($tool->getDescription());
-        $tokens += $this->countText(json_encode($tool->getParameters()));
 
         return $tokens;
     }
@@ -147,14 +125,36 @@ class TokenEstimator {
     }
 
     /**
-     * Estimates the total token count for messages and tools combined.
+     * Estimates the token count for a single tool definition.
      *
-     * @param Message[] $messages The messages to count.
+     * @param ToolInterface $tool The tool to count.
+     *
+     * @return int Estimated token count.
+     */
+    public function countTool(ToolInterface $tool): int {
+        $tokens = self::MESSAGE_OVERHEAD;
+
+        $tokens += $this->countText($tool->getName());
+        $tokens += $this->countText($tool->getDescription());
+        $tokens += $this->countText(json_encode($tool->getParameters()));
+
+        return $tokens;
+    }
+
+    /**
+     * Estimates the token count for an array of tools.
+     *
      * @param ToolInterface[] $tools The tools to count.
      *
-     * @return int Estimated total token count.
+     * @return int Estimated token count.
      */
-    public function count(array $messages, array $tools = []): int {
-        return $this->countMessages($messages) + $this->countTools($tools);
+    public function countTools(array $tools): int {
+        $tokens = 0;
+
+        foreach ($tools as $tool) {
+            $tokens += $this->countTool($tool);
+        }
+
+        return $tokens;
     }
 }

@@ -56,7 +56,7 @@ $message = new Message('user', [
 try {
     $response = $client->chat([$message]);
     echo $response->getMessage()->getContent()."\n";
-} catch (\Exception $e) {
+} catch (Exception $e) {
     echo "Error: ".$e->getMessage()."\n";
 }
 
@@ -80,7 +80,7 @@ $message = new Message('user', [
 try {
     $response = $client->chat([$message]);
     echo $response->getMessage()->getContent()."\n";
-} catch (\Exception $e) {
+} catch (Exception $e) {
     echo "Error: ".$e->getMessage()."\n";
 }
 
@@ -94,7 +94,7 @@ $message = new Message('user', [
 try {
     $response = $client->chat([$message]);
     echo $response->getMessage()->getContent()."\n";
-} catch (\Exception $e) {
+} catch (Exception $e) {
     echo "Error: ".$e->getMessage()."\n";
 }
 
@@ -110,7 +110,7 @@ $message = new Message('user', [
 try {
     $response = $client->chat([$message]);
     echo $response->getMessage()->getContent()."\n";
-} catch (\Exception $e) {
+} catch (Exception $e) {
     echo "Error: ".$e->getMessage()."\n";
 }
 unlink($tempFile);
@@ -125,7 +125,7 @@ $message = new Message('user', [
 try {
     $response = $client->chat([$message]);
     echo $response->getMessage()->getContent()."\n";
-} catch (\Exception $e) {
+} catch (Exception $e) {
     echo "Error: ".$e->getMessage()."\n";
 }
 

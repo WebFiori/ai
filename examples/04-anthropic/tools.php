@@ -37,7 +37,8 @@ $weatherTool = new Tool(
         ],
         'required' => ['location'],
     ],
-    callback: function (array $args): string {
+    callback: function (array $args): string
+    {
         // Simulated weather data
         $location = $args['location'];
         $unit = $args['unit'] ?? 'celsius';

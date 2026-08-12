@@ -24,7 +24,10 @@ $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
 echo "1. Basic audit entry\n";
 
 $entry = null;
-$client->setAuditCallback(function ($e) use (&$entry) { $entry = $e; });
+$client->setAuditCallback(function ($e) use (&$entry)
+{
+    $entry = $e;
+});
 
 $fakeHttp = new FakeHttpClient();
 $fakeHttp->addResponse(new HttpResponse(200, [], json_encode([
@@ -99,7 +102,8 @@ $fakeHttp->addResponse(new HttpResponse(401, [], json_encode([
 
 try {
     $client->chat([new Message('user', 'Hi')]);
-} catch (\Throwable $e) {}
+} catch (Throwable $e) {
+}
 
 echo '   status: '.$entry['status']."\n";
 echo '   error:  '.json_encode($entry['error'])."\n";

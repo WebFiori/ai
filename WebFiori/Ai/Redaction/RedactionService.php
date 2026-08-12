@@ -20,27 +20,6 @@ namespace WebFiori\Ai\Redaction;
  */
 class RedactionService {
     /**
-     * Mandatory rules that are always applied regardless of config.
-     *
-     * @var RedactionRule[]
-     */
-    private array $mandatoryRules;
-
-    /**
-     * Optional built-in rules that can be disabled per config.
-     *
-     * @var RedactionRule[]
-     */
-    private array $optionalRules;
-
-    /**
-     * The redaction configuration.
-     *
-     * @var RedactionConfig
-     */
-    private RedactionConfig $config;
-
-    /**
      * Log/metric context keys that may contain sensitive body content.
      *
      * @var string[]
@@ -55,6 +34,26 @@ class RedactionService {
     private const RESPONSE_BODY_KEYS = ['response_body', 'response', 'content', 'text'];
 
     /**
+     * The redaction configuration.
+     *
+     * @var RedactionConfig
+     */
+    private RedactionConfig $config;
+    /**
+     * Mandatory rules that are always applied regardless of config.
+     *
+     * @var RedactionRule[]
+     */
+    private array $mandatoryRules;
+
+    /**
+     * Optional built-in rules that can be disabled per config.
+     *
+     * @var RedactionRule[]
+     */
+    private array $optionalRules;
+
+    /**
      * Creates a new RedactionService instance.
      *
      * @param RedactionConfig $config The redaction configuration.
@@ -62,6 +61,32 @@ class RedactionService {
     public function __construct(RedactionConfig $config) {
         $this->config = $config;
         $this->initRules();
+    }
+
+    /**
+     * Redacts sensitive data from a log/metric context array.
+     *
+     * Recursively processes string values. Applies body redaction to
+     * known sensitive keys based on configuration.
+     *
+     * @param array<string, mixed> $context The context array to redact.
+     *
+     * @return array<string, mixed> The redacted context array.
+     */
+    public function redactContext(array $context): array {
+        $result = [];
+
+        foreach ($context as $key => $value) {
+            if (is_string($value)) {
+                $result[$key] = $this->redactContextValue($key, $value);
+            } elseif (is_array($value)) {
+                $result[$key] = $this->redactContext($value);
+            } else {
+                $result[$key] = $value;
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -97,32 +122,6 @@ class RedactionService {
         }
 
         return $text;
-    }
-
-    /**
-     * Redacts sensitive data from a log/metric context array.
-     *
-     * Recursively processes string values. Applies body redaction to
-     * known sensitive keys based on configuration.
-     *
-     * @param array<string, mixed> $context The context array to redact.
-     *
-     * @return array<string, mixed> The redacted context array.
-     */
-    public function redactContext(array $context): array {
-        $result = [];
-
-        foreach ($context as $key => $value) {
-            if (is_string($value)) {
-                $result[$key] = $this->redactContextValue($key, $value);
-            } elseif (is_array($value)) {
-                $result[$key] = $this->redactContext($value);
-            } else {
-                $result[$key] = $value;
-            }
-        }
-
-        return $result;
     }
 
     /**

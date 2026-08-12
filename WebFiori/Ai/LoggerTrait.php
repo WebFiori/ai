@@ -58,15 +58,6 @@ trait LoggerTrait {
     }
 
     /**
-     * Sets the redaction service for log context sanitization.
-     *
-     * @param RedactionService|null $service The redaction service, or null to disable.
-     */
-    protected function setLogRedactionService(?RedactionService $service): void {
-        $this->logRedactionService = $service;
-    }
-
-    /**
      * Emits a log message at the specified level.
      */
     private function log(string $level, string $message, array $context): void {
@@ -120,5 +111,14 @@ trait LoggerTrait {
      */
     protected function logWarning(string $message, array $context = []): void {
         $this->log('warning', $message, $context);
+    }
+
+    /**
+     * Sets the redaction service for log context sanitization.
+     *
+     * @param RedactionService|null $service The redaction service, or null to disable.
+     */
+    protected function setLogRedactionService(?RedactionService $service): void {
+        $this->logRedactionService = $service;
     }
 }
