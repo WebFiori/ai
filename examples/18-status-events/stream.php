@@ -12,8 +12,8 @@ require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
-use WebFiori\Ai\SSEStatusEmitter;
 use WebFiori\Ai\Status;
+use WebFiori\Ai\StatusMessageFormatter;
 use WebFiori\Ai\Tool\Tool;
 
 // Set SSE headers
@@ -38,7 +38,30 @@ $client = new GoogleClient([
 ]);
 
 $client->enableConnectionReuse();
-$client->setStatusEmitter(new SSEStatusEmitter());
+
+// Use StatusMessageFormatter to add human-readable messages to SSE events
+$formatter = new StatusMessageFormatter();
+$formatter->setTemplates([
+    Status::TOOL_CALLING => 'Getting {arguments.city} weather using {tool}...',
+    Status::TOOL_EXECUTING => 'Fetching live data from {tool}...',
+    Status::TOOL_COMPLETED => 'Got data from {tool} in {duration_ms}ms',
+    Status::COMPLETED => 'Done in {duration_s} seconds',
+]);
+
+// Custom SSE emitter that includes humanized message
+$client->setStatusEmitter(new WebFiori\Ai\CallbackStatusEmitter(
+    function (string $status, array $context) use ($formatter)
+    {
+        echo 'event: status'."\n";
+        echo 'data: '.json_encode([
+            'status' => $status,
+            'message' => $formatter->format($status, $context),
+            ...$context,
+        ])."\n\n";
+        ob_flush();
+        flush();
+    }
+));
 
 $weatherTool = new Tool(
     'get_weather',

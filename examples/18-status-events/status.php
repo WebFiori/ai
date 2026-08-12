@@ -6,8 +6,8 @@
  * Run: php examples/18-status-events/status.php
  *
  * Demonstrates:
- * 1. CallbackStatusEmitter for logging/debugging
- * 2. Status events during tool calling loop
+ * 1. Default StatusMessageFormatter with humanized messages
+ * 2. Custom templates for tool-specific context
  * 3. SSEStatusEmitter pattern for web usage
  */
 require_once __DIR__.'/../../vendor/autoload.php';
@@ -16,6 +16,7 @@ use WebFiori\Ai\CallbackStatusEmitter;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
 use WebFiori\Ai\Status;
+use WebFiori\Ai\StatusMessageFormatter;
 use WebFiori\Ai\Tool\Tool;
 
 $client = new GoogleClient([
@@ -25,42 +26,36 @@ $client = new GoogleClient([
 
 $client->enableConnectionReuse();
 
-// ─── Option A: Callback emitter for debugging ─────────────────────────────────
-echo '═══ Status Events with Tool Calling ═══'.PHP_EOL.PHP_EOL;
+// ─── Option A: Default formatter ─────────────────────────────────────────────
+echo '═══ Default Humanized Messages ═══'.PHP_EOL.PHP_EOL;
 
-// Map status codes to human-readable messages with colors
-$statusLabels = [
-    Status::PREPARING => '🔄 Preparing request',
-    Status::SENDING_REQUEST => '📤 Sending to AI',
-    Status::WAITING_RESPONSE => '⏳ Waiting for response',
-    Status::CACHE_HIT => '⚡ Cache hit',
-    Status::CACHE_MISS => '🔍 Cache miss',
-    Status::TOOL_CALLING => '🔧 AI calling tool',
-    Status::TOOL_EXECUTING => '⚙️  Executing tool',
-    Status::TOOL_COMPLETED => '✅ Tool completed',
-    Status::COMPLETED => '🎉 Done',
-    Status::ERROR => '❌ Error',
-];
+$formatter = new StatusMessageFormatter();
 
 $client->setStatusEmitter(new CallbackStatusEmitter(
-    function (string $status, array $context) use ($statusLabels)
+    function (string $status, array $context) use ($formatter)
     {
-        $label = $statusLabels[$status] ?? "• {$status}";
-        $extra = '';
+        echo '  '.$formatter->format($status, $context).PHP_EOL;
+    }
+));
 
-        if ($status === Status::TOOL_CALLING) {
-            $extra = " → {$context['tool']}(".json_encode($context['arguments']).')';
-        } elseif ($status === Status::TOOL_COMPLETED) {
-            $extra = " → {$context['tool']} ({$context['duration_ms']}ms)";
-        } elseif ($status === Status::SENDING_REQUEST && isset($context['iteration'])) {
-            $extra = $context['iteration'] > 0 ? " (round {$context['iteration']})" : '';
-        } elseif ($status === Status::COMPLETED) {
-            $extra = " ({$context['duration_ms']}ms, {$context['total_tokens']} tokens)";
-        } elseif ($status === Status::ERROR) {
-            $extra = " → {$context['error']}";
-        }
+// ─── Option B: Custom templates ──────────────────────────────────────────────
+echo PHP_EOL.'═══ Custom Templates ═══'.PHP_EOL.PHP_EOL;
 
-        echo "  {$label}{$extra}".PHP_EOL;
+$customFormatter = new StatusMessageFormatter();
+$customFormatter->setTemplates([
+    Status::PREPARING => 'Getting ready to answer your question...',
+    Status::SENDING_REQUEST => 'Asking {model}...',
+    Status::TOOL_CALLING => 'Looking up {tool} data for {arguments.city}...',
+    Status::TOOL_EXECUTING => 'Fetching live data from {tool}...',
+    Status::TOOL_COMPLETED => '✓ Got {tool} result in {duration_ms}ms',
+    Status::COMPLETED => '✓ Answer ready in {duration_s}s using {total_tokens} tokens',
+    Status::ERROR => '✗ Failed: {error}',
+]);
+
+$client->setStatusEmitter(new CallbackStatusEmitter(
+    function (string $status, array $context) use ($customFormatter)
+    {
+        echo '  '.$customFormatter->format($status, $context).PHP_EOL;
     }
 ));
 
@@ -119,56 +114,7 @@ $response = $client->chat(
 
 echo PHP_EOL.'AI: '.$response->getMessage()->getContent().PHP_EOL;
 
-// ─── Option B: SSE pattern (web usage) ───────────────────────────────────────
-echo PHP_EOL.'═══ SSE Pattern (for web use) ═══'.PHP_EOL.PHP_EOL;
-echo 'In a web context, use SSEStatusEmitter:'.PHP_EOL.PHP_EOL;
-echo <<<'CODE'
-<?php
-// api/chat.php
-require_once 'vendor/autoload.php';
-
-use WebFiori\Ai\SSEStatusEmitter;
-use WebFiori\Ai\Provider\Google\GoogleClient;
-
-header('Content-Type: text/event-stream');
-header('Cache-Control: no-cache');
-header('X-Accel-Buffering: no');
-
-$client = new GoogleClient([...]);
-$client->setStatusEmitter(new SSEStatusEmitter());
-
-$response = $client->chat($messages, [
-    'tools' => $tools,
-    'auto_execute_tools' => true,
-]);
-
-// Send final response
-echo "event: response\n";
-echo "data: " . json_encode(['content' => $response->getMessage()->getContent()]) . "\n\n";
-
-CODE;
-
-echo PHP_EOL.'// JavaScript frontend:'.PHP_EOL;
-echo <<<'CODE'
-const es = new EventSource('/api/chat');
-
-es.addEventListener('status', (e) => {
-    const { status, ...ctx } = JSON.parse(e.data);
-
-    const messages = {
-        'preparing':       '🔄 Preparing...',
-        'sending_request': '🤔 Thinking...',
-        'tool_calling':    `🔧 Using ${ctx.tool}...`,
-        'tool_completed':  `✅ ${ctx.tool} done`,
-        'completed':       '✨ Done!',
-    };
-
-    document.getElementById('status').textContent = messages[status] ?? status;
-});
-
-es.addEventListener('response', (e) => {
-    const { content } = JSON.parse(e.data);
-    document.getElementById('response').textContent = content;
-    es.close();
-});
-CODE;
+// ─── SSE usage (web) ─────────────────────────────────────────────────────────
+echo PHP_EOL.'To use with SSE in a web app, run:'.PHP_EOL;
+echo '  php -S localhost:8080 -t examples/18-status-events'.PHP_EOL;
+echo '  Then open: http://localhost:8080'.PHP_EOL;

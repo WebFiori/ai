@@ -178,18 +178,18 @@
 </div>
 
 <script>
-    const statusLabels = {
-        'preparing':           { icon: '🔄', text: 'Preparing request' },
-        'truncating_context':  { icon: '✂️',  text: 'Truncating context' },
-        'sending_request':     { icon: '📤', text: 'Sending to AI' },
-        'waiting_response':    { icon: '⏳', text: 'Waiting for response' },
-        'cache_hit':           { icon: '⚡', text: 'Cache hit' },
-        'cache_miss':          { icon: '🔍', text: 'Cache miss' },
-        'tool_calling':        { icon: '🔧', text: (ctx) => `AI calling tool: ${ctx.tool}` },
-        'tool_executing':      { icon: '⚙️',  text: (ctx) => `Executing: ${ctx.tool}` },
-        'tool_completed':      { icon: '✅', text: (ctx) => `${ctx.tool} done (${ctx.duration_ms}ms)` },
-        'completed':           { icon: '🎉', text: (ctx) => `Done in ${ctx.duration_ms}ms` },
-        'error':               { icon: '❌', text: (ctx) => `Error: ${ctx.error}` },
+    const statusIcons = {
+        'preparing':           '🔄',
+        'truncating_context':  '✂️',
+        'sending_request':     '📤',
+        'waiting_response':    '⏳',
+        'cache_hit':           '⚡',
+        'cache_miss':          '🔍',
+        'tool_calling':        '🔧',
+        'tool_executing':      '⚙️',
+        'tool_completed':      '✅',
+        'completed':           '🎉',
+        'error':               '❌',
     };
 
     let eventSource = null;
@@ -212,25 +212,20 @@
 
         eventSource.addEventListener('status', (e) => {
             const data = JSON.parse(e.data);
-            const { status, ...ctx } = data;
+            const { status, message: humanMessage } = data;
 
-            const def = statusLabels[status] ?? { icon: '•', text: status };
-            const text = typeof def.text === 'function' ? def.text(ctx) : def.text;
-
-            const li = document.createElement('li');
-            li.className = 'status-item active';
-
+            const icon = statusIcons[status] ?? '•';
+            const isRunning = ['sending_request', 'tool_executing'].includes(status);
             const isDone = status === 'completed';
             const isError = status === 'error';
-            const isRunning = ['sending_request', 'tool_executing'].includes(status);
 
-            if (isError) li.className = 'status-item error';
-            else if (isDone) li.className = 'status-item done';
+            const li = document.createElement('li');
+            li.className = 'status-item' + (isDone ? ' done' : isError ? ' error' : ' active');
 
             if (isRunning) {
-                li.innerHTML = `<span class="spinner"></span><span>${text}</span>`;
+                li.innerHTML = `<span class="spinner"></span><span>${humanMessage}</span>`;
             } else {
-                li.innerHTML = `<span class="status-icon">${def.icon}</span><span>${text}</span>`;
+                li.innerHTML = `<span class="status-icon">${icon}</span><span>${humanMessage}</span>`;
             }
 
             document.getElementById('statusList').appendChild(li);
