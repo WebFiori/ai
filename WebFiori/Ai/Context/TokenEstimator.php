@@ -20,6 +20,10 @@ use WebFiori\Ai\Tool\ToolInterface;
  * This is not exact but provides sufficient accuracy for context
  * window management (~5-10% margin).
  *
+ * Results are memoized per message object to avoid redundant computation
+ * during context window truncation, which may count the same messages
+ * multiple times.
+ *
  * @author Ibrahim
  */
 class TokenEstimator {
@@ -50,6 +54,31 @@ class TokenEstimator {
     private const REQUEST_OVERHEAD = 3;
 
     /**
+     * Memoized token counts keyed by message object ID.
+     *
+     * @var array<int, int>
+     */
+    private array $messageCache = [];
+
+    /**
+     * Memoized token counts keyed by tool object ID.
+     *
+     * @var array<int, int>
+     */
+    private array $toolCache = [];
+
+    /**
+     * Clears the memoization caches.
+     *
+     * Call this if message or tool objects are reused with different content.
+     * Under normal usage this is not needed since Message objects are immutable.
+     */
+    public function clearCache(): void {
+        $this->messageCache = [];
+        $this->toolCache = [];
+    }
+
+    /**
      * Estimates the total token count for messages and tools combined.
      *
      * @param Message[] $messages The messages to count.
@@ -64,11 +93,20 @@ class TokenEstimator {
     /**
      * Estimates the token count for a single message.
      *
+     * Results are memoized by object identity. The cache is valid as long
+     * as the message object is not mutated (Message objects are immutable).
+     *
      * @param Message $message The message to count.
      *
      * @return int Estimated token count.
      */
     public function countMessage(Message $message): int {
+        $id = spl_object_id($message);
+
+        if (isset($this->messageCache[$id])) {
+            return $this->messageCache[$id];
+        }
+
         $tokens = self::MESSAGE_OVERHEAD;
 
         // Content
@@ -88,6 +126,8 @@ class TokenEstimator {
             $tokens += $this->countText($message->getToolResult()->getContent());
             $tokens += $this->countText($message->getToolResult()->getToolCallId());
         }
+
+        $this->messageCache[$id] = $tokens;
 
         return $tokens;
     }
@@ -127,16 +167,26 @@ class TokenEstimator {
     /**
      * Estimates the token count for a single tool definition.
      *
+     * Results are memoized by object identity.
+     *
      * @param ToolInterface $tool The tool to count.
      *
      * @return int Estimated token count.
      */
     public function countTool(ToolInterface $tool): int {
+        $id = spl_object_id($tool);
+
+        if (isset($this->toolCache[$id])) {
+            return $this->toolCache[$id];
+        }
+
         $tokens = self::MESSAGE_OVERHEAD;
 
         $tokens += $this->countText($tool->getName());
         $tokens += $this->countText($tool->getDescription());
         $tokens += $this->countText(json_encode($tool->getParameters()));
+
+        $this->toolCache[$id] = $tokens;
 
         return $tokens;
     }
