@@ -17,17 +17,45 @@ use WebFiori\Ai\Tool\ToolResult;
  * Represents a chat message with a role, content, and optional tool interactions.
  *
  * Messages form the conversation history sent to AI providers. Each message
- * has a role (system, user, assistant, tool) and content.
+ * has a role (system, user, assistant, tool) and content. Content can be
+ * a simple string or an array of ContentPart objects for multi-modal messages.
+ *
+ * Basic usage:
+ * ```php
+ * $message = new Message('user', 'Hello, world!');
+ * ```
+ *
+ * Multi-modal usage:
+ * ```php
+ * $message = new Message('user', [
+ *     ContentPart::text('What is in this image?'),
+ *     ContentPart::imageUrl('https://example.com/photo.jpg'),
+ * ]);
+ * ```
  *
  * @author Ibrahim
  */
 class Message {
     /**
-     * The message content.
+     * The message content as a string (for text-only messages).
      *
      * @var string
      */
     private string $content;
+
+    /**
+     * The message content parts (for multi-modal messages).
+     *
+     * @var ContentPart[]
+     */
+    private array $contentParts;
+
+    /**
+     * Whether this message has multi-modal content.
+     *
+     * @var bool
+     */
+    private bool $isMultiModal;
 
     /**
      * The role of the message sender.
@@ -55,7 +83,9 @@ class Message {
      *
      * @param string $role The role of the message sender. Valid values are
      *        'system', 'user', 'assistant', and 'tool'.
-     * @param string $content The message content.
+     * @param string|ContentPart[] $content The message content. Can be a string
+     *        for text-only messages, or an array of ContentPart objects for
+     *        multi-modal messages containing text and images.
      * @param ToolCall[] $toolCalls Tool calls requested by the assistant.
      *        Only applicable for assistant messages.
      * @param ToolResult|null $toolResult The tool execution result.
@@ -63,23 +93,50 @@ class Message {
      */
     public function __construct(
         string $role,
-        string $content,
+        string|array $content,
         array $toolCalls = [],
         ?ToolResult $toolResult = null
     ) {
         $this->role = $role;
-        $this->content = $content;
         $this->toolCalls = $toolCalls;
         $this->toolResult = $toolResult;
+
+        if (is_array($content)) {
+            $this->isMultiModal = true;
+            $this->contentParts = $content;
+            $this->content = $this->extractTextContent($content);
+        } else {
+            $this->isMultiModal = false;
+            $this->contentParts = [];
+            $this->content = $content;
+        }
     }
 
     /**
-     * Returns the message content.
+     * Returns the message text content.
+     *
+     * For text-only messages, returns the full content. For multi-modal
+     * messages, returns the concatenated text from all text parts.
      *
      * @return string The message text content.
      */
     public function getContent(): string {
         return $this->content;
+    }
+
+    /**
+     * Returns the content parts for multi-modal messages.
+     *
+     * For text-only messages, returns an array with a single text ContentPart.
+     *
+     * @return ContentPart[] The content parts.
+     */
+    public function getContentParts(): array {
+        if (!$this->isMultiModal) {
+            return [ContentPart::text($this->content)];
+        }
+
+        return $this->contentParts;
     }
 
     /**
@@ -122,5 +179,52 @@ class Message {
      */
     public function hasToolCalls(): bool {
         return count($this->toolCalls) > 0;
+    }
+
+    /**
+     * Checks if this message has multi-modal content (text + images).
+     *
+     * @return bool True if the message contains ContentPart objects.
+     */
+    public function isMultiModal(): bool {
+        return $this->isMultiModal;
+    }
+
+    /**
+     * Checks if this message contains any image content.
+     *
+     * @return bool True if the message has at least one image part.
+     */
+    public function hasImages(): bool {
+        if (!$this->isMultiModal) {
+            return false;
+        }
+
+        foreach ($this->contentParts as $part) {
+            if ($part->isImage()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Extracts and concatenates text content from content parts.
+     *
+     * @param ContentPart[] $parts The content parts.
+     *
+     * @return string The concatenated text content.
+     */
+    private function extractTextContent(array $parts): string {
+        $texts = [];
+
+        foreach ($parts as $part) {
+            if ($part->isText()) {
+                $texts[] = $part->getText();
+            }
+        }
+
+        return implode("\n", $texts);
     }
 }

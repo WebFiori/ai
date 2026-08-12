@@ -243,7 +243,10 @@ class InvokeStrategy implements InvocationStrategyInterface {
             if ($message->hasToolCalls()) {
                 $content = [];
 
-                if (!empty($message->getContent())) {
+                // Handle multi-modal content
+                if ($message->isMultiModal()) {
+                    $content = array_merge($content, $this->formatAnthropicContentParts($message->getContentParts()));
+                } elseif (!empty($message->getContent())) {
                     $content[] = ['type' => 'text', 'text' => $message->getContent()];
                 }
 
@@ -257,6 +260,16 @@ class InvokeStrategy implements InvocationStrategyInterface {
                 }
 
                 $formatted[] = ['role' => 'assistant', 'content' => $content];
+
+                continue;
+            }
+
+            // Handle multi-modal messages
+            if ($message->isMultiModal()) {
+                $formatted[] = [
+                    'role' => $message->getRole(),
+                    'content' => $this->formatAnthropicContentParts($message->getContentParts()),
+                ];
 
                 continue;
             }
@@ -289,7 +302,166 @@ class InvokeStrategy implements InvocationStrategyInterface {
     }
 
     /**
+     * Formats ContentPart objects into Anthropic content array format.
+     *
+     * @param \WebFiori\Ai\ContentPart[] $parts The content parts.
+     *
+     * @return array<int, array<string, mixed>> The formatted content array.
+     */
+    private function formatAnthropicContentParts(array $parts): array {
+        $formatted = [];
+
+        foreach ($parts as $part) {
+            switch ($part->getType()) {
+                case \WebFiori\Ai\ContentPart::TYPE_TEXT:
+                    $formatted[] = [
+                        'type' => 'text',
+                        'text' => $part->getData()['text'],
+                    ];
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_URL:
+                    // Anthropic requires base64 data, fetch the file
+                    $url = $part->getData()['url'];
+                    $fileData = $this->fetchFileFromUrl($url);
+
+                    if ($fileData !== null) {
+                        $formatted[] = [
+                            'type' => 'image',
+                            'source' => [
+                                'type' => 'base64',
+                                'media_type' => $fileData['mime_type'],
+                                'data' => $fileData['data'],
+                            ],
+                        ];
+                    }
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_BASE64:
+                    $data = $part->getData();
+                    $formatted[] = [
+                        'type' => 'image',
+                        'source' => [
+                            'type' => 'base64',
+                            'media_type' => $data['mime_type'],
+                            'data' => $data['data'],
+                        ],
+                    ];
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_DOCUMENT:
+                    $data = $part->getData();
+                    $mimeType = $data['mime_type'];
+
+                    if (str_starts_with($mimeType, 'image/')) {
+                        $formatted[] = [
+                            'type' => 'image',
+                            'source' => [
+                                'type' => 'base64',
+                                'media_type' => $mimeType,
+                                'data' => $data['data'],
+                            ],
+                        ];
+                    } elseif ($mimeType === 'application/pdf') {
+                        // Claude via Invoke supports PDFs
+                        $formatted[] = [
+                            'type' => 'document',
+                            'source' => [
+                                'type' => 'base64',
+                                'media_type' => $mimeType,
+                                'data' => $data['data'],
+                            ],
+                        ];
+                    } else {
+                        // For text-based documents, convert to text
+                        $decoded = base64_decode($data['data']);
+                        $formatted[] = [
+                            'type' => 'text',
+                            'text' => $decoded,
+                        ];
+                    }
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_FILE_GCS:
+                    // Anthropic doesn't support GCS URIs, need to fetch the file
+                    $data = $part->getData();
+                    // Convert gs://bucket/path to https://storage.googleapis.com/bucket/path
+                    $gcsPath = substr($data['uri'], 5); // Remove 'gs://'
+                    $httpsUrl = 'https://storage.googleapis.com/'.$gcsPath;
+                    $fileData = $this->fetchFileFromUrl($httpsUrl);
+
+                    if ($fileData !== null) {
+                        $mimeType = $fileData['mime_type'];
+
+                        if (str_starts_with($mimeType, 'image/')) {
+                            $formatted[] = [
+                                'type' => 'image',
+                                'source' => [
+                                    'type' => 'base64',
+                                    'media_type' => $mimeType,
+                                    'data' => $fileData['data'],
+                                ],
+                            ];
+                        } elseif ($mimeType === 'application/pdf') {
+                            $formatted[] = [
+                                'type' => 'document',
+                                'source' => [
+                                    'type' => 'base64',
+                                    'media_type' => $mimeType,
+                                    'data' => $fileData['data'],
+                                ],
+                            ];
+                        }
+                    }
+
+                    break;
+            }
+        }
+
+        return $formatted;
+    }
+
+    /**
+     * Fetches a file from a URL and returns base64-encoded data.
+     *
+     * @param string $url The file URL.
+     *
+     * @return array{mime_type: string, data: string}|null The file data or null on failure.
+     */
+    private function fetchFileFromUrl(string $url): ?array {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 30,
+                'user_agent' => 'WebFiori-AI/1.0',
+            ],
+        ]);
+
+        $content = @file_get_contents($url, false, $context);
+
+        if ($content === false) {
+            return null;
+        }
+
+        // Detect MIME type from content
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo->buffer($content);
+
+        return [
+            'mime_type' => $mimeType,
+            'data' => base64_encode($content),
+        ];
+    }
+
+    /**
      * Builds the request body for Llama/Mistral models via Invoke.
+     *
+     * Llama/Mistral models use text-only prompt format and do not support
+     * multi-modal content. If multi-modal messages are passed, only the
+     * text content will be used.
      *
      * @param Message[] $messages The messages.
      * @param int $maxTokens Max tokens.
@@ -302,7 +474,7 @@ class InvokeStrategy implements InvocationStrategyInterface {
 
         foreach ($messages as $message) {
             $role = $message->getRole();
-            $content = $message->getContent();
+            $content = $message->getContent(); // getText only, images ignored
 
             if ($role === 'system') {
                 $prompt .= "[INST] <<SYS>>\n$content\n<</SYS>>\n\n";
