@@ -31,10 +31,13 @@ use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\LoggerTrait;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\MetricsTrait;
+use WebFiori\Ai\NullStatusEmitter;
 use WebFiori\Ai\RateLimitStatus;
 use WebFiori\Ai\Redaction\RedactionConfig;
 use WebFiori\Ai\Redaction\RedactionService;
 use WebFiori\Ai\RetryConfig;
+use WebFiori\Ai\Status;
+use WebFiori\Ai\StatusEmitterInterface;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Tool\ToolResult;
@@ -93,6 +96,13 @@ abstract class AbstractClient implements ProviderInterface {
     private HttpClientInterface $httpClient;
 
     /**
+     * Status emitter for real-time progress tracking.
+     *
+     * @var StatusEmitterInterface
+     */
+    private StatusEmitterInterface $statusEmitter;
+
+    /**
      * Token estimator for counting tokens.
      *
      * @var TokenEstimator
@@ -118,6 +128,7 @@ abstract class AbstractClient implements ProviderInterface {
         $this->cacheConfig = new CacheConfig(enabled: false);
         $this->cacheKeyGenerator = new CacheKeyGenerator();
         $this->tokenEstimator = new TokenEstimator();
+        $this->statusEmitter = new NullStatusEmitter();
         $this->initAuditTrait();
         $this->validateConfig($config);
     }
@@ -155,7 +166,16 @@ abstract class AbstractClient implements ProviderInterface {
         $tools = $options['tools'] ?? [];
         $requestId = $options['request_id'] ?? uniqid('req_', true);
 
+        $this->statusEmitter->emit(Status::PREPARING, [
+            'model' => $model,
+            'message_count' => count($messages),
+            'tool_count' => count($tools),
+        ]);
+
         // Apply context window strategy if set
+        if ($this->contextStrategy !== null) {
+            $this->statusEmitter->emit(Status::TRUNCATING_CONTEXT, []);
+        }
         $messages = $this->applyContextStrategy($messages, $tools);
 
         // Check cache (skip if auto_execute_tools is enabled due to side effects)
@@ -185,6 +205,8 @@ abstract class AbstractClient implements ProviderInterface {
                     ['key' => $cacheKey]
                 ));
 
+                $this->statusEmitter->emit(Status::CACHE_HIT, ['key' => $cacheKey]);
+
                 return $cached->getData();
             }
 
@@ -192,6 +214,8 @@ abstract class AbstractClient implements ProviderInterface {
                 $this->buildBaseMetricData($requestId, $this->getName(), $model),
                 ['key' => $cacheKey]
             ));
+
+            $this->statusEmitter->emit(Status::CACHE_MISS, []);
         }
 
         $this->logInfo('Chat request started', [
@@ -206,6 +230,11 @@ abstract class AbstractClient implements ProviderInterface {
         ));
 
         try {
+            $this->statusEmitter->emit(Status::SENDING_REQUEST, [
+                'model' => $model,
+                'iteration' => 0,
+            ]);
+
             $request = $this->buildChatRequest($messages, $options);
             $httpResponse = $this->sendRequest($request);
             $this->handleErrorResponse($httpResponse);
@@ -245,6 +274,12 @@ abstract class AbstractClient implements ProviderInterface {
                     $newMessages = array_slice($messages, $formattedCount);
                     $request = $this->buildIncrementalChatRequest($request, $messages, $newMessages, $options);
                     $formattedCount = count($messages);
+
+                    $this->statusEmitter->emit(Status::SENDING_REQUEST, [
+                        'model' => $model,
+                        'iteration' => $iteration,
+                    ]);
+
                     $httpResponse = $this->sendRequest($request);
                     $this->handleErrorResponse($httpResponse);
                     $response = $this->parseChatResponse($httpResponse);
@@ -328,6 +363,12 @@ abstract class AbstractClient implements ProviderInterface {
 
             $this->emitAudit($auditEntry);
 
+            $this->statusEmitter->emit(Status::COMPLETED, [
+                'model' => $response->getModel(),
+                'duration_ms' => $durationMs,
+                'total_tokens' => $response->getUsage()?->getTotalTokens(),
+            ]);
+
             return $response;
         } catch (\Throwable $e) {
             $durationMs = (int) ((microtime(true) - $startTime) * 1000);
@@ -350,6 +391,11 @@ abstract class AbstractClient implements ProviderInterface {
                     'error' => ['type' => get_class($e), 'message' => $e->getMessage()],
                 ]
             ));
+
+            $this->statusEmitter->emit(Status::ERROR, [
+                'error' => $e->getMessage(),
+                'type' => get_class($e),
+            ]);
 
             throw $e;
         }
@@ -753,6 +799,15 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Returns the current status emitter.
+     *
+     * @return StatusEmitterInterface The current emitter.
+     */
+    public function getStatusEmitter(): StatusEmitterInterface {
+        return $this->statusEmitter;
+    }
+
+    /**
      * Sets the cache implementation for storing responses.
      *
      * When a cache is set, responses from chat() and embed() calls will be
@@ -872,6 +927,33 @@ abstract class AbstractClient implements ProviderInterface {
             : $this->httpClient;
 
         $this->httpClient = new RetryableHttpClient($inner, $config, $this->getLogCallback());
+    }
+
+    /**
+     * Sets the status emitter for real-time progress tracking.
+     *
+     * The emitter receives events during chat() calls such as tool executions,
+     * cache hits, and request lifecycle events. Use this to show progress
+     * indicators in your frontend via SSE, WebSocket, or logging.
+     *
+     * ```php
+     * // SSE streaming
+     * $client->setStatusEmitter(new SSEStatusEmitter());
+     *
+     * // Custom callback
+     * $client->setStatusEmitter(new CallbackStatusEmitter(function($status, $ctx) {
+     *     echo "[{$status}] " . json_encode($ctx) . "\n";
+     * }));
+     * ```
+     *
+     * @param StatusEmitterInterface $emitter The emitter to use.
+     *
+     * @return self Returns the instance for method chaining.
+     */
+    public function setStatusEmitter(StatusEmitterInterface $emitter): self {
+        $this->statusEmitter = $emitter;
+
+        return $this;
     }
 
     /**
@@ -1053,9 +1135,23 @@ abstract class AbstractClient implements ProviderInterface {
         foreach ($toolCalls as $toolCall) {
             $tool = $this->findTool($tools, $toolCall->getName());
 
+            $this->statusEmitter->emit(Status::TOOL_CALLING, [
+                'tool' => $toolCall->getName(),
+                'arguments' => $toolCall->getArguments(),
+            ]);
+
+            $this->statusEmitter->emit(Status::TOOL_EXECUTING, [
+                'tool' => $toolCall->getName(),
+            ]);
+
             $start = microtime(true);
             $output = $tool !== null ? $tool->execute($toolCall->getArguments()) : '';
             $duration = (int) ((microtime(true) - $start) * 1000);
+
+            $this->statusEmitter->emit(Status::TOOL_COMPLETED, [
+                'tool' => $toolCall->getName(),
+                'duration_ms' => $duration,
+            ]);
 
             $results[$toolCall->getId()] = [
                 'name' => $toolCall->getName(),
