@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.9](https://github.com/WebFiori/ai/compare/v0.4.8...v0.4.9) (2026-08-12)
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#70](https://github.com/WebFiori/ai/issues/70) from WebFiori/dev ([5e0dc66](https://github.com/WebFiori/ai/commit/5e0dc66341f18acde9fa5d5ceaf9dc4dba18dfe3))
+
 ## [0.4.8](https://github.com/WebFiori/ai/compare/v0.4.7...v0.4.8) (2026-08-12)
 
 
