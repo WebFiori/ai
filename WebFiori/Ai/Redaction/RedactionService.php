@@ -16,6 +16,9 @@ namespace WebFiori\Ai\Redaction;
  * API keys and Bearer tokens are always redacted. Additional rules
  * are applied based on the provided configuration.
  *
+ * For performance, all active patterns are compiled into arrays on first
+ * use and applied in a single preg_replace() call instead of N separate calls.
+ *
  * @author Ibrahim
  */
 class RedactionService {
@@ -34,11 +37,27 @@ class RedactionService {
     private const RESPONSE_BODY_KEYS = ['response_body', 'response', 'content', 'text'];
 
     /**
+     * Compiled patterns array for single-pass redaction.
+     * Built lazily on first use.
+     *
+     * @var string[]|null
+     */
+    private ?array $compiledPatterns = null;
+
+    /**
+     * Compiled replacements array matching compiledPatterns.
+     *
+     * @var string[]|null
+     */
+    private ?array $compiledReplacements = null;
+
+    /**
      * The redaction configuration.
      *
      * @var RedactionConfig
      */
     private RedactionConfig $config;
+
     /**
      * Mandatory rules that are always applied regardless of config.
      *
@@ -92,8 +111,8 @@ class RedactionService {
     /**
      * Redacts sensitive data from a string.
      *
-     * Always applies mandatory rules (API keys, Bearer tokens).
-     * Applies optional built-in and custom rules based on configuration.
+     * All active patterns are applied in a single preg_replace() call
+     * using arrays, which is significantly faster than N separate calls.
      *
      * @param string $text The text to redact.
      *
@@ -104,24 +123,45 @@ class RedactionService {
             return $text;
         }
 
-        // Always apply mandatory rules
-        foreach ($this->mandatoryRules as $rule) {
-            $text = preg_replace($rule->getPattern(), $rule->getReplacement(), $text) ?? $text;
+        $this->ensureCompiled();
+
+        return preg_replace($this->compiledPatterns, $this->compiledReplacements, $text) ?? $text;
+    }
+
+    /**
+     * Builds the compiled patterns and replacements arrays from active rules.
+     * Called lazily on first redactString() call.
+     */
+    private function ensureCompiled(): void {
+        if ($this->compiledPatterns !== null) {
+            return;
         }
 
-        // Apply optional built-in rules if not disabled
+        $patterns = [];
+        $replacements = [];
+
+        // Mandatory rules - always included
+        foreach ($this->mandatoryRules as $rule) {
+            $patterns[] = $rule->getPattern();
+            $replacements[] = $rule->getReplacement();
+        }
+
+        // Optional rules - only if enabled
         foreach ($this->optionalRules as $rule) {
             if ($this->config->isRuleEnabled($rule->getName())) {
-                $text = preg_replace($rule->getPattern(), $rule->getReplacement(), $text) ?? $text;
+                $patterns[] = $rule->getPattern();
+                $replacements[] = $rule->getReplacement();
             }
         }
 
-        // Apply custom rules
+        // Custom rules
         foreach ($this->config->getCustomRules() as $rule) {
-            $text = preg_replace($rule->getPattern(), $rule->getReplacement(), $text) ?? $text;
+            $patterns[] = $rule->getPattern();
+            $replacements[] = $rule->getReplacement();
         }
 
-        return $text;
+        $this->compiledPatterns = $patterns;
+        $this->compiledReplacements = $replacements;
     }
 
     /**
