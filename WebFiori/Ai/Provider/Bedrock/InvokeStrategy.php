@@ -322,17 +322,17 @@ class InvokeStrategy implements InvocationStrategyInterface {
                     break;
 
                 case \WebFiori\Ai\ContentPart::TYPE_IMAGE_URL:
-                    // Anthropic requires base64 data, fetch the image
+                    // Anthropic requires base64 data, fetch the file
                     $url = $part->getData()['url'];
-                    $imageData = $this->fetchImageFromUrl($url);
+                    $fileData = $this->fetchFileFromUrl($url);
 
-                    if ($imageData !== null) {
+                    if ($fileData !== null) {
                         $formatted[] = [
                             'type' => 'image',
                             'source' => [
                                 'type' => 'base64',
-                                'media_type' => $imageData['mime_type'],
-                                'data' => $imageData['data'],
+                                'media_type' => $fileData['mime_type'],
+                                'data' => $fileData['data'],
                             ],
                         ];
                     }
@@ -352,23 +352,70 @@ class InvokeStrategy implements InvocationStrategyInterface {
 
                     break;
 
-                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_GCS:
-                    // Anthropic doesn't support GCS URIs, need to fetch the image
+                case \WebFiori\Ai\ContentPart::TYPE_DOCUMENT:
                     $data = $part->getData();
-                    // Convert gs://bucket/path to https://storage.googleapis.com/bucket/path
-                    $gcsPath = substr($data['uri'], 5); // Remove 'gs://'
-                    $httpsUrl = 'https://storage.googleapis.com/'.$gcsPath;
-                    $imageData = $this->fetchImageFromUrl($httpsUrl);
+                    $mimeType = $data['mime_type'];
 
-                    if ($imageData !== null) {
+                    if (str_starts_with($mimeType, 'image/')) {
                         $formatted[] = [
                             'type' => 'image',
                             'source' => [
                                 'type' => 'base64',
-                                'media_type' => $imageData['mime_type'],
-                                'data' => $imageData['data'],
+                                'media_type' => $mimeType,
+                                'data' => $data['data'],
                             ],
                         ];
+                    } elseif ($mimeType === 'application/pdf') {
+                        // Claude via Invoke supports PDFs
+                        $formatted[] = [
+                            'type' => 'document',
+                            'source' => [
+                                'type' => 'base64',
+                                'media_type' => $mimeType,
+                                'data' => $data['data'],
+                            ],
+                        ];
+                    } else {
+                        // For text-based documents, convert to text
+                        $decoded = base64_decode($data['data']);
+                        $formatted[] = [
+                            'type' => 'text',
+                            'text' => $decoded,
+                        ];
+                    }
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_FILE_GCS:
+                    // Anthropic doesn't support GCS URIs, need to fetch the file
+                    $data = $part->getData();
+                    // Convert gs://bucket/path to https://storage.googleapis.com/bucket/path
+                    $gcsPath = substr($data['uri'], 5); // Remove 'gs://'
+                    $httpsUrl = 'https://storage.googleapis.com/'.$gcsPath;
+                    $fileData = $this->fetchFileFromUrl($httpsUrl);
+
+                    if ($fileData !== null) {
+                        $mimeType = $fileData['mime_type'];
+
+                        if (str_starts_with($mimeType, 'image/')) {
+                            $formatted[] = [
+                                'type' => 'image',
+                                'source' => [
+                                    'type' => 'base64',
+                                    'media_type' => $mimeType,
+                                    'data' => $fileData['data'],
+                                ],
+                            ];
+                        } elseif ($mimeType === 'application/pdf') {
+                            $formatted[] = [
+                                'type' => 'document',
+                                'source' => [
+                                    'type' => 'base64',
+                                    'media_type' => $mimeType,
+                                    'data' => $fileData['data'],
+                                ],
+                            ];
+                        }
                     }
 
                     break;
@@ -379,13 +426,13 @@ class InvokeStrategy implements InvocationStrategyInterface {
     }
 
     /**
-     * Fetches an image from a URL and returns base64-encoded data.
+     * Fetches a file from a URL and returns base64-encoded data.
      *
-     * @param string $url The image URL.
+     * @param string $url The file URL.
      *
-     * @return array{mime_type: string, data: string}|null The image data or null on failure.
+     * @return array{mime_type: string, data: string}|null The file data or null on failure.
      */
-    private function fetchImageFromUrl(string $url): ?array {
+    private function fetchFileFromUrl(string $url): ?array {
         $context = stream_context_create([
             'http' => [
                 'timeout' => 30,
@@ -402,10 +449,6 @@ class InvokeStrategy implements InvocationStrategyInterface {
         // Detect MIME type from content
         $finfo = new \finfo(FILEINFO_MIME_TYPE);
         $mimeType = $finfo->buffer($content);
-
-        if (!in_array($mimeType, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
-            return null;
-        }
 
         return [
             'mime_type' => $mimeType,

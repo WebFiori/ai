@@ -211,17 +211,17 @@ class AnthropicClient extends AbstractClient {
                     break;
 
                 case \WebFiori\Ai\ContentPart::TYPE_IMAGE_URL:
-                    // Anthropic requires base64 data, fetch the image
+                    // Anthropic requires base64 data, fetch the file
                     $url = $part->getData()['url'];
-                    $imageData = $this->fetchImageFromUrl($url);
+                    $fileData = $this->fetchFileFromUrl($url);
 
-                    if ($imageData !== null) {
+                    if ($fileData !== null) {
                         $formatted[] = [
                             'type' => 'image',
                             'source' => [
                                 'type' => 'base64',
-                                'media_type' => $imageData['mime_type'],
-                                'data' => $imageData['data'],
+                                'media_type' => $fileData['mime_type'],
+                                'data' => $fileData['data'],
                             ],
                         ];
                     }
@@ -241,24 +241,72 @@ class AnthropicClient extends AbstractClient {
 
                     break;
 
-                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_GCS:
-                    // Anthropic doesn't support GCS URIs, need to fetch the image
+                case \WebFiori\Ai\ContentPart::TYPE_DOCUMENT:
+                    $data = $part->getData();
+                    $mimeType = $data['mime_type'];
+
+                    // Claude supports images and PDFs
+                    if (str_starts_with($mimeType, 'image/')) {
+                        $formatted[] = [
+                            'type' => 'image',
+                            'source' => [
+                                'type' => 'base64',
+                                'media_type' => $mimeType,
+                                'data' => $data['data'],
+                            ],
+                        ];
+                    } elseif ($mimeType === 'application/pdf') {
+                        // Claude 3.5 supports PDFs via document type
+                        $formatted[] = [
+                            'type' => 'document',
+                            'source' => [
+                                'type' => 'base64',
+                                'media_type' => $mimeType,
+                                'data' => $data['data'],
+                            ],
+                        ];
+                    } else {
+                        // For text-based documents, convert to text
+                        $decoded = base64_decode($data['data']);
+                        $formatted[] = [
+                            'type' => 'text',
+                            'text' => $decoded,
+                        ];
+                    }
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_FILE_GCS:
+                    // Anthropic doesn't support GCS URIs, need to fetch the file
                     $this->logWarning('Anthropic does not support GCS URIs directly. Attempting to fetch via HTTPS.');
                     $data = $part->getData();
                     // Convert gs://bucket/path to https://storage.googleapis.com/bucket/path
                     $gcsPath = substr($data['uri'], 5); // Remove 'gs://'
                     $httpsUrl = 'https://storage.googleapis.com/'.$gcsPath;
-                    $imageData = $this->fetchImageFromUrl($httpsUrl);
+                    $fileData = $this->fetchFileFromUrl($httpsUrl);
 
-                    if ($imageData !== null) {
-                        $formatted[] = [
-                            'type' => 'image',
-                            'source' => [
-                                'type' => 'base64',
-                                'media_type' => $imageData['mime_type'],
-                                'data' => $imageData['data'],
-                            ],
-                        ];
+                    if ($fileData !== null) {
+                        $mimeType = $fileData['mime_type'];
+
+                        if (str_starts_with($mimeType, 'image/')) {
+                            $formatted[] = [
+                                'type' => 'image',
+                                'source' => [
+                                    'type' => 'base64',
+                                    'media_type' => $mimeType,
+                                    'data' => $fileData['data'],
+                                ],
+                            ];
+                        } elseif ($mimeType === 'application/pdf') {
+                            $formatted[] = [
+                                'type' => 'document',
+                                'source' => [
+                                    'type' => 'base64',
+                                    'media_type' => $mimeType,
+                                    'data' => $fileData['data'],
+                                ],
+                            ];
+                        }
                     }
 
                     break;
@@ -269,13 +317,13 @@ class AnthropicClient extends AbstractClient {
     }
 
     /**
-     * Fetches an image from a URL and returns base64-encoded data.
+     * Fetches a file from a URL and returns base64-encoded data.
      *
-     * @param string $url The image URL.
+     * @param string $url The file URL.
      *
-     * @return array{mime_type: string, data: string}|null The image data or null on failure.
+     * @return array{mime_type: string, data: string}|null The file data or null on failure.
      */
-    private function fetchImageFromUrl(string $url): ?array {
+    private function fetchFileFromUrl(string $url): ?array {
         $context = stream_context_create([
             'http' => [
                 'timeout' => 30,
@@ -286,7 +334,7 @@ class AnthropicClient extends AbstractClient {
         $content = @file_get_contents($url, false, $context);
 
         if ($content === false) {
-            $this->logWarning('Failed to fetch image from URL', ['url' => $url]);
+            $this->logWarning('Failed to fetch file from URL', ['url' => $url]);
 
             return null;
         }
@@ -294,12 +342,6 @@ class AnthropicClient extends AbstractClient {
         // Detect MIME type from content
         $finfo = new \finfo(FILEINFO_MIME_TYPE);
         $mimeType = $finfo->buffer($content);
-
-        if (!in_array($mimeType, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
-            $this->logWarning('Unsupported image MIME type from URL', ['url' => $url, 'mime_type' => $mimeType]);
-
-            return null;
-        }
 
         return [
             'mime_type' => $mimeType,

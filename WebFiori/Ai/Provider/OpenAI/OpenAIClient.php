@@ -171,22 +171,62 @@ class OpenAIClient extends AbstractClient {
 
                     break;
 
-                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_GCS:
+                case \WebFiori\Ai\ContentPart::TYPE_DOCUMENT:
+                    // OpenAI supports files via data URLs for supported types
+                    $data = $part->getData();
+                    $mimeType = $data['mime_type'];
+
+                    // For images in document type, use image_url
+                    if (str_starts_with($mimeType, 'image/')) {
+                        $dataUrl = 'data:'.$mimeType.';base64,'.$data['data'];
+                        $formatted[] = [
+                            'type' => 'image_url',
+                            'image_url' => [
+                                'url' => $dataUrl,
+                                'detail' => $imageDetail,
+                            ],
+                        ];
+                    } else {
+                        // For other documents (PDF, audio, etc.), use input_file or file type
+                        // OpenAI uses file type with base64 data URL for PDFs and other files
+                        $dataUrl = 'data:'.$mimeType.';base64,'.$data['data'];
+                        $formatted[] = [
+                            'type' => 'file',
+                            'file' => [
+                                'file_data' => $dataUrl,
+                            ],
+                        ];
+                    }
+
+                    break;
+
+                case \WebFiori\Ai\ContentPart::TYPE_FILE_GCS:
                     // OpenAI doesn't support GCS URIs directly, convert to regular URL
                     // This won't work unless the GCS object is publicly accessible
                     // via its HTTPS URL. Log a warning but attempt anyway.
-                    $this->logWarning('OpenAI does not natively support GCS URIs. The image must be publicly accessible.');
+                    $this->logWarning('OpenAI does not natively support GCS URIs. The file must be publicly accessible.');
                     $data = $part->getData();
                     // Convert gs://bucket/path to https://storage.googleapis.com/bucket/path
                     $gcsPath = substr($data['uri'], 5); // Remove 'gs://'
                     $httpsUrl = 'https://storage.googleapis.com/'.$gcsPath;
-                    $formatted[] = [
-                        'type' => 'image_url',
-                        'image_url' => [
-                            'url' => $httpsUrl,
-                            'detail' => $imageDetail,
-                        ],
-                    ];
+                    $mimeType = $data['mime_type'];
+
+                    if (str_starts_with($mimeType, 'image/')) {
+                        $formatted[] = [
+                            'type' => 'image_url',
+                            'image_url' => [
+                                'url' => $httpsUrl,
+                                'detail' => $imageDetail,
+                            ],
+                        ];
+                    } else {
+                        $formatted[] = [
+                            'type' => 'file',
+                            'file' => [
+                                'url' => $httpsUrl,
+                            ],
+                        ];
+                    }
 
                     break;
             }

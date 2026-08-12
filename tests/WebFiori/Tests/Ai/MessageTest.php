@@ -168,7 +168,7 @@ class MessageTest extends TestCase {
         $this->assertTrue($message->hasImages());
 
         $parts = $message->getContentParts();
-        $this->assertEquals(ContentPart::TYPE_IMAGE_GCS, $parts[1]->getType());
+        $this->assertEquals(ContentPart::TYPE_FILE_GCS, $parts[1]->getType());
         $this->assertEquals('gs://my-bucket/images/photo.jpg', $parts[1]->getData()['uri']);
     }
 

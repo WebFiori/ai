@@ -230,13 +230,13 @@ class GoogleClient extends AbstractClient {
                     // Google requires fetching the image and sending as inline data
                     // or using fileData for GCS URIs. For HTTP URLs, we fetch and encode.
                     $url = $part->getData()['url'];
-                    $imageData = $this->fetchImageFromUrl($url);
+                    $fileData = $this->fetchFileFromUrl($url);
 
-                    if ($imageData !== null) {
+                    if ($fileData !== null) {
                         $parts[] = [
                             'inlineData' => [
-                                'mimeType' => $imageData['mime_type'],
-                                'data' => $imageData['data'],
+                                'mimeType' => $fileData['mime_type'],
+                                'data' => $fileData['data'],
                             ],
                         ];
                     }
@@ -244,6 +244,7 @@ class GoogleClient extends AbstractClient {
                     break;
 
                 case \WebFiori\Ai\ContentPart::TYPE_IMAGE_BASE64:
+                case \WebFiori\Ai\ContentPart::TYPE_DOCUMENT:
                     $data = $part->getData();
                     $parts[] = [
                         'inlineData' => [
@@ -254,7 +255,7 @@ class GoogleClient extends AbstractClient {
 
                     break;
 
-                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_GCS:
+                case \WebFiori\Ai\ContentPart::TYPE_FILE_GCS:
                     $data = $part->getData();
                     $parts[] = [
                         'fileData' => [
@@ -271,13 +272,13 @@ class GoogleClient extends AbstractClient {
     }
 
     /**
-     * Fetches an image from a URL and returns base64-encoded data.
+     * Fetches a file from a URL and returns base64-encoded data.
      *
-     * @param string $url The image URL.
+     * @param string $url The file URL.
      *
-     * @return array{mime_type: string, data: string}|null The image data or null on failure.
+     * @return array{mime_type: string, data: string}|null The file data or null on failure.
      */
-    private function fetchImageFromUrl(string $url): ?array {
+    private function fetchFileFromUrl(string $url): ?array {
         $context = stream_context_create([
             'http' => [
                 'timeout' => 30,
@@ -288,7 +289,7 @@ class GoogleClient extends AbstractClient {
         $content = @file_get_contents($url, false, $context);
 
         if ($content === false) {
-            $this->logWarning('Failed to fetch image from URL', ['url' => $url]);
+            $this->logWarning('Failed to fetch file from URL', ['url' => $url]);
 
             return null;
         }
@@ -296,12 +297,6 @@ class GoogleClient extends AbstractClient {
         // Detect MIME type from content
         $finfo = new \finfo(FILEINFO_MIME_TYPE);
         $mimeType = $finfo->buffer($content);
-
-        if (!in_array($mimeType, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
-            $this->logWarning('Unsupported image MIME type from URL', ['url' => $url, 'mime_type' => $mimeType]);
-
-            return null;
-        }
 
         return [
             'mime_type' => $mimeType,

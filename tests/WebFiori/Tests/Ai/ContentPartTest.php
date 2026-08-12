@@ -84,7 +84,7 @@ class ContentPartTest extends TestCase {
         $mimeType = 'image/jpeg';
         $part = ContentPart::gcsUri($uri, $mimeType);
 
-        $this->assertSame(ContentPart::TYPE_IMAGE_GCS, $part->getType());
+        $this->assertSame(ContentPart::TYPE_FILE_GCS, $part->getType());
         $this->assertTrue($part->isImage());
         $this->assertSame([
             'uri' => $uri,
@@ -98,13 +98,18 @@ class ContentPartTest extends TestCase {
         ContentPart::gcsUri('https://storage.googleapis.com/bucket/file.jpg', 'image/jpeg');
     }
 
-    public function testGcsUriUnsupportedMimeType(): void {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Unsupported image MIME type');
-        ContentPart::gcsUri('gs://bucket/file.bmp', 'image/bmp');
+    public function testGcsUriWithPdf(): void {
+        $uri = 'gs://my-bucket/documents/report.pdf';
+        $mimeType = 'application/pdf';
+        $part = ContentPart::gcsUri($uri, $mimeType);
+
+        $this->assertSame(ContentPart::TYPE_FILE_GCS, $part->getType());
+        $this->assertFalse($part->isImage());
+        $this->assertTrue($part->isDocument());
+        $this->assertSame($mimeType, $part->getMimeType());
     }
 
-    public function testFileFromPath(): void {
+    public function testFileFromImagePath(): void {
         // Create a temporary test image
         $tempFile = sys_get_temp_dir().'/test_image_'.uniqid().'.png';
         // 1x1 transparent PNG
@@ -123,28 +128,156 @@ class ContentPartTest extends TestCase {
         }
     }
 
-    public function testFileNotFound(): void {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Image file not found');
-        ContentPart::file('/nonexistent/path/to/image.jpg');
-    }
-
-    public function testFileUnsupportedExtension(): void {
-        $tempFile = sys_get_temp_dir().'/test_image_'.uniqid().'.bmp';
-        file_put_contents($tempFile, 'fake bmp content');
+    public function testFileFromPdfPath(): void {
+        $tempFile = sys_get_temp_dir().'/test_doc_'.uniqid().'.pdf';
+        $pdfData = '%PDF-1.4 fake pdf content';
+        file_put_contents($tempFile, $pdfData);
 
         try {
-            $this->expectException(InvalidArgumentException::class);
-            $this->expectExceptionMessage('Unsupported image file extension');
-            ContentPart::file($tempFile);
+            $part = ContentPart::file($tempFile);
+
+            $this->assertSame(ContentPart::TYPE_DOCUMENT, $part->getType());
+            $this->assertTrue($part->isDocument());
+            $this->assertFalse($part->isImage());
+            $this->assertSame('application/pdf', $part->getMimeType());
         } finally {
             unlink($tempFile);
         }
     }
 
-    public function testFileAllSupportedExtensions(): void {
+    public function testFileFromTextPath(): void {
+        $tempFile = sys_get_temp_dir().'/test_code_'.uniqid().'.py';
+        $codeContent = 'print("Hello, World!")';
+        file_put_contents($tempFile, $codeContent);
+
+        try {
+            $part = ContentPart::file($tempFile);
+
+            $this->assertSame(ContentPart::TYPE_DOCUMENT, $part->getType());
+            $this->assertTrue($part->isDocument());
+            $this->assertSame('text/plain', $part->getMimeType());
+        } finally {
+            unlink($tempFile);
+        }
+    }
+
+    public function testFileFromJsonPath(): void {
+        $tempFile = sys_get_temp_dir().'/test_config_'.uniqid().'.json';
+        $jsonContent = '{"key": "value"}';
+        file_put_contents($tempFile, $jsonContent);
+
+        try {
+            $part = ContentPart::file($tempFile);
+
+            $this->assertSame(ContentPart::TYPE_DOCUMENT, $part->getType());
+            $this->assertSame('application/json', $part->getMimeType());
+        } finally {
+            unlink($tempFile);
+        }
+    }
+
+    public function testFileNotFound(): void {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('File not found');
+        ContentPart::file('/nonexistent/path/to/file.txt');
+    }
+
+    public function testFileUnknownExtensionTreatedAsText(): void {
+        $tempFile = sys_get_temp_dir().'/test_unknown_'.uniqid().'.xyz';
+        file_put_contents($tempFile, 'some content');
+
+        try {
+            $part = ContentPart::file($tempFile);
+
+            $this->assertSame(ContentPart::TYPE_DOCUMENT, $part->getType());
+            $this->assertSame('text/plain', $part->getMimeType());
+        } finally {
+            unlink($tempFile);
+        }
+    }
+
+    public function testDocumentWithPdf(): void {
+        $data = base64_encode('%PDF-1.4 fake pdf');
+        $part = ContentPart::document($data, 'application/pdf');
+
+        $this->assertSame(ContentPart::TYPE_DOCUMENT, $part->getType());
+        $this->assertTrue($part->isDocument());
+        $this->assertFalse($part->isImage());
+        $this->assertSame('application/pdf', $part->getMimeType());
+    }
+
+    public function testDocumentWithImage(): void {
+        // document() with image MIME type should still work
+        $data = base64_encode('fake image data');
+        $part = ContentPart::document($data, 'image/png');
+
+        // Should be routed to IMAGE_BASE64 type for consistent handling
+        $this->assertSame(ContentPart::TYPE_IMAGE_BASE64, $part->getType());
+        $this->assertTrue($part->isImage());
+    }
+
+    public function testDocumentWithAudio(): void {
+        $data = base64_encode('fake audio data');
+        $part = ContentPart::document($data, 'audio/mpeg');
+
+        $this->assertSame(ContentPart::TYPE_DOCUMENT, $part->getType());
+        $this->assertTrue($part->isAudio());
+        $this->assertFalse($part->isImage());
+        $this->assertTrue($part->isMedia());
+    }
+
+    public function testDocumentWithVideo(): void {
+        $data = base64_encode('fake video data');
+        $part = ContentPart::document($data, 'video/mp4');
+
+        $this->assertSame(ContentPart::TYPE_DOCUMENT, $part->getType());
+        $this->assertTrue($part->isVideo());
+        $this->assertFalse($part->isImage());
+        $this->assertTrue($part->isMedia());
+    }
+
+    public function testDocumentUnsupportedMimeType(): void {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unsupported MIME type');
+        ContentPart::document('data', 'application/octet-stream');
+    }
+
+    public function testIsMediaReturnsTrueForImageAudioVideo(): void {
+        $image = ContentPart::imageBase64('data', 'image/png');
+        $audio = ContentPart::document('data', 'audio/mp3');
+        $video = ContentPart::document('data', 'video/mp4');
+        $pdf = ContentPart::document('data', 'application/pdf');
+        $text = ContentPart::text('hello');
+
+        $this->assertTrue($image->isMedia());
+        $this->assertTrue($audio->isMedia());
+        $this->assertTrue($video->isMedia());
+        $this->assertFalse($pdf->isMedia());
+        $this->assertFalse($text->isMedia());
+    }
+
+    public function testGetSupportedMimeTypes(): void {
+        $supported = ContentPart::getSupportedMimeTypes();
+
+        $this->assertContains('image/jpeg', $supported);
+        $this->assertContains('application/pdf', $supported);
+        $this->assertContains('audio/mpeg', $supported);
+        $this->assertContains('video/mp4', $supported);
+        $this->assertContains('text/plain', $supported);
+    }
+
+    public function testGetMimeType(): void {
+        $text = ContentPart::text('hello');
+        $image = ContentPart::imageBase64('data', 'image/png');
+        $url = ContentPart::imageUrl('https://example.com/photo.jpg');
+
+        $this->assertNull($text->getMimeType());
+        $this->assertSame('image/png', $image->getMimeType());
+        $this->assertNull($url->getMimeType());
+    }
+
+    public function testFileAllSupportedImageExtensions(): void {
         $extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        // Minimal valid image data for each type
         $imageData = [
             'jpg' => "\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00",
             'jpeg' => "\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00",
@@ -160,31 +293,31 @@ class ContentPartTest extends TestCase {
             try {
                 $part = ContentPart::file($tempFile);
                 $this->assertSame(ContentPart::TYPE_IMAGE_BASE64, $part->getType());
+                $this->assertTrue($part->isImage());
             } finally {
                 unlink($tempFile);
             }
         }
     }
 
-    public function testIsImageReturnsTrueForAllImageTypes(): void {
-        $urlPart = ContentPart::imageUrl('https://example.com/photo.jpg');
-        $base64Part = ContentPart::imageBase64('data', 'image/png');
-        $gcsPart = ContentPart::gcsUri('gs://bucket/photo.jpg', 'image/jpeg');
+    public function testFileOfficeDocuments(): void {
+        $officeExtensions = [
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        ];
 
-        $this->assertTrue($urlPart->isImage());
-        $this->assertTrue($base64Part->isImage());
-        $this->assertTrue($gcsPart->isImage());
-    }
+        foreach ($officeExtensions as $ext => $expectedMime) {
+            $tempFile = sys_get_temp_dir().'/test_office_'.uniqid().'.'.$ext;
+            file_put_contents($tempFile, 'PK fake office content');
 
-    public function testIsTextReturnsFalseForImageTypes(): void {
-        $urlPart = ContentPart::imageUrl('https://example.com/photo.jpg');
-
-        $this->assertFalse($urlPart->isText());
-    }
-
-    public function testGetTextReturnsNullForNonTextParts(): void {
-        $imagePart = ContentPart::imageUrl('https://example.com/photo.jpg');
-
-        $this->assertNull($imagePart->getText());
+            try {
+                $part = ContentPart::file($tempFile);
+                $this->assertSame(ContentPart::TYPE_DOCUMENT, $part->getType());
+                $this->assertSame($expectedMime, $part->getMimeType());
+            } finally {
+                unlink($tempFile);
+            }
+        }
     }
 }
