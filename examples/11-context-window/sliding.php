@@ -36,9 +36,11 @@ $provider->setContextWindowStrategy(new SlidingWindowStrategy(
 ));
 
 // Enable logging to see truncation warnings
-$provider->setLogCallback(function ($level, $message, $context) {
+$provider->setLogCallback(function ($level, $message, $context)
+{
     if ($level === 'warning') {
         echo "[WARNING] {$message}\n";
+
         if (isset($context['removed_messages'])) {
             echo "  Removed: {$context['removed_messages']} messages\n";
             echo "  Removed: {$context['removed_tokens']} tokens\n";

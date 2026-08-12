@@ -44,19 +44,9 @@ use InvalidArgumentException;
  */
 class ContentPart {
     /**
-     * Content type constant for text.
+     * Content type constant for base64-encoded document (PDF, audio, video, etc.).
      */
-    public const TYPE_TEXT = 'text';
-
-    /**
-     * Content type constant for image URL.
-     */
-    public const TYPE_IMAGE_URL = 'image_url';
-
-    /**
-     * Content type constant for base64-encoded image.
-     */
-    public const TYPE_IMAGE_BASE64 = 'image_base64';
+    public const TYPE_DOCUMENT = 'document';
 
     /**
      * Content type constant for Google Cloud Storage URI.
@@ -64,18 +54,30 @@ class ContentPart {
     public const TYPE_FILE_GCS = 'file_gcs';
 
     /**
-     * Content type constant for base64-encoded document (PDF, audio, video, etc.).
+     * Content type constant for base64-encoded image.
      */
-    public const TYPE_DOCUMENT = 'document';
+    public const TYPE_IMAGE_BASE64 = 'image_base64';
 
     /**
-     * Supported image MIME types.
+     * Content type constant for image URL.
      */
-    private const IMAGE_MIME_TYPES = [
-        'image/jpeg',
-        'image/png',
-        'image/gif',
-        'image/webp',
+    public const TYPE_IMAGE_URL = 'image_url';
+    /**
+     * Content type constant for text.
+     */
+    public const TYPE_TEXT = 'text';
+
+    /**
+     * Supported audio MIME types.
+     */
+    private const AUDIO_MIME_TYPES = [
+        'audio/mpeg',
+        'audio/mp3',
+        'audio/wav',
+        'audio/ogg',
+        'audio/webm',
+        'audio/aac',
+        'audio/flac',
     ];
 
     /**
@@ -95,30 +97,6 @@ class ContentPart {
         'text/rtf',
         'application/json',
         'application/xml',
-    ];
-
-    /**
-     * Supported audio MIME types.
-     */
-    private const AUDIO_MIME_TYPES = [
-        'audio/mpeg',
-        'audio/mp3',
-        'audio/wav',
-        'audio/ogg',
-        'audio/webm',
-        'audio/aac',
-        'audio/flac',
-    ];
-
-    /**
-     * Supported video MIME types.
-     */
-    private const VIDEO_MIME_TYPES = [
-        'video/mp4',
-        'video/webm',
-        'video/quicktime',
-        'video/x-msvideo',
-        'video/mpeg',
     ];
 
     /**
@@ -154,11 +132,25 @@ class ContentPart {
     ];
 
     /**
-     * The content type.
-     *
-     * @var string
+     * Supported image MIME types.
      */
-    private string $type;
+    private const IMAGE_MIME_TYPES = [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+    ];
+
+    /**
+     * Supported video MIME types.
+     */
+    private const VIDEO_MIME_TYPES = [
+        'video/mp4',
+        'video/webm',
+        'video/quicktime',
+        'video/x-msvideo',
+        'video/mpeg',
+    ];
 
     /**
      * The content data.
@@ -166,6 +158,13 @@ class ContentPart {
      * @var array<string, mixed>
      */
     private array $data;
+
+    /**
+     * The content type.
+     *
+     * @var string
+     */
+    private string $type;
 
     /**
      * Creates a new ContentPart instance.
@@ -179,57 +178,41 @@ class ContentPart {
     }
 
     /**
-     * Creates a text content part.
+     * Creates a content part from base64-encoded data with explicit MIME type.
      *
-     * @param string $text The text content.
+     * Use this for documents, audio, video, or any file type that isn't an image URL.
+     * For images, prefer imageBase64() for clarity.
      *
-     * @return self A new text content part.
+     * @param string $data The base64-encoded file data.
+     * @param string $mimeType The MIME type (e.g., 'application/pdf', 'audio/mp3').
+     *
+     * @return self A new document content part.
+     *
+     * @throws InvalidArgumentException If the MIME type is not supported.
      */
-    public static function text(string $text): self {
-        return new self(self::TYPE_TEXT, ['text' => $text]);
-    }
+    public static function document(string $data, string $mimeType): self {
+        $allSupported = array_merge(
+            self::IMAGE_MIME_TYPES,
+            self::DOCUMENT_MIME_TYPES,
+            self::AUDIO_MIME_TYPES,
+            self::VIDEO_MIME_TYPES
+        );
 
-    /**
-     * Creates an image content part from a URL.
-     *
-     * @param string $url The image URL (http:// or https://).
-     *
-     * @return self A new image URL content part.
-     *
-     * @throws InvalidArgumentException If the URL is invalid.
-     */
-    public static function imageUrl(string $url): self {
-        if (!filter_var($url, FILTER_VALIDATE_URL)) {
-            throw new InvalidArgumentException("Invalid image URL: {$url}");
-        }
-
-        if (!str_starts_with($url, 'http://') && !str_starts_with($url, 'https://')) {
-            throw new InvalidArgumentException("Image URL must use http:// or https:// scheme: {$url}");
-        }
-
-        return new self(self::TYPE_IMAGE_URL, ['url' => $url]);
-    }
-
-    /**
-     * Creates an image content part from base64-encoded data.
-     *
-     * @param string $data The base64-encoded image data.
-     * @param string $mimeType The image MIME type (e.g., 'image/png').
-     *
-     * @return self A new base64 image content part.
-     *
-     * @throws InvalidArgumentException If the MIME type is not a supported image type.
-     */
-    public static function imageBase64(string $data, string $mimeType): self {
-        if (!in_array($mimeType, self::IMAGE_MIME_TYPES, true)) {
-            $supported = implode(', ', self::IMAGE_MIME_TYPES);
-
+        if (!in_array($mimeType, $allSupported, true)) {
             throw new InvalidArgumentException(
-                "Unsupported image MIME type: {$mimeType}. Supported types: {$supported}"
+                "Unsupported MIME type: {$mimeType}. Use a supported image, document, audio, or video MIME type."
             );
         }
 
-        return new self(self::TYPE_IMAGE_BASE64, [
+        // Route images to the image type for consistent handling
+        if (in_array($mimeType, self::IMAGE_MIME_TYPES, true)) {
+            return new self(self::TYPE_IMAGE_BASE64, [
+                'data' => $data,
+                'mime_type' => $mimeType,
+            ]);
+        }
+
+        return new self(self::TYPE_DOCUMENT, [
             'data' => $data,
             'mime_type' => $mimeType,
         ]);
@@ -277,47 +260,6 @@ class ContentPart {
     }
 
     /**
-     * Creates a content part from base64-encoded data with explicit MIME type.
-     *
-     * Use this for documents, audio, video, or any file type that isn't an image URL.
-     * For images, prefer imageBase64() for clarity.
-     *
-     * @param string $data The base64-encoded file data.
-     * @param string $mimeType The MIME type (e.g., 'application/pdf', 'audio/mp3').
-     *
-     * @return self A new document content part.
-     *
-     * @throws InvalidArgumentException If the MIME type is not supported.
-     */
-    public static function document(string $data, string $mimeType): self {
-        $allSupported = array_merge(
-            self::IMAGE_MIME_TYPES,
-            self::DOCUMENT_MIME_TYPES,
-            self::AUDIO_MIME_TYPES,
-            self::VIDEO_MIME_TYPES
-        );
-
-        if (!in_array($mimeType, $allSupported, true)) {
-            throw new InvalidArgumentException(
-                "Unsupported MIME type: {$mimeType}. Use a supported image, document, audio, or video MIME type."
-            );
-        }
-
-        // Route images to the image type for consistent handling
-        if (in_array($mimeType, self::IMAGE_MIME_TYPES, true)) {
-            return new self(self::TYPE_IMAGE_BASE64, [
-                'data' => $data,
-                'mime_type' => $mimeType,
-            ]);
-        }
-
-        return new self(self::TYPE_DOCUMENT, [
-            'data' => $data,
-            'mime_type' => $mimeType,
-        ]);
-    }
-
-    /**
      * Creates a content part from a Google Cloud Storage URI.
      *
      * This is primarily supported by Google Vertex AI provider.
@@ -342,15 +284,6 @@ class ContentPart {
     }
 
     /**
-     * Returns the content type.
-     *
-     * @return string One of the TYPE_* constants.
-     */
-    public function getType(): string {
-        return $this->type;
-    }
-
-    /**
      * Returns the content data.
      *
      * The structure depends on the content type:
@@ -364,97 +297,6 @@ class ContentPart {
      */
     public function getData(): array {
         return $this->data;
-    }
-
-    /**
-     * Checks if this content part is text.
-     *
-     * @return bool True if this is a text content part.
-     */
-    public function isText(): bool {
-        return $this->type === self::TYPE_TEXT;
-    }
-
-    /**
-     * Checks if this content part is an image.
-     *
-     * @return bool True if this is any type of image content part.
-     */
-    public function isImage(): bool {
-        if ($this->type === self::TYPE_IMAGE_URL || $this->type === self::TYPE_IMAGE_BASE64) {
-            return true;
-        }
-
-        if ($this->type === self::TYPE_FILE_GCS || $this->type === self::TYPE_DOCUMENT) {
-            $mimeType = $this->data['mime_type'] ?? '';
-
-            return in_array($mimeType, self::IMAGE_MIME_TYPES, true);
-        }
-
-        return false;
-    }
-
-    /**
-     * Checks if this content part is a document (PDF, Office, text, etc.).
-     *
-     * @return bool True if this is a document content part.
-     */
-    public function isDocument(): bool {
-        if ($this->type === self::TYPE_DOCUMENT || $this->type === self::TYPE_FILE_GCS) {
-            $mimeType = $this->data['mime_type'] ?? '';
-
-            return in_array($mimeType, self::DOCUMENT_MIME_TYPES, true);
-        }
-
-        return false;
-    }
-
-    /**
-     * Checks if this content part is audio.
-     *
-     * @return bool True if this is an audio content part.
-     */
-    public function isAudio(): bool {
-        if ($this->type === self::TYPE_DOCUMENT || $this->type === self::TYPE_FILE_GCS) {
-            $mimeType = $this->data['mime_type'] ?? '';
-
-            return in_array($mimeType, self::AUDIO_MIME_TYPES, true);
-        }
-
-        return false;
-    }
-
-    /**
-     * Checks if this content part is video.
-     *
-     * @return bool True if this is a video content part.
-     */
-    public function isVideo(): bool {
-        if ($this->type === self::TYPE_DOCUMENT || $this->type === self::TYPE_FILE_GCS) {
-            $mimeType = $this->data['mime_type'] ?? '';
-
-            return in_array($mimeType, self::VIDEO_MIME_TYPES, true);
-        }
-
-        return false;
-    }
-
-    /**
-     * Checks if this content part is a media file (image, audio, or video).
-     *
-     * @return bool True if this is a media content part.
-     */
-    public function isMedia(): bool {
-        return $this->isImage() || $this->isAudio() || $this->isVideo();
-    }
-
-    /**
-     * Returns the text content if this is a text part.
-     *
-     * @return string|null The text content, or null if not a text part.
-     */
-    public function getText(): ?string {
-        return $this->data['text'] ?? null;
     }
 
     /**
@@ -478,6 +320,163 @@ class ContentPart {
             self::AUDIO_MIME_TYPES,
             self::VIDEO_MIME_TYPES
         );
+    }
+
+    /**
+     * Returns the text content if this is a text part.
+     *
+     * @return string|null The text content, or null if not a text part.
+     */
+    public function getText(): ?string {
+        return $this->data['text'] ?? null;
+    }
+
+    /**
+     * Returns the content type.
+     *
+     * @return string One of the TYPE_* constants.
+     */
+    public function getType(): string {
+        return $this->type;
+    }
+
+    /**
+     * Creates an image content part from base64-encoded data.
+     *
+     * @param string $data The base64-encoded image data.
+     * @param string $mimeType The image MIME type (e.g., 'image/png').
+     *
+     * @return self A new base64 image content part.
+     *
+     * @throws InvalidArgumentException If the MIME type is not a supported image type.
+     */
+    public static function imageBase64(string $data, string $mimeType): self {
+        if (!in_array($mimeType, self::IMAGE_MIME_TYPES, true)) {
+            $supported = implode(', ', self::IMAGE_MIME_TYPES);
+
+            throw new InvalidArgumentException(
+                "Unsupported image MIME type: {$mimeType}. Supported types: {$supported}"
+            );
+        }
+
+        return new self(self::TYPE_IMAGE_BASE64, [
+            'data' => $data,
+            'mime_type' => $mimeType,
+        ]);
+    }
+
+    /**
+     * Creates an image content part from a URL.
+     *
+     * @param string $url The image URL (http:// or https://).
+     *
+     * @return self A new image URL content part.
+     *
+     * @throws InvalidArgumentException If the URL is invalid.
+     */
+    public static function imageUrl(string $url): self {
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+            throw new InvalidArgumentException("Invalid image URL: {$url}");
+        }
+
+        if (!str_starts_with($url, 'http://') && !str_starts_with($url, 'https://')) {
+            throw new InvalidArgumentException("Image URL must use http:// or https:// scheme: {$url}");
+        }
+
+        return new self(self::TYPE_IMAGE_URL, ['url' => $url]);
+    }
+
+    /**
+     * Checks if this content part is audio.
+     *
+     * @return bool True if this is an audio content part.
+     */
+    public function isAudio(): bool {
+        if ($this->type === self::TYPE_DOCUMENT || $this->type === self::TYPE_FILE_GCS) {
+            $mimeType = $this->data['mime_type'] ?? '';
+
+            return in_array($mimeType, self::AUDIO_MIME_TYPES, true);
+        }
+
+        return false;
+    }
+
+    /**
+     * Checks if this content part is a document (PDF, Office, text, etc.).
+     *
+     * @return bool True if this is a document content part.
+     */
+    public function isDocument(): bool {
+        if ($this->type === self::TYPE_DOCUMENT || $this->type === self::TYPE_FILE_GCS) {
+            $mimeType = $this->data['mime_type'] ?? '';
+
+            return in_array($mimeType, self::DOCUMENT_MIME_TYPES, true);
+        }
+
+        return false;
+    }
+
+    /**
+     * Checks if this content part is an image.
+     *
+     * @return bool True if this is any type of image content part.
+     */
+    public function isImage(): bool {
+        if ($this->type === self::TYPE_IMAGE_URL || $this->type === self::TYPE_IMAGE_BASE64) {
+            return true;
+        }
+
+        if ($this->type === self::TYPE_FILE_GCS || $this->type === self::TYPE_DOCUMENT) {
+            $mimeType = $this->data['mime_type'] ?? '';
+
+            return in_array($mimeType, self::IMAGE_MIME_TYPES, true);
+        }
+
+        return false;
+    }
+
+    /**
+     * Checks if this content part is a media file (image, audio, or video).
+     *
+     * @return bool True if this is a media content part.
+     */
+    public function isMedia(): bool {
+        return $this->isImage() || $this->isAudio() || $this->isVideo();
+    }
+
+    /**
+     * Checks if this content part is text.
+     *
+     * @return bool True if this is a text content part.
+     */
+    public function isText(): bool {
+        return $this->type === self::TYPE_TEXT;
+    }
+
+    /**
+     * Checks if this content part is video.
+     *
+     * @return bool True if this is a video content part.
+     */
+    public function isVideo(): bool {
+        if ($this->type === self::TYPE_DOCUMENT || $this->type === self::TYPE_FILE_GCS) {
+            $mimeType = $this->data['mime_type'] ?? '';
+
+            return in_array($mimeType, self::VIDEO_MIME_TYPES, true);
+        }
+
+        return false;
+    }
+
+    /**
+     * Creates a text content part.
+     *
+     * @param string $text The text content.
+     *
+     * @return self A new text content part.
+     */
+    public static function text(string $text): self {
+        return new self(self::TYPE_TEXT, ['text' => $text]);
     }
 
     /**

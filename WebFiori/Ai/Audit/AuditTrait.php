@@ -126,42 +126,6 @@ trait AuditTrait {
     }
 
     /**
-     * Sets the redaction service for sanitizing audit entries.
-     *
-     * @param RedactionService|null $service The redaction service.
-     */
-    protected function setAuditRedactionService(?RedactionService $service): void {
-        $this->auditRedactionService = $service;
-    }
-
-    /**
-     * Initializes the audit trait default values.
-     *
-     * Must be called from the class constructor.
-     */
-    protected function initAuditTrait(): void {
-        $this->auditConfig = new AuditConfig();
-        $this->auditContext = [];
-    }
-
-    /**
-     * Emits a structured audit entry.
-     *
-     * @param array<string, mixed> $entry The audit entry to emit.
-     */
-    protected function emitAudit(array $entry): void {
-        if ($this->auditCallback === null) {
-            return;
-        }
-
-        if ($this->auditRedactionService !== null) {
-            $entry = $this->auditRedactionService->redactContext($entry);
-        }
-
-        ($this->auditCallback)($entry);
-    }
-
-    /**
      * Builds the base fields shared by all audit entries.
      *
      * @param string $requestId The unique request identifier.
@@ -190,6 +154,33 @@ trait AuditTrait {
     }
 
     /**
+     * Emits a structured audit entry.
+     *
+     * @param array<string, mixed> $entry The audit entry to emit.
+     */
+    protected function emitAudit(array $entry): void {
+        if ($this->auditCallback === null) {
+            return;
+        }
+
+        if ($this->auditRedactionService !== null) {
+            $entry = $this->auditRedactionService->redactContext($entry);
+        }
+
+        ($this->auditCallback)($entry);
+    }
+
+    /**
+     * Initializes the audit trait default values.
+     *
+     * Must be called from the class constructor.
+     */
+    protected function initAuditTrait(): void {
+        $this->auditConfig = new AuditConfig();
+        $this->auditContext = [];
+    }
+
+    /**
      * Serializes messages for inclusion in an audit entry.
      *
      * @param Message[] $messages The messages to serialize.
@@ -201,5 +192,14 @@ trait AuditTrait {
             'role' => $m->getRole(),
             'content' => $m->getContent(),
         ], $messages);
+    }
+
+    /**
+     * Sets the redaction service for sanitizing audit entries.
+     *
+     * @param RedactionService|null $service The redaction service.
+     */
+    protected function setAuditRedactionService(?RedactionService $service): void {
+        $this->auditRedactionService = $service;
     }
 }

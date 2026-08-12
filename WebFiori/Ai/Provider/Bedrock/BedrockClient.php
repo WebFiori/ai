@@ -193,7 +193,7 @@ class BedrockClient extends AbstractClient {
             $headers = $this->getBedrockHeaders('GET', $url, '');
             $headers['Accept'] = 'application/json';
 
-            $request = new \WebFiori\Ai\Http\HttpRequest('GET', $url, $headers, '');
+            $request = new HttpRequest('GET', $url, $headers, '');
 
             $httpClient = new \WebFiori\Ai\Http\CurlHttpClient($timeout, $timeout);
             $response = $httpClient->send($request);

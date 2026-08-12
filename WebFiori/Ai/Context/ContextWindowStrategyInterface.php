@@ -24,6 +24,12 @@ use WebFiori\Ai\Tool\ToolInterface;
  */
 interface ContextWindowStrategyInterface {
     /**
+     * Returns the number of tokens reserved for the completion response.
+     *
+     * @return int Tokens reserved for output.
+     */
+    public function getReservedTokens(): int;
+    /**
      * Truncates messages to fit within the token limit.
      *
      * @param Message[] $messages The conversation messages.
@@ -36,11 +42,4 @@ interface ContextWindowStrategyInterface {
      *         does not support truncation and limit is exceeded.
      */
     public function truncate(array $messages, int $maxTokens, array $tools = []): array;
-
-    /**
-     * Returns the number of tokens reserved for the completion response.
-     *
-     * @return int Tokens reserved for output.
-     */
-    public function getReservedTokens(): int;
 }

@@ -67,7 +67,7 @@ class OpenAIClient extends AbstractClient {
         $checkMethod = 'models_list';
 
         try {
-            $request = new \WebFiori\Ai\Http\HttpRequest(
+            $request = new HttpRequest(
                 'GET',
                 $this->getEndpoint('/models'),
                 $this->getHeaders(),
@@ -131,56 +131,6 @@ class OpenAIClient extends AbstractClient {
         if (isset($options['tools']) && count($options['tools']) > 0) {
             $body['tools'] = $this->formatTools($options['tools']);
         }
-    }
-
-    /**
-     * Formats Message objects into the OpenAI messages format.
-     *
-     * @param Message[] $messages The messages to format.
-     * @param array<string, mixed> $options Request options (may contain 'detail' for images).
-     *
-     * @return array<int, array<string, mixed>> The formatted messages array.
-     */
-    private function formatMessages(array $messages, array $options = []): array {
-        $formatted = [];
-        $imageDetail = $options['detail'] ?? 'auto';
-
-        foreach ($messages as $message) {
-            $entry = [
-                'role' => $message->getRole(),
-            ];
-
-            // Handle multi-modal content
-            if ($message->isMultiModal()) {
-                $entry['content'] = $this->formatContentParts($message->getContentParts(), $imageDetail);
-            } else {
-                $entry['content'] = $message->getContent();
-            }
-
-            if ($message->hasToolCalls()) {
-                $entry['tool_calls'] = [];
-
-                foreach ($message->getToolCalls() as $toolCall) {
-                    $entry['tool_calls'][] = [
-                        'id' => $toolCall->getId(),
-                        'type' => 'function',
-                        'function' => [
-                            'name' => $toolCall->getName(),
-                            'arguments' => json_encode($toolCall->getArguments()),
-                        ],
-                    ];
-                }
-            }
-
-            if ($message->getToolResult() !== null) {
-                $entry['tool_call_id'] = $message->getToolResult()->getToolCallId();
-                $entry['content'] = $message->getToolResult()->getContent();
-            }
-
-            $formatted[] = $entry;
-        }
-
-        return $formatted;
     }
 
     /**
@@ -287,6 +237,56 @@ class OpenAIClient extends AbstractClient {
 
                     break;
             }
+        }
+
+        return $formatted;
+    }
+
+    /**
+     * Formats Message objects into the OpenAI messages format.
+     *
+     * @param Message[] $messages The messages to format.
+     * @param array<string, mixed> $options Request options (may contain 'detail' for images).
+     *
+     * @return array<int, array<string, mixed>> The formatted messages array.
+     */
+    private function formatMessages(array $messages, array $options = []): array {
+        $formatted = [];
+        $imageDetail = $options['detail'] ?? 'auto';
+
+        foreach ($messages as $message) {
+            $entry = [
+                'role' => $message->getRole(),
+            ];
+
+            // Handle multi-modal content
+            if ($message->isMultiModal()) {
+                $entry['content'] = $this->formatContentParts($message->getContentParts(), $imageDetail);
+            } else {
+                $entry['content'] = $message->getContent();
+            }
+
+            if ($message->hasToolCalls()) {
+                $entry['tool_calls'] = [];
+
+                foreach ($message->getToolCalls() as $toolCall) {
+                    $entry['tool_calls'][] = [
+                        'id' => $toolCall->getId(),
+                        'type' => 'function',
+                        'function' => [
+                            'name' => $toolCall->getName(),
+                            'arguments' => json_encode($toolCall->getArguments()),
+                        ],
+                    ];
+                }
+            }
+
+            if ($message->getToolResult() !== null) {
+                $entry['tool_call_id'] = $message->getToolResult()->getToolCallId();
+                $entry['content'] = $message->getToolResult()->getContent();
+            }
+
+            $formatted[] = $entry;
         }
 
         return $formatted;

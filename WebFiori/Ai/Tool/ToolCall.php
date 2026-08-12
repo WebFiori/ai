@@ -91,20 +91,20 @@ class ToolCall {
     }
 
     /**
-     * Sets the raw provider-specific part data for this tool call.
-     *
-     * @param array<string, mixed> $part The raw part from the provider response.
-     */
-    public function setRawPart(array $part): void {
-        $this->rawPart = $part;
-    }
-
-    /**
      * Returns the raw provider-specific part data, or null if not set.
      *
      * @return array<string, mixed>|null
      */
     public function getRawPart(): ?array {
         return $this->rawPart;
+    }
+
+    /**
+     * Sets the raw provider-specific part data for this tool call.
+     *
+     * @param array<string, mixed> $part The raw part from the provider response.
+     */
+    public function setRawPart(array $part): void {
+        $this->rawPart = $part;
     }
 }

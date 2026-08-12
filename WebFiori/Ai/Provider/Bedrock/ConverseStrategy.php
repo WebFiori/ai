@@ -305,76 +305,34 @@ class ConverseStrategy implements InvocationStrategyInterface {
     }
 
     /**
-     * Formats messages for the Converse API format.
+     * Fetches a file from a URL and returns base64-encoded data.
      *
-     * @param Message[] $messages The messages to format.
+     * @param string $url The file URL.
      *
-     * @return array Formatted messages array.
+     * @return array{mime_type: string, data: string}|null The file data or null on failure.
      */
-    private function formatMessages(array $messages): array {
-        $formatted = [];
+    private function fetchFileFromUrl(string $url): ?array {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 30,
+                'user_agent' => 'WebFiori-AI/1.0',
+            ],
+        ]);
 
-        foreach ($messages as $message) {
-            if ($message->getRole() === 'system') {
-                continue;
-            }
+        $content = @file_get_contents($url, false, $context);
 
-            if ($message->getToolResult() !== null) {
-                $formatted[] = [
-                    'role' => 'user',
-                    'content' => [[
-                        'toolResult' => [
-                            'toolUseId' => $message->getToolResult()->getToolCallId(),
-                            'content' => [['text' => $message->getToolResult()->getContent()]],
-                        ],
-                    ]],
-                ];
-
-                continue;
-            }
-
-            if ($message->hasToolCalls()) {
-                $content = [];
-
-                // Handle multi-modal content
-                if ($message->isMultiModal()) {
-                    $content = array_merge($content, $this->formatContentParts($message->getContentParts()));
-                } elseif (!empty($message->getContent())) {
-                    $content[] = ['text' => $message->getContent()];
-                }
-
-                foreach ($message->getToolCalls() as $toolCall) {
-                    $content[] = [
-                        'toolUse' => [
-                            'toolUseId' => $toolCall->getId(),
-                            'name' => $toolCall->getName(),
-                            'input' => $toolCall->getArguments(),
-                        ],
-                    ];
-                }
-
-                $formatted[] = ['role' => 'assistant', 'content' => $content];
-
-                continue;
-            }
-
-            // Handle multi-modal messages
-            if ($message->isMultiModal()) {
-                $formatted[] = [
-                    'role' => $message->getRole(),
-                    'content' => $this->formatContentParts($message->getContentParts()),
-                ];
-
-                continue;
-            }
-
-            $formatted[] = [
-                'role' => $message->getRole(),
-                'content' => [['text' => $message->getContent()]],
-            ];
+        if ($content === false) {
+            return null;
         }
 
-        return $formatted;
+        // Detect MIME type from content
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo->buffer($content);
+
+        return [
+            'mime_type' => $mimeType,
+            'data' => base64_encode($content),
+        ];
     }
 
     /**
@@ -498,51 +456,76 @@ class ConverseStrategy implements InvocationStrategyInterface {
     }
 
     /**
-     * Converts MIME type to Bedrock image format.
+     * Formats messages for the Converse API format.
      *
-     * @param string $mimeType The MIME type.
+     * @param Message[] $messages The messages to format.
      *
-     * @return string The Bedrock format string.
+     * @return array Formatted messages array.
      */
-    private function mimeToFormat(string $mimeType): string {
-        return match ($mimeType) {
-            'image/jpeg' => 'jpeg',
-            'image/png' => 'png',
-            'image/gif' => 'gif',
-            'image/webp' => 'webp',
-            default => 'jpeg',
-        };
-    }
+    private function formatMessages(array $messages): array {
+        $formatted = [];
 
-    /**
-     * Fetches a file from a URL and returns base64-encoded data.
-     *
-     * @param string $url The file URL.
-     *
-     * @return array{mime_type: string, data: string}|null The file data or null on failure.
-     */
-    private function fetchFileFromUrl(string $url): ?array {
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 30,
-                'user_agent' => 'WebFiori-AI/1.0',
-            ],
-        ]);
+        foreach ($messages as $message) {
+            if ($message->getRole() === 'system') {
+                continue;
+            }
 
-        $content = @file_get_contents($url, false, $context);
+            if ($message->getToolResult() !== null) {
+                $formatted[] = [
+                    'role' => 'user',
+                    'content' => [[
+                        'toolResult' => [
+                            'toolUseId' => $message->getToolResult()->getToolCallId(),
+                            'content' => [['text' => $message->getToolResult()->getContent()]],
+                        ],
+                    ]],
+                ];
 
-        if ($content === false) {
-            return null;
+                continue;
+            }
+
+            if ($message->hasToolCalls()) {
+                $content = [];
+
+                // Handle multi-modal content
+                if ($message->isMultiModal()) {
+                    $content = array_merge($content, $this->formatContentParts($message->getContentParts()));
+                } elseif (!empty($message->getContent())) {
+                    $content[] = ['text' => $message->getContent()];
+                }
+
+                foreach ($message->getToolCalls() as $toolCall) {
+                    $content[] = [
+                        'toolUse' => [
+                            'toolUseId' => $toolCall->getId(),
+                            'name' => $toolCall->getName(),
+                            'input' => $toolCall->getArguments(),
+                        ],
+                    ];
+                }
+
+                $formatted[] = ['role' => 'assistant', 'content' => $content];
+
+                continue;
+            }
+
+            // Handle multi-modal messages
+            if ($message->isMultiModal()) {
+                $formatted[] = [
+                    'role' => $message->getRole(),
+                    'content' => $this->formatContentParts($message->getContentParts()),
+                ];
+
+                continue;
+            }
+
+            $formatted[] = [
+                'role' => $message->getRole(),
+                'content' => [['text' => $message->getContent()]],
+            ];
         }
 
-        // Detect MIME type from content
-        $finfo = new \finfo(FILEINFO_MIME_TYPE);
-        $mimeType = $finfo->buffer($content);
-
-        return [
-            'mime_type' => $mimeType,
-            'data' => base64_encode($content),
-        ];
+        return $formatted;
     }
 
     /**
@@ -581,6 +564,23 @@ class ConverseStrategy implements InvocationStrategyInterface {
             'max_tokens' => 'length',
             'tool_use' => 'tool_calls',
             default => 'stop',
+        };
+    }
+
+    /**
+     * Converts MIME type to Bedrock image format.
+     *
+     * @param string $mimeType The MIME type.
+     *
+     * @return string The Bedrock format string.
+     */
+    private function mimeToFormat(string $mimeType): string {
+        return match ($mimeType) {
+            'image/jpeg' => 'jpeg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'image/webp' => 'webp',
+            default => 'jpeg',
         };
     }
 }

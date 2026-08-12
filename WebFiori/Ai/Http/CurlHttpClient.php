@@ -33,6 +33,27 @@ class CurlHttpClient implements HttpClientInterface {
     private int $connectTimeout;
 
     /**
+     * The host of the last request (for connection reuse validation).
+     *
+     * @var string|null
+     */
+    private ?string $lastHost = null;
+
+    /**
+     * Persistent cURL handle for connection reuse.
+     *
+     * @var \CurlHandle|null
+     */
+    private ?\CurlHandle $persistentHandle = null;
+
+    /**
+     * Whether connection reuse is enabled.
+     *
+     * @var bool
+     */
+    private bool $reuseConnection = false;
+
+    /**
      * Request timeout in seconds.
      *
      * @var int
@@ -45,27 +66,6 @@ class CurlHttpClient implements HttpClientInterface {
      * @var bool
      */
     private bool $verifySsl;
-
-    /**
-     * Whether connection reuse is enabled.
-     *
-     * @var bool
-     */
-    private bool $reuseConnection = false;
-
-    /**
-     * Persistent cURL handle for connection reuse.
-     *
-     * @var \CurlHandle|null
-     */
-    private ?\CurlHandle $persistentHandle = null;
-
-    /**
-     * The host of the last request (for connection reuse validation).
-     *
-     * @var string|null
-     */
-    private ?string $lastHost = null;
 
     /**
      * Creates a new CurlHttpClient instance.
@@ -86,6 +86,20 @@ class CurlHttpClient implements HttpClientInterface {
      */
     public function __destruct() {
         $this->closeConnection();
+    }
+
+    /**
+     * Closes the persistent connection if open.
+     *
+     * Call this when done with multiple requests to release resources.
+     * The connection will be automatically closed when the client is destroyed.
+     */
+    public function closeConnection(): void {
+        if ($this->persistentHandle !== null) {
+            curl_close($this->persistentHandle);
+            $this->persistentHandle = null;
+            $this->lastHost = null;
+        }
     }
 
     /**
@@ -117,29 +131,6 @@ class CurlHttpClient implements HttpClientInterface {
     }
 
     /**
-     * Returns whether connection reuse is enabled.
-     *
-     * @return bool True if connection reuse is enabled.
-     */
-    public function isConnectionReuseEnabled(): bool {
-        return $this->reuseConnection;
-    }
-
-    /**
-     * Closes the persistent connection if open.
-     *
-     * Call this when done with multiple requests to release resources.
-     * The connection will be automatically closed when the client is destroyed.
-     */
-    public function closeConnection(): void {
-        if ($this->persistentHandle !== null) {
-            curl_close($this->persistentHandle);
-            $this->persistentHandle = null;
-            $this->lastHost = null;
-        }
-    }
-
-    /**
      * Returns the connection timeout in seconds.
      *
      * @return int The connection timeout value.
@@ -167,6 +158,15 @@ class CurlHttpClient implements HttpClientInterface {
     }
 
     /**
+     * Returns whether connection reuse is enabled.
+     *
+     * @return bool True if connection reuse is enabled.
+     */
+    public function isConnectionReuseEnabled(): bool {
+        return $this->reuseConnection;
+    }
+
+    /**
      * Sends an HTTP request and returns the full response.
      *
      * @param HttpRequest $request The request to send.
@@ -180,7 +180,8 @@ class CurlHttpClient implements HttpClientInterface {
         $responseHeaders = [];
 
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $headerLine) use (&$responseHeaders) {
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $headerLine) use (&$responseHeaders)
+        {
             $parts = explode(':', $headerLine, 2);
 
             if (count($parts) === 2) {
@@ -204,7 +205,7 @@ class CurlHttpClient implements HttpClientInterface {
             }
 
             throw new HttpException(
-                'cURL request failed: ' . $errorMessage,
+                'cURL request failed: '.$errorMessage,
                 $errorCode
             );
         }
@@ -316,6 +317,44 @@ class CurlHttpClient implements HttpClientInterface {
     }
 
     /**
+     * Configures a cURL handle with the request parameters.
+     *
+     * @param \CurlHandle $ch The cURL handle to configure.
+     * @param HttpRequest $request The HTTP request.
+     */
+    private function configureHandle(\CurlHandle $ch, HttpRequest $request): void {
+        curl_setopt($ch, CURLOPT_URL, $request->getUrl());
+        curl_setopt($ch, CURLOPT_TIMEOUT, $this->timeout);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $this->connectTimeout);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $this->verifySsl);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $this->verifySsl ? 2 : 0);
+
+        $method = $request->getMethod();
+
+        if ($method === 'POST') {
+            curl_setopt($ch, CURLOPT_POST, true);
+        } elseif ($method !== 'GET') {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+        }
+
+        $body = $request->getBody();
+
+        if ($body !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+        }
+
+        $headers = [];
+
+        foreach ($request->getHeaders() as $name => $value) {
+            $headers[] = $name.': '.$value;
+        }
+
+        if (!empty($headers)) {
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        }
+    }
+
+    /**
      * Creates and configures a cURL handle for the given request.
      *
      * @param HttpRequest $request The HTTP request to configure the handle for.
@@ -359,7 +398,7 @@ class CurlHttpClient implements HttpClientInterface {
 
         // Extract host from URL
         $parsedUrl = parse_url($request->getUrl());
-        $currentHost = ($parsedUrl['scheme'] ?? 'https') . '://' . ($parsedUrl['host'] ?? '');
+        $currentHost = ($parsedUrl['scheme'] ?? 'https').'://'.($parsedUrl['host'] ?? '');
 
         // If host changed or no handle exists, create new one
         if ($this->persistentHandle === null || $this->lastHost !== $currentHost) {
@@ -378,43 +417,5 @@ class CurlHttpClient implements HttpClientInterface {
         }
 
         return $this->persistentHandle;
-    }
-
-    /**
-     * Configures a cURL handle with the request parameters.
-     *
-     * @param \CurlHandle $ch The cURL handle to configure.
-     * @param HttpRequest $request The HTTP request.
-     */
-    private function configureHandle(\CurlHandle $ch, HttpRequest $request): void {
-        curl_setopt($ch, CURLOPT_URL, $request->getUrl());
-        curl_setopt($ch, CURLOPT_TIMEOUT, $this->timeout);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $this->connectTimeout);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $this->verifySsl);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $this->verifySsl ? 2 : 0);
-
-        $method = $request->getMethod();
-
-        if ($method === 'POST') {
-            curl_setopt($ch, CURLOPT_POST, true);
-        } elseif ($method !== 'GET') {
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
-        }
-
-        $body = $request->getBody();
-
-        if ($body !== null) {
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        }
-
-        $headers = [];
-
-        foreach ($request->getHeaders() as $name => $value) {
-            $headers[] = $name . ': ' . $value;
-        }
-
-        if (!empty($headers)) {
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        }
     }
 }

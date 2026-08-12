@@ -43,9 +43,9 @@ echo "   ✅ Available: false, Error: Connection refused\n\n";
 
 // Test 3: Checked at timestamp
 echo "3. getCheckedAt() returns current time\n";
-$before = new \DateTimeImmutable();
+$before = new DateTimeImmutable();
 $result = HealthCheckResult::success(10, 'test');
-$after = new \DateTimeImmutable();
+$after = new DateTimeImmutable();
 
 assert($result->getCheckedAt()->getTimestamp() >= $before->getTimestamp());
 assert($result->getCheckedAt()->getTimestamp() <= $after->getTimestamp());
@@ -54,7 +54,7 @@ echo "   ✅ Timestamp: ".$result->getCheckedAt()->format('Y-m-d H:i:s')."\n\n";
 
 // Test 4: healthCheck is on ProviderInterface
 echo "4. healthCheck() is part of ProviderInterface\n";
-$reflection = new \ReflectionClass(ProviderInterface::class);
+$reflection = new ReflectionClass(ProviderInterface::class);
 assert($reflection->hasMethod('healthCheck'), 'healthCheck must be on interface');
 
 $method = $reflection->getMethod('healthCheck');
@@ -79,7 +79,7 @@ try {
     if (!$result->isAvailable()) {
         echo "   Error: ".$result->getError()."\n";
     }
-} catch (\Throwable $e) {
+} catch (Throwable $e) {
     echo "   ❌ Should not throw: ".$e->getMessage()."\n";
     exit(1);
 }

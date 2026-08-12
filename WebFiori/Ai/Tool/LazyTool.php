@@ -36,25 +36,11 @@ namespace WebFiori\Ai\Tool;
  */
 class LazyTool implements ToolInterface {
     /**
-     * Tool name.
-     *
-     * @var string
-     */
-    private string $name;
-
-    /**
      * Tool description.
      *
      * @var string
      */
     private string $description;
-
-    /**
-     * Tool parameters schema.
-     *
-     * @var array<string, mixed>
-     */
-    private array $parameters;
 
     /**
      * Factory closure that creates the actual tool.
@@ -64,18 +50,31 @@ class LazyTool implements ToolInterface {
     private \Closure $factory;
 
     /**
-     * Cached tool instance after first execution.
-     *
-     * @var ToolInterface|null
-     */
-    private ?ToolInterface $instance = null;
-
-    /**
      * Optional callable handler for simple cases.
      *
      * @var callable|null
      */
     private $handler = null;
+
+    /**
+     * Cached tool instance after first execution.
+     *
+     * @var ToolInterface|null
+     */
+    private ?ToolInterface $instance = null;
+    /**
+     * Tool name.
+     *
+     * @var string
+     */
+    private string $name;
+
+    /**
+     * Tool parameters schema.
+     *
+     * @var array<string, mixed>
+     */
+    private array $parameters;
 
     /**
      * Creates a new LazyTool instance.
@@ -97,33 +96,6 @@ class LazyTool implements ToolInterface {
         $this->description = $description;
         $this->parameters = $parameters;
         $this->factory = $factory;
-    }
-
-    /**
-     * Returns the unique name of the tool.
-     *
-     * @return string The tool name.
-     */
-    public function getName(): string {
-        return $this->name;
-    }
-
-    /**
-     * Returns a description of what the tool does.
-     *
-     * @return string The tool description.
-     */
-    public function getDescription(): string {
-        return $this->description;
-    }
-
-    /**
-     * Returns the JSON Schema definition for the tool's parameters.
-     *
-     * @return array<string, mixed> The parameter schema.
-     */
-    public function getParameters(): array {
-        return $this->parameters;
     }
 
     /**
@@ -151,12 +123,30 @@ class LazyTool implements ToolInterface {
     }
 
     /**
-     * Checks if the tool has been initialized.
+     * Returns a description of what the tool does.
      *
-     * @return bool True if the factory has been invoked.
+     * @return string The tool description.
      */
-    public function isInitialized(): bool {
-        return $this->instance !== null || $this->handler !== null;
+    public function getDescription(): string {
+        return $this->description;
+    }
+
+    /**
+     * Returns the unique name of the tool.
+     *
+     * @return string The tool name.
+     */
+    public function getName(): string {
+        return $this->name;
+    }
+
+    /**
+     * Returns the JSON Schema definition for the tool's parameters.
+     *
+     * @return array<string, mixed> The parameter schema.
+     */
+    public function getParameters(): array {
+        return $this->parameters;
     }
 
     /**
@@ -167,6 +157,15 @@ class LazyTool implements ToolInterface {
      */
     public function initialize(): void {
         $this->ensureInitialized();
+    }
+
+    /**
+     * Checks if the tool has been initialized.
+     *
+     * @return bool True if the factory has been invoked.
+     */
+    public function isInitialized(): bool {
+        return $this->instance !== null || $this->handler !== null;
     }
 
     /**
@@ -185,7 +184,7 @@ class LazyTool implements ToolInterface {
             $this->handler = $result;
         } else {
             throw new \RuntimeException(
-                "LazyTool factory must return a ToolInterface or callable, got " . gettype($result)
+                "LazyTool factory must return a ToolInterface or callable, got ".gettype($result)
             );
         }
     }

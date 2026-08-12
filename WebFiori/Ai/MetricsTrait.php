@@ -54,12 +54,21 @@ trait MetricsTrait {
     }
 
     /**
-     * Sets the redaction service for metric data sanitization.
+     * Builds the base data payload included in every metric event.
      *
-     * @param RedactionService|null $service The redaction service, or null to disable.
+     * @param string $requestId The unique request identifier.
+     * @param string $provider The provider name.
+     * @param string|null $model The model name.
+     *
+     * @return array<string, mixed> Base data array.
      */
-    protected function setMetricsRedactionService(?RedactionService $service): void {
-        $this->metricsRedactionService = $service;
+    protected function buildBaseMetricData(string $requestId, string $provider, ?string $model): array {
+        return [
+            'timestamp' => (int) (microtime(true) * 1000),
+            'request_id' => $requestId,
+            'provider' => $provider,
+            'model' => $model,
+        ];
     }
 
     /**
@@ -81,20 +90,11 @@ trait MetricsTrait {
     }
 
     /**
-     * Builds the base data payload included in every metric event.
+     * Sets the redaction service for metric data sanitization.
      *
-     * @param string $requestId The unique request identifier.
-     * @param string $provider The provider name.
-     * @param string|null $model The model name.
-     *
-     * @return array<string, mixed> Base data array.
+     * @param RedactionService|null $service The redaction service, or null to disable.
      */
-    protected function buildBaseMetricData(string $requestId, string $provider, ?string $model): array {
-        return [
-            'timestamp' => (int) (microtime(true) * 1000),
-            'request_id' => $requestId,
-            'provider' => $provider,
-            'model' => $model,
-        ];
+    protected function setMetricsRedactionService(?RedactionService $service): void {
+        $this->metricsRedactionService = $service;
     }
 }

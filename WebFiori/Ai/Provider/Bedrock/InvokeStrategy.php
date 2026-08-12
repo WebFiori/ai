@@ -302,6 +302,93 @@ class InvokeStrategy implements InvocationStrategyInterface {
     }
 
     /**
+     * Builds the request body for Llama/Mistral models via Invoke.
+     *
+     * Llama/Mistral models use text-only prompt format and do not support
+     * multi-modal content. If multi-modal messages are passed, only the
+     * text content will be used.
+     *
+     * @param Message[] $messages The messages.
+     * @param int $maxTokens Max tokens.
+     * @param array $options Request options.
+     *
+     * @return array The request body.
+     */
+    private function buildLlamaBody(array $messages, int $maxTokens, array $options): array {
+        $prompt = '';
+
+        foreach ($messages as $message) {
+            $role = $message->getRole();
+            $content = $message->getContent(); // getText only, images ignored
+
+            if ($role === 'system') {
+                $prompt .= "[INST] <<SYS>>\n$content\n<</SYS>>\n\n";
+            } elseif ($role === 'user') {
+                $prompt .= "$content [/INST]\n";
+            } else {
+                $prompt .= "$content\n[INST] ";
+            }
+        }
+
+        return [
+            'prompt' => $prompt,
+            'max_gen_len' => $maxTokens,
+            'temperature' => $options['temperature'] ?? 0.7,
+        ];
+    }
+
+    /**
+     * Builds the native model body based on the model family.
+     *
+     * @param string $modelId The model ID.
+     * @param Message[] $messages The messages.
+     * @param int $maxTokens Max tokens.
+     * @param array $options Request options.
+     *
+     * @return array The formatted request body.
+     */
+    private function buildModelBody(string $modelId, array $messages, int $maxTokens, array $options): array {
+        $family = $this->getModelFamily($modelId);
+
+        if ($family === 'anthropic') {
+            return $this->buildAnthropicBody($messages, $maxTokens, $options);
+        }
+
+        return $this->buildLlamaBody($messages, $maxTokens, $options);
+    }
+
+    /**
+     * Fetches a file from a URL and returns base64-encoded data.
+     *
+     * @param string $url The file URL.
+     *
+     * @return array{mime_type: string, data: string}|null The file data or null on failure.
+     */
+    private function fetchFileFromUrl(string $url): ?array {
+        $context = stream_context_create([
+            'http' => [
+                'timeout' => 30,
+                'user_agent' => 'WebFiori-AI/1.0',
+            ],
+        ]);
+
+        $content = @file_get_contents($url, false, $context);
+
+        if ($content === false) {
+            return null;
+        }
+
+        // Detect MIME type from content
+        $finfo = new \finfo(FILEINFO_MIME_TYPE);
+        $mimeType = $finfo->buffer($content);
+
+        return [
+            'mime_type' => $mimeType,
+            'data' => base64_encode($content),
+        ];
+    }
+
+    /**
      * Formats ContentPart objects into Anthropic content array format.
      *
      * @param \WebFiori\Ai\ContentPart[] $parts The content parts.
@@ -423,93 +510,6 @@ class InvokeStrategy implements InvocationStrategyInterface {
         }
 
         return $formatted;
-    }
-
-    /**
-     * Fetches a file from a URL and returns base64-encoded data.
-     *
-     * @param string $url The file URL.
-     *
-     * @return array{mime_type: string, data: string}|null The file data or null on failure.
-     */
-    private function fetchFileFromUrl(string $url): ?array {
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 30,
-                'user_agent' => 'WebFiori-AI/1.0',
-            ],
-        ]);
-
-        $content = @file_get_contents($url, false, $context);
-
-        if ($content === false) {
-            return null;
-        }
-
-        // Detect MIME type from content
-        $finfo = new \finfo(FILEINFO_MIME_TYPE);
-        $mimeType = $finfo->buffer($content);
-
-        return [
-            'mime_type' => $mimeType,
-            'data' => base64_encode($content),
-        ];
-    }
-
-    /**
-     * Builds the request body for Llama/Mistral models via Invoke.
-     *
-     * Llama/Mistral models use text-only prompt format and do not support
-     * multi-modal content. If multi-modal messages are passed, only the
-     * text content will be used.
-     *
-     * @param Message[] $messages The messages.
-     * @param int $maxTokens Max tokens.
-     * @param array $options Request options.
-     *
-     * @return array The request body.
-     */
-    private function buildLlamaBody(array $messages, int $maxTokens, array $options): array {
-        $prompt = '';
-
-        foreach ($messages as $message) {
-            $role = $message->getRole();
-            $content = $message->getContent(); // getText only, images ignored
-
-            if ($role === 'system') {
-                $prompt .= "[INST] <<SYS>>\n$content\n<</SYS>>\n\n";
-            } elseif ($role === 'user') {
-                $prompt .= "$content [/INST]\n";
-            } else {
-                $prompt .= "$content\n[INST] ";
-            }
-        }
-
-        return [
-            'prompt' => $prompt,
-            'max_gen_len' => $maxTokens,
-            'temperature' => $options['temperature'] ?? 0.7,
-        ];
-    }
-
-    /**
-     * Builds the native model body based on the model family.
-     *
-     * @param string $modelId The model ID.
-     * @param Message[] $messages The messages.
-     * @param int $maxTokens Max tokens.
-     * @param array $options Request options.
-     *
-     * @return array The formatted request body.
-     */
-    private function buildModelBody(string $modelId, array $messages, int $maxTokens, array $options): array {
-        $family = $this->getModelFamily($modelId);
-
-        if ($family === 'anthropic') {
-            return $this->buildAnthropicBody($messages, $maxTokens, $options);
-        }
-
-        return $this->buildLlamaBody($messages, $maxTokens, $options);
     }
 
     /**

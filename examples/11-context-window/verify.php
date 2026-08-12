@@ -41,7 +41,8 @@ $provider->setContextWindowStrategy(new SlidingWindowStrategy(
 ));
 
 $truncationOccurred = false;
-$provider->setLogCallback(function ($level, $message, $context) use (&$truncationOccurred) {
+$provider->setLogCallback(function ($level, $message, $context) use (&$truncationOccurred)
+{
     if ($level === 'warning' && str_contains($message, 'truncation')) {
         $truncationOccurred = true;
     }
