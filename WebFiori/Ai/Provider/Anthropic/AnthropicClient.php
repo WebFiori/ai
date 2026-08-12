@@ -134,6 +134,22 @@ class AnthropicClient extends AbstractClient {
         if (isset($options['tools']) && count($options['tools']) > 0) {
             $body['tools'] = $this->formatTools($options['tools']);
         }
+
+        // Structured output / JSON mode
+        // Anthropic does not have a native JSON mode, so we inject a system
+        // prompt instruction. If json_schema is provided, include the schema.
+        if (isset($options['json_schema'])) {
+            $schemaJson = json_encode($options['json_schema'], JSON_PRETTY_PRINT);
+            $instruction = "Respond with valid JSON only. No explanation, no markdown. Use this schema:\n{$schemaJson}";
+            $body['system'] = isset($body['system'])
+                ? $body['system']."\n\n".$instruction
+                : $instruction;
+        } elseif (!empty($options['json_mode'])) {
+            $instruction = 'Respond with valid JSON only. No explanation, no markdown fences.';
+            $body['system'] = isset($body['system'])
+                ? $body['system']."\n\n".$instruction
+                : $instruction;
+        }
     }
 
     /**
