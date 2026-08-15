@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.5.0](https://github.com/WebFiori/ai/compare/v0.4.9...v0.5.0) (2026-08-15)
+
+
+### Features
+
+* **chat:** Implement structured output / JSON mode ([2e4d110](https://github.com/WebFiori/ai/commit/2e4d1107d221efcb0e7d1ebaae4c35793c9b4453)), closes [#30](https://github.com/WebFiori/ai/issues/30)
+* **rag:** add RAG pipeline with document chunking and vector stores ([bc631d3](https://github.com/WebFiori/ai/commit/bc631d37c405756cece6e86e8428a0d310f5e6a2))
+* **status:** Add real-time status events for progress tracking ([55666ab](https://github.com/WebFiori/ai/commit/55666abaeea2a8918aa330c5e1f1ac02897ed883)), closes [#69](https://github.com/WebFiori/ai/issues/69)
+* **status:** Add StatusMessageFormatter for humanized status messages ([649ad5b](https://github.com/WebFiori/ai/commit/649ad5ba87546b4578146e89c65b3c942c59f659))
+
+
+### Performance Improvements
+
+* Avoid message re-formatting in tool loops and fetch images concurrently ([fd4bc0b](https://github.com/WebFiori/ai/commit/fd4bc0b21a17deadc3b7b4cfd22f4a74dabd94c0))
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#74](https://github.com/WebFiori/ai/issues/74) from WebFiori/dev ([1fd61c1](https://github.com/WebFiori/ai/commit/1fd61c1e4b2cc3afeea1e440194ffb33a8374235))
+* Merge pull request [#79](https://github.com/WebFiori/ai/issues/79) from WebFiori/dev ([3c4acaf](https://github.com/WebFiori/ai/commit/3c4acaf372832e6ace1e3b03cd60969b36541c93))
+
 ## [0.4.9](https://github.com/WebFiori/ai/compare/v0.4.8...v0.4.9) (2026-08-12)
 
 
