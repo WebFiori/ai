@@ -11,9 +11,8 @@
 namespace WebFiori\Ai\Embedding;
 
 use InvalidArgumentException;
-use PDO;
-use PDOException;
 use RuntimeException;
+use SQLite3;
 
 /**
  * SQLite-based persistent vector storage.
@@ -34,11 +33,11 @@ use RuntimeException;
  */
 class SqliteVectorStore implements VectorStorageInterface {
     /**
-     * PDO database connection.
+     * SQLite3 database connection.
      *
-     * @var PDO
+     * @var SQLite3
      */
-    private PDO $db;
+    private SQLite3 $db;
 
     /**
      * Path to the SQLite database file.
@@ -65,7 +64,6 @@ class SqliteVectorStore implements VectorStorageInterface {
 
         $this->databasePath = $databasePath;
 
-        // Ensure directory exists
         $dir = dirname($databasePath);
 
         if ($dir !== '.' && !is_dir($dir)) {
@@ -75,22 +73,27 @@ class SqliteVectorStore implements VectorStorageInterface {
         }
 
         try {
-            $this->db = new PDO("sqlite:{$databasePath}");
-            $this->db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $this->db = new SQLite3($databasePath);
+            $this->db->enableExceptions(true);
 
-            // Enable WAL mode for better concurrent access
             if ($options['wal_mode'] ?? true) {
                 $this->db->exec('PRAGMA journal_mode=WAL');
             }
 
-            // Performance tunings
             $this->db->exec('PRAGMA synchronous=NORMAL');
-            $this->db->exec('PRAGMA cache_size=-64000'); // 64MB cache
+            $this->db->exec('PRAGMA cache_size=-64000');
 
             $this->initializeSchema();
-        } catch (PDOException $e) {
+        } catch (\Exception $e) {
             throw new RuntimeException("Failed to open database: {$e->getMessage()}", 0, $e);
         }
+    }
+
+    /**
+     * Closes the database connection.
+     */
+    public function __destruct() {
+        $this->db->close();
     }
 
     /**
@@ -106,9 +109,7 @@ class SqliteVectorStore implements VectorStorageInterface {
      * @return int The vector count.
      */
     public function count(): int {
-        $stmt = $this->db->query('SELECT COUNT(*) FROM vectors');
-
-        return (int) $stmt->fetchColumn();
+        return (int) $this->db->querySingle('SELECT COUNT(*) FROM vectors');
     }
 
     /**
@@ -119,10 +120,11 @@ class SqliteVectorStore implements VectorStorageInterface {
      * @return bool True if the record was deleted, false if it did not exist.
      */
     public function delete(string $id): bool {
-        $stmt = $this->db->prepare('DELETE FROM vectors WHERE id = ?');
-        $stmt->execute([$id]);
+        $stmt = $this->db->prepare('DELETE FROM vectors WHERE id = :id');
+        $stmt->bindValue(':id', $id, SQLITE3_TEXT);
+        $stmt->execute();
 
-        return $stmt->rowCount() > 0;
+        return $this->db->changes() > 0;
     }
 
     /**
@@ -133,10 +135,11 @@ class SqliteVectorStore implements VectorStorageInterface {
      * @return VectorRecord|null The record, or null if not found.
      */
     public function get(string $id): ?VectorRecord {
-        $stmt = $this->db->prepare('SELECT id, vector, metadata FROM vectors WHERE id = ?');
-        $stmt->execute([$id]);
+        $stmt = $this->db->prepare('SELECT id, vector, metadata FROM vectors WHERE id = :id');
+        $stmt->bindValue(':id', $id, SQLITE3_TEXT);
+        $result = $stmt->execute();
 
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $row = $result->fetchArray(SQLITE3_ASSOC);
 
         if ($row === false) {
             return null;
@@ -172,45 +175,29 @@ class SqliteVectorStore implements VectorStorageInterface {
      * @return VectorRecord[] The most similar records, sorted by score descending.
      */
     public function query(array $vector, int $topK = 10, array $filter = []): array {
-        // Build query with optional metadata filters
         $sql = 'SELECT id, vector, metadata FROM vectors';
-        $params = [];
-        $paramIndex = 0;
 
         if (count($filter) > 0) {
             $conditions = [];
 
             foreach ($filter as $key => $value) {
-                // json_extract returns unquoted strings and raw numbers
-                // We use named parameters to ensure proper type binding
-                $paramName = ':p' . $paramIndex++;
-                $pathName = ':path' . $paramIndex++;
-                $conditions[] = "json_extract(metadata, {$pathName}) = {$paramName}";
-                $params[$pathName] = '$.' . $key;
-                $params[$paramName] = $value;
+                $escapedPath = SQLite3::escapeString('$.' . $key);
+
+                if (is_string($value)) {
+                    $escapedValue = SQLite3::escapeString($value);
+                    $conditions[] = "json_extract(metadata, '{$escapedPath}') = '{$escapedValue}'";
+                } else {
+                    $conditions[] = "json_extract(metadata, '{$escapedPath}') = " . (is_bool($value) ? (int) $value : $value);
+                }
             }
 
             $sql .= ' WHERE ' . implode(' AND ', $conditions);
         }
 
-        $stmt = $this->db->prepare($sql);
-
-        // Bind with explicit types
-        foreach ($params as $name => $value) {
-            if (is_int($value)) {
-                $stmt->bindValue($name, $value, PDO::PARAM_INT);
-            } elseif (is_bool($value)) {
-                $stmt->bindValue($name, $value, PDO::PARAM_BOOL);
-            } else {
-                $stmt->bindValue($name, $value, PDO::PARAM_STR);
-            }
-        }
-
-        $stmt->execute();
-
+        $result = $this->db->query($sql);
         $results = [];
 
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
             $recordVector = json_decode($row['vector'], true);
             $score = $this->cosineSimilarity($vector, $recordVector);
 
@@ -222,7 +209,6 @@ class SqliteVectorStore implements VectorStorageInterface {
             );
         }
 
-        // Sort by score descending
         usort($results, function (VectorRecord $a, VectorRecord $b): int {
             return $b->getScore() <=> $a->getScore();
         });
@@ -240,14 +226,14 @@ class SqliteVectorStore implements VectorStorageInterface {
      * @param array<string, mixed> $metadata Optional metadata key-value pairs.
      */
     public function store(string $id, array $vector, array $metadata = []): void {
-        $sql = 'INSERT OR REPLACE INTO vectors (id, vector, metadata, created_at) VALUES (?, ?, ?, ?)';
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([
-            $id,
-            json_encode($vector),
-            json_encode($metadata, JSON_UNESCAPED_UNICODE),
-            time(),
-        ]);
+        $stmt = $this->db->prepare(
+            'INSERT OR REPLACE INTO vectors (id, vector, metadata, created_at) VALUES (:id, :vector, :metadata, :created_at)'
+        );
+        $stmt->bindValue(':id', $id, SQLITE3_TEXT);
+        $stmt->bindValue(':vector', json_encode($vector), SQLITE3_TEXT);
+        $stmt->bindValue(':metadata', json_encode($metadata, JSON_UNESCAPED_UNICODE), SQLITE3_TEXT);
+        $stmt->bindValue(':created_at', time(), SQLITE3_INTEGER);
+        $stmt->execute();
     }
 
     /**
@@ -258,25 +244,26 @@ class SqliteVectorStore implements VectorStorageInterface {
      * @param VectorRecord[] $records An array of VectorRecord instances to store.
      */
     public function storeBatch(array $records): void {
-        $this->db->beginTransaction();
+        $this->db->exec('BEGIN TRANSACTION');
 
         try {
-            $sql = 'INSERT OR REPLACE INTO vectors (id, vector, metadata, created_at) VALUES (?, ?, ?, ?)';
-            $stmt = $this->db->prepare($sql);
+            $stmt = $this->db->prepare(
+                'INSERT OR REPLACE INTO vectors (id, vector, metadata, created_at) VALUES (:id, :vector, :metadata, :created_at)'
+            );
             $time = time();
 
             foreach ($records as $record) {
-                $stmt->execute([
-                    $record->getId(),
-                    json_encode($record->getVector()),
-                    json_encode($record->getMetadata(), JSON_UNESCAPED_UNICODE),
-                    $time,
-                ]);
+                $stmt->bindValue(':id', $record->getId(), SQLITE3_TEXT);
+                $stmt->bindValue(':vector', json_encode($record->getVector()), SQLITE3_TEXT);
+                $stmt->bindValue(':metadata', json_encode($record->getMetadata(), JSON_UNESCAPED_UNICODE), SQLITE3_TEXT);
+                $stmt->bindValue(':created_at', $time, SQLITE3_INTEGER);
+                $stmt->execute();
+                $stmt->reset();
             }
 
-            $this->db->commit();
-        } catch (PDOException $e) {
-            $this->db->rollBack();
+            $this->db->exec('COMMIT');
+        } catch (\Exception $e) {
+            $this->db->exec('ROLLBACK');
 
             throw new RuntimeException("Batch store failed: {$e->getMessage()}", 0, $e);
         }
@@ -335,7 +322,6 @@ class SqliteVectorStore implements VectorStorageInterface {
             )
         ');
 
-        // Index for faster metadata filtering (SQLite JSON functions)
         $this->db->exec('
             CREATE INDEX IF NOT EXISTS idx_vectors_created_at ON vectors(created_at)
         ');

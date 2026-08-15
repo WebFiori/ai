@@ -15,17 +15,10 @@ class SqliteVectorStoreTest extends TestCase {
     }
 
     protected function tearDown(): void {
-        if (file_exists($this->testDb)) {
-            unlink($this->testDb);
-        }
-
-        // Clean up WAL files
-        if (file_exists($this->testDb . '-wal')) {
-            unlink($this->testDb . '-wal');
-        }
-
-        if (file_exists($this->testDb . '-shm')) {
-            unlink($this->testDb . '-shm');
+        foreach ([$this->testDb, $this->testDb . '-wal', $this->testDb . '-shm'] as $file) {
+            if (file_exists($file)) {
+                unlink($file);
+            }
         }
     }
 
@@ -50,6 +43,7 @@ class SqliteVectorStoreTest extends TestCase {
         $this->assertFileExists($nestedPath);
 
         // Cleanup
+        unset($store);
         unlink($nestedPath);
         rmdir(dirname($nestedPath));
         rmdir(dirname(dirname($nestedPath)));
@@ -163,18 +157,16 @@ class SqliteVectorStoreTest extends TestCase {
     public function testQueryReturnsTopKResults(): void {
         $store = new SqliteVectorStore($this->testDb);
 
-        // Store vectors - using simple vectors where similarity is predictable
         $store->store('id1', [1.0, 0.0, 0.0], ['name' => 'east']);
         $store->store('id2', [0.0, 1.0, 0.0], ['name' => 'north']);
         $store->store('id3', [0.0, 0.0, 1.0], ['name' => 'up']);
         $store->store('id4', [0.9, 0.1, 0.0], ['name' => 'almost-east']);
 
-        // Query for vector similar to [1, 0, 0]
         $results = $store->query([1.0, 0.0, 0.0], topK: 2);
 
         $this->assertCount(2, $results);
-        $this->assertEquals('id1', $results[0]->getId()); // Exact match
-        $this->assertEquals('id4', $results[1]->getId()); // Close match
+        $this->assertEquals('id1', $results[0]->getId());
+        $this->assertEquals('id4', $results[1]->getId());
         $this->assertEqualsWithDelta(1.0, $results[0]->getScore(), 0.001);
     }
 
@@ -185,14 +177,14 @@ class SqliteVectorStoreTest extends TestCase {
         $store->store('id2', [0.9, 0.1], ['category' => 'water', 'year' => 2023]);
         $store->store('id3', [0.8, 0.2], ['category' => 'energy', 'year' => 2024]);
 
-        // Filter by category
+        // Filter by string field
         $results = $store->query([1.0, 0.0], topK: 10, filter: ['category' => 'water']);
 
         $this->assertCount(2, $results);
         $this->assertEquals('water', $results[0]->getMetadata()['category']);
         $this->assertEquals('water', $results[1]->getMetadata()['category']);
 
-        // Filter by multiple fields
+        // Filter by multiple fields (string + int)
         $results = $store->query([1.0, 0.0], topK: 10, filter: ['category' => 'water', 'year' => 2024]);
 
         $this->assertCount(1, $results);
@@ -210,12 +202,11 @@ class SqliteVectorStoreTest extends TestCase {
     }
 
     public function testPersistenceAcrossInstances(): void {
-        // Store data with first instance
         $store1 = new SqliteVectorStore($this->testDb);
         $store1->store('id1', [0.1, 0.2, 0.3], ['source' => 'test.pdf']);
         $store1->store('id2', [0.4, 0.5, 0.6], ['source' => 'other.pdf']);
+        unset($store1); // Close connection
 
-        // Create new instance pointing to same database
         $store2 = new SqliteVectorStore($this->testDb);
 
         $this->assertEquals(2, $store2->count());
@@ -254,8 +245,8 @@ class SqliteVectorStoreTest extends TestCase {
         ];
 
         $store->store('id1', [0.1, 0.2], $metadata);
+        unset($store);
 
-        // Reload from database
         $store2 = new SqliteVectorStore($this->testDb);
         $record = $store2->get('id1');
 
@@ -267,7 +258,6 @@ class SqliteVectorStoreTest extends TestCase {
     public function testLargeVector(): void {
         $store = new SqliteVectorStore($this->testDb);
 
-        // 1536 dimensions (like OpenAI text-embedding-3-small)
         $vector = array_fill(0, 1536, 0.1);
 
         $store->store('id1', $vector, ['model' => 'text-embedding-3-small']);
@@ -281,14 +271,11 @@ class SqliteVectorStoreTest extends TestCase {
     public function testVacuum(): void {
         $store = new SqliteVectorStore($this->testDb);
 
-        // Store and delete some records
         for ($i = 0; $i < 100; $i++) {
             $store->store("id{$i}", array_fill(0, 100, 0.1));
         }
 
         $store->clear();
-
-        // Should not throw
         $store->vacuum();
 
         $this->assertEquals(0, $store->count());
