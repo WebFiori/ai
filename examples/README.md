@@ -43,3 +43,4 @@ export GCP_ACCESS_TOKEN="ya29...."
 | 16 | [Multi-Modal](16-multi-modal/) | Images, documents, audio and video in chat messages |
 | 17 | [Structured Output](17-structured-output/) | Force JSON responses with optional schema validation |
 | 18 | [Status Events](18-status-events/) | Real-time progress tracking via SSE or callback |
+| 19 | [RAG](19-rag/) | Retrieval-Augmented Generation — ingest documents, retrieve, and chat |
