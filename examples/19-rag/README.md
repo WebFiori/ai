@@ -2,9 +2,29 @@
 
 This directory demonstrates how to build a RAG pipeline using the webfiori/ai library.
 
-## What is RAG?
+## How It Works
 
-RAG enhances AI responses by retrieving relevant information from a knowledge base before generating answers. Instead of relying solely on the model's training data, RAG injects context from your own documents.
+RAG is implemented as a **tool the chat model can invoke**, not as a pipeline that wraps `chat()`. The model decides when retrieval is needed:
+
+```
+User question
+     │
+     ▼
+Chat model (e.g. gemini-2.5-flash)
+     │  decides to call search_knowledge("water withdrawal")
+     ▼
+RetrievalTool::execute()
+     ├── Embedding model embeds the query → float[]
+     ├── VectorStore searches by cosine similarity
+     └── Returns JSON: {"results": [{"text": "...", "score": 0.89}]}
+     │
+     ▼
+Chat model reads retrieved chunks, formulates final answer
+```
+
+The chat model and embedding model are completely independent. The chat model never sees vectors — it only receives the tool result as structured JSON text.
+
+See [ADR-0033](https://github.com/WebFiori/docs/blob/main/adr/0033-ai-rag-as-tool.md) for the full rationale.
 
 ## Components
 

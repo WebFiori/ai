@@ -204,3 +204,5 @@ ADRs relevant to this library live in [WebFiori/docs/adr](https://github.com/Web
 | 0036 | Metrics collection — separate callback, synchronous |
 | 0037 | PII redaction — RedactionService, mandatory api_key/bearer rules |
 | 0038 | Structured audit logging — AuditTrait, static+dynamic context |
+| 0033 | RAG — retrieval as a tool, not a pipeline wrapper |
+| 0034 | SQLite3 class over PDO for SqliteVectorStore |
