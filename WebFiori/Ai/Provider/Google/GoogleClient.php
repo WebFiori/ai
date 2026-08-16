@@ -27,6 +27,9 @@ use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\AbstractClient;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolInterface;
+use WebFiori\Ai\Tool\BuiltInToolInterface;
+use WebFiori\Ai\Tool\GoogleBuiltInTool;
+use WebFiori\Ai\Exception\UnsupportedFeatureException;
 use WebFiori\Ai\Usage;
 
 /**
@@ -472,23 +475,80 @@ class GoogleClient extends AbstractClient {
      * Formats ToolInterface instances into the Google tools format.
      *
      * Google uses 'functionDeclarations' inside a tools array.
+     * Built-in tools (googleSearch, codeExecution, urlContext) are
+     * added as separate objects alongside functionDeclarations.
      *
-     * @param ToolInterface[] $tools The tools to format.
+     * Vertex AI does not support mixing googleSearch with functionDeclarations.
+     * An UnsupportedFeatureException is thrown in that case.
+     *
+     * @param ToolInterface[] $tools Custom function calling tools.
+     * @param BuiltInToolInterface[] $builtInTools Provider-native built-in tools.
      *
      * @return array<int, array<string, mixed>> The formatted tools array.
+     *
+     * @throws UnsupportedFeatureException If a built-in tool is not supported,
+     *         or if GOOGLE_SEARCH is combined with custom tools on Vertex AI.
      */
-    private function formatTools(array $tools): array {
-        $declarations = [];
+    private function formatTools(array $tools, array $builtInTools = []): array {
+        $result = [];
 
-        foreach ($tools as $tool) {
-            $declarations[] = [
-                'name' => $tool->getName(),
-                'description' => $tool->getDescription(),
-                'parameters' => $tool->getParameters(),
-            ];
+        // Map built-in tool values to Google API keys
+        $builtInMap = [
+            'google_search'  => 'googleSearch',
+            'code_execution' => 'codeExecution',
+            'url_context'    => 'urlContext',
+        ];
+
+        $hasGoogleSearch = false;
+
+        foreach ($builtInTools as $builtIn) {
+            if (!($builtIn instanceof GoogleBuiltInTool)) {
+                throw new UnsupportedFeatureException(
+                    'built_in_tools:' . get_class($builtIn),
+                    'GoogleClient'
+                );
+            }
+
+            $apiKey = $builtInMap[$builtIn->getValue()] ?? null;
+
+            if ($apiKey === null) {
+                throw new UnsupportedFeatureException(
+                    'built_in_tools:' . $builtIn->getValue(),
+                    'GoogleClient'
+                );
+            }
+
+            if ($builtIn === GoogleBuiltInTool::GOOGLE_SEARCH) {
+                $hasGoogleSearch = true;
+            }
+
+            $result[] = [$apiKey => (object) []];
         }
 
-        return [['functionDeclarations' => $declarations]];
+        // Vertex AI does not support mixing googleSearch with functionDeclarations
+        if ($hasGoogleSearch && count($tools) > 0 && !$this->isGeminiApi()) {
+            throw new UnsupportedFeatureException(
+                'GOOGLE_SEARCH + functionDeclarations combined',
+                'Vertex AI'
+            );
+        }
+
+        // Add function declarations if any custom tools provided
+        if (count($tools) > 0) {
+            $declarations = [];
+
+            foreach ($tools as $tool) {
+                $declarations[] = [
+                    'name'        => $tool->getName(),
+                    'description' => $tool->getDescription(),
+                    'parameters'  => $tool->getParameters(),
+                ];
+            }
+
+            $result[] = ['functionDeclarations' => $declarations];
+        }
+
+        return $result;
     }
 
     /**
@@ -728,8 +788,11 @@ class GoogleClient extends AbstractClient {
             $body['generationConfig'] = $generationConfig;
         }
 
-        if (isset($options['tools']) && count($options['tools']) > 0) {
-            $body['tools'] = $this->formatTools($options['tools']);
+        $customTools  = $options['tools'] ?? [];
+        $builtInTools = $options['built_in_tools'] ?? [];
+
+        if (count($customTools) > 0 || count($builtInTools) > 0) {
+            $body['tools'] = $this->formatTools($customTools, $builtInTools);
         }
 
         return new HttpRequest(
@@ -892,8 +955,11 @@ class GoogleClient extends AbstractClient {
             $body['generationConfig'] = $generationConfig;
         }
 
-        if (isset($options['tools']) && count($options['tools']) > 0) {
-            $body['tools'] = $this->formatTools($options['tools']);
+        $customTools  = $options['tools'] ?? [];
+        $builtInTools = $options['built_in_tools'] ?? [];
+
+        if (count($customTools) > 0 || count($builtInTools) > 0) {
+            $body['tools'] = $this->formatTools($customTools, $builtInTools);
         }
 
         return new HttpRequest(
@@ -1095,6 +1161,17 @@ class GoogleClient extends AbstractClient {
             $content,
             $toolCalls
         );
+
+        // When Google Search grounding is active, the model may return the
+        // answer via groundingMetadata.searchEntryPoint.renderedContent
+        // instead of parts[].text. Fall back to that if content is empty.
+        if ($content === '' && empty($toolCalls)) {
+            $renderedContent = $candidate['groundingMetadata']['searchEntryPoint']['renderedContent'] ?? '';
+
+            if ($renderedContent !== '') {
+                $message = new Message('assistant', $renderedContent, []);
+            }
+        }
 
         $usage = null;
 
