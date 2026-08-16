@@ -48,18 +48,27 @@ class AwsSigner {
     private string $service;
 
     /**
+     * AWS session token (for temporary credentials from IAM roles).
+     *
+     * @var string|null
+     */
+    private ?string $sessionToken;
+
+    /**
      * Creates a new AwsSigner instance.
      *
      * @param string $accessKey AWS access key ID.
      * @param string $secretKey AWS secret access key.
      * @param string $region AWS region (e.g., 'us-east-1').
      * @param string $service AWS service name (e.g., 'bedrock').
+     * @param string|null $sessionToken Optional session token for temporary credentials.
      */
-    public function __construct(string $accessKey, string $secretKey, string $region, string $service = 'bedrock') {
-        $this->accessKey = $accessKey;
-        $this->secretKey = $secretKey;
-        $this->region = $region;
-        $this->service = $service;
+    public function __construct(string $accessKey, string $secretKey, string $region, string $service = 'bedrock', ?string $sessionToken = null) {
+        $this->accessKey    = $accessKey;
+        $this->secretKey    = $secretKey;
+        $this->region       = $region;
+        $this->service      = $service;
+        $this->sessionToken = $sessionToken;
     }
 
     /**
@@ -85,6 +94,11 @@ class AwsSigner {
         // Add required headers
         $headers['Host'] = $host;
         $headers['X-Amz-Date'] = $timestamp;
+
+        // Session token for temporary credentials (IAM roles)
+        if ($this->sessionToken !== null) {
+            $headers['X-Amz-Security-Token'] = $this->sessionToken;
+        }
 
         // Hash the payload
         $payloadHash = hash('sha256', $body);

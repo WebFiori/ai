@@ -4,13 +4,50 @@ This directory contains examples for using the AWS Bedrock provider.
 
 ## Setup
 
-1. Get AWS credentials with Bedrock access from your AWS account
-2. Set the environment variables:
-   ```bash
-   export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
-   export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-   export AWS_REGION=us-east-1
-   ```
+The library resolves AWS credentials automatically using the standard credential chain. You do not need to provide explicit keys in production environments.
+
+### Credential Resolution Order
+
+**1. Explicit configuration (highest priority)**
+```php
+$client = new BedrockClient([
+    'access_key' => 'AKIA...',
+    'secret_key' => 'wJal...',
+    'region'     => 'us-east-1',
+]);
+```
+
+**2. Environment variables**
+```bash
+export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+export AWS_SESSION_TOKEN=optional-session-token  # for temporary credentials
+export AWS_REGION=us-east-1
+```
+
+**3. AWS credentials file**
+
+Linux/Mac: `~/.aws/credentials`
+Windows: `%USERPROFILE%\.aws\credentials`
+
+```ini
+[default]
+aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+
+[staging]
+aws_access_key_id = STAGINGKEY
+aws_secret_access_key = STAGINGSECRET
+```
+
+Use `AWS_PROFILE` env var to select a named profile:
+```bash
+export AWS_PROFILE=staging
+```
+
+**4. EC2 / ECS / Lambda instance metadata (zero-config)**
+
+No configuration needed when running on AWS infrastructure with an IAM role attached. Temporary credentials are retrieved automatically from the metadata service and refreshed as needed.
 
 ## Examples
 
@@ -40,13 +77,18 @@ Simple request/response chat completion with Claude on Bedrock.
 ## Configuration Options
 
 ```php
+// Explicit credentials
 $client = new BedrockClient([
-    'access_key' => 'AKIA...',   // Required: AWS access key
-    'secret_key' => 'wJal...',   // Required: AWS secret key
+    'access_key' => 'AKIA...',   // Optional: AWS access key (uses credential chain if omitted)
+    'secret_key' => 'wJal...',   // Required when access_key is provided
+    'session_token' => '...',    // Optional: for temporary IAM role credentials
     'region' => 'us-east-1',     // Required: AWS region
     'model' => 'anthropic.claude-3-5-sonnet-20241022-v2:0', // Default model
     'max_tokens' => 4096,        // Default max tokens
 ]);
+
+// Zero-config on EC2/ECS/Lambda with IAM role
+$client = new BedrockClient(['region' => 'us-east-1']);
 ```
 
 ## Differences from Direct Anthropic API

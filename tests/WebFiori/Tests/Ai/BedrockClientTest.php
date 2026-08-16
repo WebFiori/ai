@@ -188,8 +188,10 @@ class BedrockClientTest extends TestCase {
      * @test
      */
     public function testMissingBothAuthOptions() {
-        $this->expectException(InvalidConfigException::class);
-        new BedrockClient(['region' => 'us-east-1']);
+        // No explicit credentials = ADC will be tried at request time
+        // Construction should succeed — no exception
+        $provider = new BedrockClient(['region' => 'us-east-1']);
+        $this->assertEquals('bedrock', $provider->getName());
     }
 
     /**

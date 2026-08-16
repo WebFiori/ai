@@ -82,7 +82,7 @@ class BedrockClient extends AbstractClient {
      *
      * @var AwsSigner|null
      */
-    private ?AwsSigner $signer;
+    private ?AwsSigner $signer = null;
     /**
      * The active invocation strategy.
      *
@@ -100,9 +100,31 @@ class BedrockClient extends AbstractClient {
     public function __construct(array $config = []) {
         parent::__construct($config);
 
-        $this->signer = !empty($config['access_key'])
-            ? new AwsSigner($config['access_key'], $config['secret_key'], $config['region'], 'bedrock')
-            : null;
+        if (!empty($config['access_key'])) {
+            // Explicit credentials — use directly
+            $sessionToken = $config['session_token'] ?? null;
+            $this->signer = new AwsSigner(
+                $config['access_key'],
+                $config['secret_key'],
+                $config['region'],
+                'bedrock',
+                $sessionToken
+            );
+        } elseif (empty($config['api_key'])) {
+            // No explicit credentials — try credential chain
+            $chain = new AwsCredentialChain();
+            $creds = $chain->resolve();
+
+            if ($creds !== null) {
+                $this->signer = new AwsSigner(
+                    $creds['access_key'],
+                    $creds['secret_key'],
+                    $config['region'],
+                    'bedrock',
+                    $creds['session_token']
+                );
+            }
+        }
 
         $this->strategy = $this->createStrategy($config['api_method'] ?? ApiMethod::CONVERSE);
     }
@@ -411,21 +433,18 @@ class BedrockClient extends AbstractClient {
             );
         }
 
-        $hasApiKey = !empty($config['api_key']);
-        $hasSigV4 = !empty($config['access_key']) && !empty($config['secret_key']);
+        // Explicit api_key or access_key+secret_key are valid
+        // No credentials = credential chain will be tried at request time (IAM roles, env vars, ~/.aws/credentials)
+        $hasApiKey  = !empty($config['api_key']);
+        $hasExplicitKey = !empty($config['access_key']);
 
-        if (!$hasApiKey && !$hasSigV4) {
+        if ($hasExplicitKey && empty($config['secret_key'])) {
             throw new InvalidConfigException(
-                'Bedrock provider requires either "api_key" or both "access_key" and "secret_key".',
-                'api_key'
-            );
-        }
-
-        if (!$hasApiKey && empty($config['secret_key'])) {
-            throw new InvalidConfigException(
-                'The "secret_key" configuration option is required when using AWS credentials.',
+                'The "secret_key" configuration option is required when "access_key" is provided.',
                 'secret_key'
             );
         }
+
+        // If none of the above, credential chain will be attempted — no error here
     }
 }
