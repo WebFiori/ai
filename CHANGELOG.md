@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.1](https://github.com/WebFiori/ai/compare/v0.5.0...v0.5.1) (2026-08-16)
+
+
+### Features
+
+* **auth:** add Google ADC and AWS credential chain support ([892b3d2](https://github.com/WebFiori/ai/commit/892b3d29f31ed4a6ae94a4870264eb392648c330))
+* RAG pipeline, FileContentExtractor, built-in tools grounding fix, Google ADC, AWS credential chain ([6f874dc](https://github.com/WebFiori/ai/commit/6f874dc39afa8c48a4c5c4e95b4fa5190e4f0e2f))
+* **tools:** add FileContentExtractor universal file-to-text tool ([111224a](https://github.com/WebFiori/ai/commit/111224a2a25680aa366471df2f3ccb0f1a98a3b8)), closes [#61](https://github.com/WebFiori/ai/issues/61)
+* **tools:** support provider-native built-in tools alongside function calling ([f10ab09](https://github.com/WebFiori/ai/commit/f10ab09c827392af96caaf37ee56c180d999caa1)), closes [#78](https://github.com/WebFiori/ai/issues/78)
+
+
+### Miscellaneous Chores
+
+* **main:** release 0.5.0 ([6a6fe3a](https://github.com/WebFiori/ai/commit/6a6fe3aeced556a811e3cddb28e8f814dee99f4e))
+* Merge pull request [#80](https://github.com/WebFiori/ai/issues/80) from WebFiori/dev ([e80a842](https://github.com/WebFiori/ai/commit/e80a8420faeb5769fe4316d6ca365ee21ffb9eec))
+
 ## [0.5.0](https://github.com/WebFiori/ai/compare/v0.4.9...v0.5.0) (2026-08-15)
 
 
