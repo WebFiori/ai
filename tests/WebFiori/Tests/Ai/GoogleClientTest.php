@@ -260,12 +260,14 @@ class GoogleClientTest extends TestCase {
      * @test
      */
     public function testMissingCredentialsThrows() {
-        $this->expectException(InvalidConfigException::class);
-        $this->expectExceptionMessage('credentials');
-        new GoogleClient([
+        // No explicit credentials = ADC will be tried at request time
+        // Construction should succeed for Vertex AI (project_id is still required)
+        $client = new GoogleClient([
+            'api'        => 'vertex_ai',
             'project_id' => 'my-project',
-            'location' => 'us-central1',
+            'location'   => 'us-central1',
         ]);
+        $this->assertInstanceOf(GoogleClient::class, $client);
     }
 
     /**

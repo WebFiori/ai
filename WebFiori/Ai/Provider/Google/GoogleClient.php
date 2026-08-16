@@ -647,24 +647,170 @@ class GoogleClient extends AbstractClient {
             return $this->accessToken;
         }
 
-        // Generate from service account credentials
+        // Generate from service account credentials (explicit config)
         $credentials = $this->getConfig('credentials');
 
         if (is_string($credentials) && is_file($credentials)) {
             $credentials = json_decode(file_get_contents($credentials), true);
         }
 
-        if (!is_array($credentials)) {
-            throw new AuthenticationException(
-                'Invalid credentials configuration for Google provider.',
-                401
-            );
+        if (is_array($credentials)) {
+            $this->accessToken = $this->generateAccessToken($credentials);
+            $this->tokenExpiresAt = time() + 3500;
+
+            return $this->accessToken;
         }
 
-        $this->accessToken = $this->generateAccessToken($credentials);
-        $this->tokenExpiresAt = time() + 3500; // ~58 minutes
+        // ADC: GOOGLE_APPLICATION_CREDENTIALS environment variable
+        $envPath = getenv('GOOGLE_APPLICATION_CREDENTIALS');
 
-        return $this->accessToken;
+        if (!empty($envPath) && is_file($envPath)) {
+            $credentials = json_decode(file_get_contents($envPath), true);
+
+            if (is_array($credentials)) {
+                if (($credentials['type'] ?? '') === 'authorized_user') {
+                    $token = $this->refreshGcloudToken($credentials);
+
+                    if ($token !== null) {
+                        $this->accessToken = $token;
+                        $this->tokenExpiresAt = time() + 3500;
+
+                        return $this->accessToken;
+                    }
+                } else {
+                    $this->accessToken = $this->generateAccessToken($credentials);
+                    $this->tokenExpiresAt = time() + 3500;
+
+                    return $this->accessToken;
+                }
+            }
+        }
+
+        // ADC: gcloud default credentials file
+        // Note: authorized_user credentials work with Vertex AI (cloud-platform scope)
+        // but NOT with the free Gemini API (generativelanguage.googleapis.com),
+        // which requires an api_key or service_account credentials.
+        $gcloudPath = $this->getGcloudDefaultCredentialsPath();
+
+        if (is_file($gcloudPath)) {
+            $gcloudCreds = json_decode(file_get_contents($gcloudPath), true);
+
+            if (is_array($gcloudCreds)) {
+                // gcloud default credentials use a different format (authorized_user)
+                if (($gcloudCreds['type'] ?? '') === 'authorized_user') {
+                    $token = $this->refreshGcloudToken($gcloudCreds);
+
+                    if ($token !== null) {
+                        $this->accessToken = $token;
+                        $this->tokenExpiresAt = time() + 3500;
+
+                        return $this->accessToken;
+                    }
+                } else {
+                    // Service account in gcloud path
+                    $this->accessToken = $this->generateAccessToken($gcloudCreds);
+                    $this->tokenExpiresAt = time() + 3500;
+
+                    return $this->accessToken;
+                }
+            }
+        }
+
+        // ADC: GCE/GKE/Cloud Run metadata server
+        $metadataToken = $this->fetchFromMetadataServer();
+
+        if ($metadataToken !== null) {
+            $this->accessToken = $metadataToken['access_token'];
+            $this->tokenExpiresAt = time() + (int) ($metadataToken['expires_in'] ?? 3500) - 60;
+
+            return $this->accessToken;
+        }
+
+        throw new AuthenticationException(
+            'No Google credentials found. Provide "api_key", "access_token", "credentials", ' .
+            'set GOOGLE_APPLICATION_CREDENTIALS, run "gcloud auth application-default login", ' .
+            'or run on GCE/GKE/Cloud Run.',
+            401
+        );
+    }
+
+    /**
+     * Returns the path to the gcloud application default credentials file.
+     *
+     * @return string
+     */
+    private function getGcloudDefaultCredentialsPath(): string {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $appData = getenv('APPDATA') ?: '';
+
+            return $appData . DIRECTORY_SEPARATOR . 'gcloud' . DIRECTORY_SEPARATOR . 'application_default_credentials.json';
+        }
+
+        $home = getenv('HOME') ?: '';
+
+        return $home . '/.config/gcloud/application_default_credentials.json';
+    }
+
+    /**
+     * Fetches an access token from the GCE metadata server.
+     *
+     * @return array{access_token: string, expires_in: int}|null
+     */
+    private function fetchFromMetadataServer(): ?array {
+        $url = 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token';
+
+        $context = stream_context_create([
+            'http' => [
+                'method'  => 'GET',
+                'header'  => "Metadata-Flavor: Google\r\n",
+                'timeout' => 2,
+            ],
+        ]);
+
+        $response = @file_get_contents($url, false, $context);
+
+        if ($response === false) {
+            return null;
+        }
+
+        $data = json_decode($response, true);
+
+        if (!is_array($data) || empty($data['access_token'])) {
+            return null;
+        }
+
+        return $data;
+    }
+
+    /**
+     * Refreshes an access token using gcloud authorized_user credentials.
+     *
+     * @param array<string, string> $creds The authorized_user credentials.
+     *
+     * @return string|null The refreshed access token, or null on failure.
+     */
+    private function refreshGcloudToken(array $creds): ?string {
+        $tokenRequest = new HttpRequest(
+            'POST',
+            'https://oauth2.googleapis.com/token',
+            ['Content-Type' => 'application/x-www-form-urlencoded'],
+            http_build_query([
+                'client_id'     => $creds['client_id'] ?? '',
+                'client_secret' => $creds['client_secret'] ?? '',
+                'refresh_token' => $creds['refresh_token'] ?? '',
+                'grant_type'    => 'refresh_token',
+            ])
+        );
+
+        $response = $this->getHttpClient()->send($tokenRequest);
+
+        if (!$response->isSuccess()) {
+            return null;
+        }
+
+        $data = $response->getJson();
+
+        return $data['access_token'] ?? null;
     }
 
     /**
@@ -1265,11 +1411,7 @@ class GoogleClient extends AbstractClient {
             }
         }
 
-        if (empty($config['credentials']) && empty($config['access_token']) && empty($config['api_key'])) {
-            throw new InvalidConfigException(
-                'One of "api_key", "credentials", or "access_token" is required for Google provider.',
-                'credentials'
-            );
-        }
+        // Explicit credentials are optional — ADC will be tried at request time:
+        // GOOGLE_APPLICATION_CREDENTIALS env var → gcloud default credentials → GCE metadata server
     }
 }
