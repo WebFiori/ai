@@ -69,8 +69,8 @@ class DocumentConverter extends AbstractConverter {
         if (!extension_loaded('zip')) {
             throw new RuntimeException('The "zip" PHP extension is required for DocumentConverter.');
         }
-        $format = $this->resolveFormat($options->getOutputFormat());
-        $includeMetadata = (bool) $options->getExtra('include_metadata', false);
+        $format          = $this->resolveFormat($options->getOutputFormat());
+        $includeMetadata = (bool) $options->getExtra('include_metadata', true); // default true now
 
         $tmpFile = tempnam(sys_get_temp_dir(), 'wf_doc_');
         file_put_contents($tmpFile, $content);
@@ -80,6 +80,16 @@ class DocumentConverter extends AbstractConverter {
         } finally {
             unlink($tmpFile);
         }
+
+        // Always add structural metadata
+        $words      = $text !== '' ? str_word_count($text) : 0;
+        $paragraphs = $text !== '' ? max(1, substr_count($text, "\n\n") + 1) : 0;
+
+        $metadata = array_merge([
+            'word_count'      => $words,
+            'paragraph_count' => $paragraphs,
+            'char_count'      => mb_strlen($text),
+        ], $metadata);
 
         return $this->makeResult(
             content: $text,

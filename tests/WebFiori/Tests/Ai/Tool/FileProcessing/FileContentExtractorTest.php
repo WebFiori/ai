@@ -242,6 +242,21 @@ class FileContentExtractorTest extends TestCase {
         $this->assertEquals('plain_text', (new TextConverter())->getDefaultOutputFormat());
     }
 
+    public function testTextConverterMetadata(): void {
+        $converter = new TextConverter();
+        $content   = "Line one.\nLine two.\nLine three.";
+        $options   = new ConversionOptions();
+
+        $result   = $converter->convert($content, $options);
+        $metadata = $result->getMetadata();
+
+        $this->assertArrayHasKey('line_count', $metadata);
+        $this->assertArrayHasKey('word_count', $metadata);
+        $this->assertArrayHasKey('char_count', $metadata);
+        $this->assertEquals(3, $metadata['line_count']);
+        $this->assertGreaterThan(0, $metadata['word_count']);
+    }
+
     // =========================================================================
     // SpreadsheetConverter (requires zip extension)
     // =========================================================================
@@ -338,10 +353,15 @@ class FileContentExtractorTest extends TestCase {
         $options   = new ConversionOptions();
         $content   = file_get_contents($this->fixtures . '/test.xlsx');
 
-        $result = $converter->convert($content, $options);
+        $result   = $converter->convert($content, $options);
+        $metadata = $result->getMetadata();
 
-        $this->assertArrayHasKey('row_count', $result->getMetadata());
-        $this->assertGreaterThan(0, $result->getMetadata()['row_count']);
+        $this->assertArrayHasKey('rows_extracted', $metadata);
+        $this->assertArrayHasKey('sheet_names', $metadata);
+        $this->assertArrayHasKey('sheet_count', $metadata);
+        $this->assertArrayHasKey('current_sheet', $metadata);
+        $this->assertGreaterThan(0, $metadata['rows_extracted']);
+        $this->assertIsArray($metadata['sheet_names']);
     }
 
     // =========================================================================
@@ -381,6 +401,23 @@ class FileContentExtractorTest extends TestCase {
      */
     public function testDocumentConverterDefaultFormat(): void {
         $this->assertEquals('plain_text', (new DocumentConverter())->getDefaultOutputFormat());
+    }
+
+    /**
+     * @requires extension zip
+     */
+    public function testDocumentConverterMetadata(): void {
+        $converter = new DocumentConverter();
+        $options   = new ConversionOptions();
+        $content   = file_get_contents($this->fixtures . '/test.docx');
+
+        $result   = $converter->convert($content, $options);
+        $metadata = $result->getMetadata();
+
+        $this->assertArrayHasKey('word_count', $metadata);
+        $this->assertArrayHasKey('paragraph_count', $metadata);
+        $this->assertArrayHasKey('char_count', $metadata);
+        $this->assertGreaterThan(0, $metadata['word_count']);
     }
 
     // =========================================================================
@@ -425,10 +462,14 @@ class FileContentExtractorTest extends TestCase {
         $options   = new ConversionOptions();
         $content   = file_get_contents($this->fixtures . '/test.pptx');
 
-        $result = $converter->convert($content, $options);
+        $result   = $converter->convert($content, $options);
+        $metadata = $result->getMetadata();
 
-        $this->assertArrayHasKey('total_slides', $result->getMetadata());
-        $this->assertEquals(2, $result->getMetadata()['total_slides']);
+        $this->assertArrayHasKey('total_slides', $metadata);
+        $this->assertArrayHasKey('extracted_slides', $metadata);
+        $this->assertArrayHasKey('slide_titles', $metadata);
+        $this->assertEquals(2, $metadata['total_slides']);
+        $this->assertIsArray($metadata['slide_titles']);
     }
 
     /**

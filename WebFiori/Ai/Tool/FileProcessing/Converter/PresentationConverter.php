@@ -68,14 +68,14 @@ class PresentationConverter extends AbstractConverter {
         if (!extension_loaded('zip')) {
             throw new RuntimeException('The "zip" PHP extension is required for PresentationConverter.');
         }
-        $format = $this->resolveFormat($options->getOutputFormat());
+        $format    = $this->resolveFormat($options->getOutputFormat());
         $pageRange = $options->getExtra('page_range', null);
 
         $tmpFile = tempnam(sys_get_temp_dir(), 'wf_ppt_');
         file_put_contents($tmpFile, $content);
 
         try {
-            [$slides, $totalSlides] = $this->extractSlides($tmpFile, $pageRange);
+            [$slides, $totalSlides, $slideTitles] = $this->extractSlides($tmpFile, $pageRange);
         } finally {
             unlink($tmpFile);
         }
@@ -88,7 +88,11 @@ class PresentationConverter extends AbstractConverter {
             $lines[] = '';
         }
 
-        $metadata = ['total_slides' => $totalSlides, 'extracted_slides' => count($slides)];
+        $metadata = [
+            'total_slides'     => $totalSlides,
+            'extracted_slides' => count($slides),
+            'slide_titles'     => $slideTitles,
+        ];
 
         return $this->makeResult(
             content: trim(implode("\n", $lines)),
@@ -127,16 +131,21 @@ class PresentationConverter extends AbstractConverter {
             }
 
             $allowedSlides = $this->parsePageRange($pageRange, $totalSlides);
-            $slides = [];
+            $slides      = [];
+            $slideTitles = [];
 
             for ($i = 1; $i <= $totalSlides; $i++) {
-                if (!in_array($i, $allowedSlides, true)) {
-                    continue;
-                }
-
                 $slideXml = $zip->getFromName("ppt/slides/slide{$i}.xml");
 
                 if ($slideXml === false) {
+                    continue;
+                }
+
+                // Extract title for all slides (for metadata), text only for allowed slides
+                $title = $this->getSlideTitle($slideXml);
+                $slideTitles[$i] = $title ?: "Slide {$i}";
+
+                if (!in_array($i, $allowedSlides, true)) {
                     continue;
                 }
 
@@ -147,10 +156,43 @@ class PresentationConverter extends AbstractConverter {
                 }
             }
 
-            return [$slides, $totalSlides];
+            return [$slides, $totalSlides, $slideTitles];
         } finally {
             $zip->close();
         }
+    }
+
+    /**
+     * Extracts the title text from a slide XML.
+     *
+     * Looks for placeholder elements of type "title" or "ctrTitle".
+     *
+     * @param string $slideXml
+     *
+     * @return string The slide title, or empty string if not found.
+     */
+    private function getSlideTitle(string $slideXml): string {
+        $doc = simplexml_load_string($slideXml);
+
+        if ($doc === false) {
+            return '';
+        }
+
+        $doc->registerXPathNamespace('p', 'http://schemas.openxmlformats.org/presentationml/2006/main');
+        $doc->registerXPathNamespace('a', 'http://schemas.openxmlformats.org/drawingml/2006/main');
+
+        // Title placeholders have type="title" or type="ctrTitle"
+        $titleNodes = $doc->xpath('//p:sp[p:nvSpPr/p:nvPr/p:ph[@type="title" or @type="ctrTitle"]]//a:t');
+
+        if (!empty($titleNodes)) {
+            $title = trim(implode(' ', array_map(fn($t) => (string) $t, $titleNodes)));
+
+            if ($title !== '') {
+                return $title;
+            }
+        }
+
+        return '';
     }
 
     /**

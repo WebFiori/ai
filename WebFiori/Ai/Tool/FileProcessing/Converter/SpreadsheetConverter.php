@@ -70,8 +70,8 @@ class SpreadsheetConverter extends AbstractConverter {
         if (!extension_loaded('zip')) {
             throw new RuntimeException('The "zip" PHP extension is required for SpreadsheetConverter.');
         }
-        $format = $this->resolveFormat($options->getOutputFormat());
-        $maxRows = (int) $options->getExtra('max_rows', PHP_INT_MAX);
+        $format    = $this->resolveFormat($options->getOutputFormat());
+        $maxRows   = (int) $options->getExtra('max_rows', PHP_INT_MAX);
         $sheetName = $options->getExtra('sheet_name', null);
 
         // Write to temp file for ZipArchive
@@ -79,12 +79,24 @@ class SpreadsheetConverter extends AbstractConverter {
         file_put_contents($tmpFile, $content);
 
         try {
-            $rows = $this->extractRows($tmpFile, $sheetName, $maxRows);
+            $allSheetNames = $this->extractSheetNames($tmpFile);
+            $rows          = $this->extractRows($tmpFile, $sheetName, $maxRows);
         } finally {
             unlink($tmpFile);
         }
 
-        $metadata = ['row_count' => count($rows)];
+        $extractedRows = count($rows);
+        $metadata = [
+            'sheet_names'     => $allSheetNames,
+            'sheet_count'     => count($allSheetNames),
+            'current_sheet'   => $sheetName ?? ($allSheetNames[0] ?? null),
+            'rows_extracted'  => $extractedRows,
+        ];
+
+        // If max_rows was applied, include it so model knows extraction was capped
+        if ($maxRows !== PHP_INT_MAX) {
+            $metadata['max_rows_applied'] = $maxRows;
+        }
 
         $text = match ($format) {
             'markdown_table' => $this->toMarkdownTable($rows),
@@ -100,6 +112,50 @@ class SpreadsheetConverter extends AbstractConverter {
             format: $format,
             metadata: $metadata,
         );
+    }
+
+    /**
+     * Extracts all sheet names from an XLSX workbook.
+     *
+     * @param string $filePath Path to the XLSX file.
+     *
+     * @return string[] Sheet names in order.
+     */
+    private function extractSheetNames(string $filePath): array {
+        $zip = new ZipArchive();
+
+        if ($zip->open($filePath) !== true) {
+            return [];
+        }
+
+        try {
+            $workbook = $zip->getFromName('xl/workbook.xml');
+
+            if ($workbook === false) {
+                return [];
+            }
+
+            $wbXml = simplexml_load_string($workbook);
+
+            if ($wbXml === false) {
+                return [];
+            }
+
+            $names = [];
+
+            foreach ($wbXml->sheets->sheet ?? [] as $sheet) {
+                $attrs = $sheet->attributes();
+                $name  = (string) ($attrs['name'] ?? '');
+
+                if ($name !== '') {
+                    $names[] = $name;
+                }
+            }
+
+            return $names;
+        } finally {
+            $zip->close();
+        }
     }
 
     /**
