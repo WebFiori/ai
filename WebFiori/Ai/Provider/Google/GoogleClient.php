@@ -1019,26 +1019,66 @@ class GoogleClient extends AbstractClient {
      * @return HttpRequest The HTTP request to send.
      */
     protected function buildImageRequest(ImageRequest $request): HttpRequest {
-        $model = $this->getConfig('image_model', 'imagen-3.0-generate-001');
+        // Use Gemini native image generation (generateContent with IMAGE modality).
+        // This works on both Gemini API and Vertex AI with -image model variants.
+        // Falls back gracefully — Gemini image models output both text and inline PNG data.
+        $model = $this->getConfig('image_model', 'gemini-2.5-flash-image');
+
+        $parts = [['text' => $request->getPrompt()]];
+
+        // Add negative prompt as an instruction if provided
+        if ($request->getNegativePrompt() !== null) {
+            $parts[0]['text'] .= ' Do NOT include: ' . $request->getNegativePrompt();
+        }
+
+        // Add style guidance if provided
+        if ($request->getStyle() !== null) {
+            $parts[0]['text'] .= ' Style: ' . $request->getStyle();
+        }
+
+        // Add aspect ratio guidance from size
+        $aspectHint = $this->sizeToAspectRatioHint($request->getSize());
+
+        if ($aspectHint !== null) {
+            $parts[0]['text'] .= ' ' . $aspectHint;
+        }
+
         $body = [
-            'instances' => [[
-                'prompt' => $request->getPrompt(),
+            'contents' => [[
+                'role'  => 'user',
+                'parts' => $parts,
             ]],
-            'parameters' => [
-                'sampleCount' => $request->getCount(),
+            'generationConfig' => [
+                'responseModalities' => ['TEXT', 'IMAGE'],
             ],
         ];
 
-        if ($request->getNegativePrompt() !== null) {
-            $body['instances'][0]['negativePrompt'] = $request->getNegativePrompt();
-        }
+        // Request multiple images by repeating the prompt in separate turns
+        // Gemini generates one image per call; for count > 1 we note it for the response parser
+        $body['generationConfig']['candidateCount'] = min($request->getCount(), 4);
 
         return new HttpRequest(
             'POST',
-            $this->getEndpoint($model, 'predict'),
+            $this->getEndpoint($model, 'generateContent'),
             $this->getHeaders(),
             json_encode($body)
         );
+    }
+
+    /**
+     * Maps a size string to an aspect ratio hint for the prompt.
+     *
+     * @param string $size e.g. '1024x1024', '1792x1024'
+     *
+     * @return string|null Hint to append to prompt, or null for square.
+     */
+    private function sizeToAspectRatioHint(string $size): ?string {
+        return match ($size) {
+            '1792x1024', '1920x1080' => 'Aspect ratio: 16:9 landscape orientation.',
+            '1024x1792', '1080x1920' => 'Aspect ratio: 9:16 portrait orientation.',
+            '1024x768',  '1280x960'  => 'Aspect ratio: 4:3 landscape orientation.',
+            default                   => null, // square — no hint needed
+        };
     }
 
     /**
@@ -1378,18 +1418,35 @@ class GoogleClient extends AbstractClient {
      * @return ImageResponse The parsed image response.
      */
     protected function parseImageResponse(HttpResponse $response): ImageResponse {
-        $data = $response->getJson();
+        $data   = $response->getJson();
         $images = [];
+        $textParts = [];
 
-        foreach ($data['predictions'] ?? [] as $prediction) {
-            $images[] = new GeneratedImage(
-                null,
-                $prediction['bytesBase64Encoded'] ?? null,
-                null
-            );
+        // Gemini returns images as inlineData parts inside candidates
+        foreach ($data['candidates'] ?? [] as $candidate) {
+            foreach ($candidate['content']['parts'] ?? [] as $part) {
+                if (isset($part['inlineData'])) {
+                    $images[] = new GeneratedImage(
+                        url: null,
+                        base64: $part['inlineData']['data'] ?? null,
+                    );
+                } elseif (isset($part['text']) && trim($part['text']) !== '') {
+                    $textParts[] = trim($part['text']);
+                }
+            }
         }
 
-        $model = $this->getConfig('image_model', 'imagen-3.0-generate-001');
+        $model = $this->getConfig('image_model', 'gemini-2.5-flash-image');
+
+        // If the model described the image in text, attach it as revisedPrompt on first image
+        if (!empty($images) && !empty($textParts)) {
+            $description = implode(' ', $textParts);
+            $images[0]   = new GeneratedImage(
+                url: null,
+                base64: $images[0]->getBase64(),
+                revisedPrompt: $description,
+            );
+        }
 
         return new ImageResponse($images, $model);
     }
