@@ -199,7 +199,7 @@ test('retrieves relevant chunks', function ()
         'usage' => ['prompt_tokens' => 5, 'total_tokens' => 5],
     ])));
 
-    $provider = new OpenAIClient(['api_key' => 'test-key', 'model' => 'text-embedding-3-small']);
+    $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'text-embedding-3-small'));
     $provider->setHttpClient($fakeHttp);
 
     $retriever = new Retriever($provider, $store);
@@ -222,7 +222,7 @@ test('respects minimum score threshold', function ()
         'usage' => ['prompt_tokens' => 5, 'total_tokens' => 5],
     ])));
 
-    $provider = new OpenAIClient(['api_key' => 'test-key']);
+    $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key'));
     $provider->setHttpClient($fakeHttp);
 
     $retriever = new Retriever($provider, $store);
@@ -325,7 +325,7 @@ test('complete RAG pipeline', function () use ($tempDir)
         'usage' => ['prompt_tokens' => 5, 'total_tokens' => 5],
     ])));
 
-    $provider = new OpenAIClient(['api_key' => 'test']);
+    $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test'));
     $provider->setHttpClient($fakeHttp);
 
     $retriever = new Retriever($provider, $store);

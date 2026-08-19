@@ -18,6 +18,8 @@ use WebFiori\Ai\Exception\RateLimitException;
 use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
+use WebFiori\Ai\Provider\Google\GoogleApi;
+use WebFiori\Ai\Provider\Google\GoogleApiVersion;
 use WebFiori\Ai\Provider\Google\GoogleClient;
 use WebFiori\Ai\Provider\Google\GoogleClientConfig;
 use WebFiori\Ai\Tool\ToolCall;
@@ -263,11 +265,11 @@ class GoogleClientTest extends TestCase {
     public function testMissingCredentialsThrows() {
         // No explicit credentials = ADC will be tried at request time
         // Construction should succeed for Vertex AI (project_id is still required)
-        $client = new GoogleClient([
-            'api'        => 'vertex_ai',
-            'project_id' => 'my-project',
-            'location'   => 'us-central1',
-        ]);
+        $client = new GoogleClient(new GoogleClientConfig(
+            projectId: 'my-project',
+            location: 'us-central1',
+            api: GoogleApi::VERTEX_AI,
+        ));
         $this->assertInstanceOf(GoogleClient::class, $client);
     }
 
@@ -275,11 +277,11 @@ class GoogleClientTest extends TestCase {
      * @test
      */
     public function testLocationDefaultsToGlobal() {
-        $client = new GoogleClient([
-            'api' => 'vertex_ai',
-            'project_id' => 'my-project',
-            'access_token' => 'token',
-        ]);
+        $client = new GoogleClient(new GoogleClientConfig(
+            projectId: 'my-project',
+            accessToken: 'token',
+            api: GoogleApi::VERTEX_AI,
+        ));
 
         $fakeHttp = new FakeHttpClient();
         $fakeHttp->addResponse(new HttpResponse(200, [], json_encode([
@@ -300,12 +302,12 @@ class GoogleClientTest extends TestCase {
      * @test
      */
     public function testRegionalLocationUsesRegionalEndpoint() {
-        $client = new GoogleClient([
-            'api' => 'vertex_ai',
-            'project_id' => 'my-project',
-            'location' => 'us-central1',
-            'access_token' => 'token',
-        ]);
+        $client = new GoogleClient(new GoogleClientConfig(
+            projectId: 'my-project',
+            location: 'us-central1',
+            accessToken: 'token',
+            api: GoogleApi::VERTEX_AI,
+        ));
 
         $fakeHttp = new FakeHttpClient();
         $fakeHttp->addResponse(new HttpResponse(200, [], json_encode([
@@ -328,11 +330,11 @@ class GoogleClientTest extends TestCase {
     public function testMissingProjectIdThrows() {
         $this->expectException(InvalidConfigException::class);
         $this->expectExceptionMessage('project_id');
-        new GoogleClient([
-            'api' => 'vertex_ai',
-            'location' => 'us-central1',
-            'access_token' => 'token',
-        ]);
+        new GoogleClient(new GoogleClientConfig(
+            location: 'us-central1',
+            accessToken: 'token',
+            api: GoogleApi::VERTEX_AI,
+        ));
     }
 
     /**
@@ -486,11 +488,10 @@ class GoogleClientTest extends TestCase {
             'usageMetadata' => ['promptTokenCount' => 1, 'candidatesTokenCount' => 1],
         ])));
 
-        $provider = new GoogleClient([
-            'api' => 'gemini',
-            'model' => 'gemini-2.0-flash',
-            'access_token' => 'test-token',
-        ]);
+        $provider = new GoogleClient(new GoogleClientConfig(
+            model: 'gemini-2.0-flash',
+            accessToken: 'test-token',
+        ));
         $provider->setHttpClient($client);
 
         $provider->chat([new Message('user', 'Hi')]);
@@ -510,11 +511,10 @@ class GoogleClientTest extends TestCase {
             "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hi\"}],\"role\":\"model\"},\"finishReason\":\"STOP\"}]}\n\n",
         ]);
 
-        $provider = new GoogleClient([
-            'api' => 'gemini',
-            'model' => 'gemini-2.0-flash',
-            'access_token' => 'test-token',
-        ]);
+        $provider = new GoogleClient(new GoogleClientConfig(
+            model: 'gemini-2.0-flash',
+            accessToken: 'test-token',
+        ));
         $provider->setHttpClient($client);
 
         $provider->streamChat(
@@ -532,11 +532,9 @@ class GoogleClientTest extends TestCase {
      */
     public function testGeminiApiDoesNotRequireProjectId() {
         // Should not throw — project_id and location not needed for Gemini API
-        $provider = new GoogleClient([
-            'api' => 'gemini',
-            'access_token' => 'test-token',
-        ]);
-
+        $provider = new GoogleClient(new GoogleClientConfig(
+            accessToken: 'test-token',
+        ));
         $this->assertEquals('google', $provider->getName());
     }
 
@@ -546,11 +544,11 @@ class GoogleClientTest extends TestCase {
     public function testVertexAiApiStillRequiresProjectId() {
         $this->expectException(InvalidConfigException::class);
         $this->expectExceptionMessage('project_id');
-        new GoogleClient([
-            'api' => 'vertex_ai',
-            'location' => 'us-central1',
-            'access_token' => 'token',
-        ]);
+        new GoogleClient(new GoogleClientConfig(
+            location: 'us-central1',
+            accessToken: 'token',
+            api: GoogleApi::VERTEX_AI,
+        ));
     }
 
     /**
@@ -565,11 +563,10 @@ class GoogleClientTest extends TestCase {
             ]],
         ])));
 
-        $provider = new GoogleClient([
-            'api' => 'gemini',
-            'api_key' => 'test-api-key-123',
-            'model' => 'gemini-2.5-flash',
-        ]);
+        $provider = new GoogleClient(new GoogleClientConfig(
+            model: 'gemini-2.5-flash',
+            apiKey: 'test-api-key-123',
+        ));
         $provider->setHttpClient($client);
 
         $provider->chat([new Message('user', 'Hi')]);
@@ -585,10 +582,7 @@ class GoogleClientTest extends TestCase {
      * @test
      */
     public function testApiKeyDoesNotRequireCredentials() {
-        $provider = new GoogleClient([
-            'api' => 'gemini',
-            'api_key' => 'test-key',
-        ]);
+        $provider = new GoogleClient(new GoogleClientConfig(apiKey: 'test-key'));
 
         $this->assertEquals('google', $provider->getName());
     }

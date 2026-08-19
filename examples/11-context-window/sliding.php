@@ -12,6 +12,10 @@ require_once __DIR__.'/../../vendor/autoload.php';
 use WebFiori\Ai\Context\SlidingWindowStrategy;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
+use WebFiori\Ai\Provider\Google\GoogleApi;
+use WebFiori\Ai\Provider\Google\GoogleApiVersion;
+
 
 $apiKey = getenv('GOOGLE_API_KEY');
 $credentials = __DIR__.'/../../vertex-ai-key.json';

@@ -16,7 +16,7 @@ use WebFiori\Ai\Redaction\RedactionConfig;
 
 echo "=== Structured Audit Logging ===\n\n";
 
-$client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+$client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Basic audit entry

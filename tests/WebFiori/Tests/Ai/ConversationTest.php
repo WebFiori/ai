@@ -18,6 +18,7 @@ use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 use WebFiori\Ai\Usage;
 
 /**
@@ -271,10 +272,7 @@ class ConversationTest extends TestCase {
      * @return OpenAIClient The configured provider.
      */
     private function createProvider(?FakeHttpClient $client = null): OpenAIClient {
-        $provider = new OpenAIClient([
-            'api_key' => 'sk-test',
-            'model' => 'gpt-4o',
-        ]);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'sk-test', model: 'gpt-4o'));
 
         if ($client !== null) {
             $provider->setHttpClient($client);

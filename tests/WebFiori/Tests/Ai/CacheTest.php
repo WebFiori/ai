@@ -22,6 +22,7 @@ use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 use WebFiori\Ai\Usage;
 
 /**
@@ -447,7 +448,7 @@ class CacheTest extends TestCase {
      * @test
      */
     public function testProviderChatCacheHit() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         $cache = new InMemoryCache();
         $client->setCache($cache);
         $client->setCacheConfig(new CacheConfig(
@@ -478,7 +479,7 @@ class CacheTest extends TestCase {
      * @test
      */
     public function testProviderChatCacheMissOnDifferentMessages() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         $cache = new InMemoryCache();
         $client->setCache($cache);
         $client->setCacheConfig(new CacheConfig(skipCacheAboveTemperature: null));
@@ -505,7 +506,7 @@ class CacheTest extends TestCase {
      * @test
      */
     public function testProviderChatSkipsCacheForHighTemperature() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         $cache = new InMemoryCache();
         $client->setCache($cache);
         $client->setCacheConfig(new CacheConfig(skipCacheAboveTemperature: 0.0));
@@ -535,7 +536,7 @@ class CacheTest extends TestCase {
      * @test
      */
     public function testProviderChatCachesWithTemperatureZero() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         $cache = new InMemoryCache();
         $client->setCache($cache);
         $client->setCacheConfig(new CacheConfig(skipCacheAboveTemperature: 0.0));
@@ -561,7 +562,7 @@ class CacheTest extends TestCase {
      * @test
      */
     public function testProviderChatSkipsCacheWithAutoExecuteTools() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         $cache = new InMemoryCache();
         $client->setCache($cache);
         $client->setCacheConfig(new CacheConfig(skipCacheAboveTemperature: null));
@@ -592,7 +593,7 @@ class CacheTest extends TestCase {
      * @test
      */
     public function testProviderEmbeddingCacheHit() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         $cache = new InMemoryCache();
         $client->setCache($cache);
 
@@ -617,7 +618,7 @@ class CacheTest extends TestCase {
      * @test
      */
     public function testProviderCacheDisabled() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         $cache = new InMemoryCache();
         $client->setCache($cache);
         $client->setCacheConfig(new CacheConfig(enabled: false));
@@ -647,7 +648,7 @@ class CacheTest extends TestCase {
      * @test
      */
     public function testProviderNoCacheSet() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         // No cache set
 
         $fakeHttp = new FakeHttpClient();
@@ -666,7 +667,7 @@ class CacheTest extends TestCase {
      * @test
      */
     public function testSetCacheEnablesConfigAutomatically() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
 
         $this->assertFalse($client->getCacheConfig()->isEnabled());
 
@@ -679,7 +680,7 @@ class CacheTest extends TestCase {
      * @test
      */
     public function testSetCacheNullDisables() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         $client->setCache(new InMemoryCache());
         $client->setCache(null);
 
@@ -690,7 +691,7 @@ class CacheTest extends TestCase {
      * @test
      */
     public function testGetCacheConfig() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         $config = new CacheConfig(defaultTtl: 9999);
         $client->setCacheConfig($config);
 
@@ -702,7 +703,7 @@ class CacheTest extends TestCase {
      * @test
      */
     public function testCacheUsesEmbeddingTtl() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         $cache = new InMemoryCache();
         $client->setCache($cache);
         $client->setCacheConfig(new CacheConfig(
@@ -737,7 +738,7 @@ class CacheTest extends TestCase {
      * @test
      */
     public function testCacheDifferentTemperaturesAreDifferentKeys() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         $cache = new InMemoryCache();
         $client->setCache($cache);
         $client->setCacheConfig(new CacheConfig(skipCacheAboveTemperature: null));

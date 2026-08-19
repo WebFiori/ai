@@ -41,7 +41,7 @@ class BedrockClientConfig extends ClientConfig {
      *
      * @var ApiMethod
      */
-    public readonly ApiMethod $apiMethod;
+    public readonly string $apiMethod;
 
     /**
      * Default max tokens for responses.
@@ -88,7 +88,7 @@ class BedrockClientConfig extends ClientConfig {
      * @param string|null $secretKey AWS secret access key (SigV4 auth).
      * @param string|null $sessionToken AWS session token (temporary credentials).
      * @param string|null $profile AWS profile name for credential chain.
-     * @param ApiMethod $apiMethod Invocation API to use.
+     * @param string $apiMethod Invocation API to use. Use ApiMethod constants.
      * @param int $maxTokens Default max tokens for responses.
      * @param int $timeout Request timeout in seconds.
      * @param int $connectTimeout Connection timeout in seconds.
@@ -101,7 +101,7 @@ class BedrockClientConfig extends ClientConfig {
         ?string $secretKey = null,
         ?string $sessionToken = null,
         ?string $profile = null,
-        ApiMethod $apiMethod = ApiMethod::CONVERSE,
+        string $apiMethod = ApiMethod::CONVERSE,
         int $maxTokens = 4096,
         int $timeout = 30,
         int $connectTimeout = 10

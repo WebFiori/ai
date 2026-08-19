@@ -11,6 +11,8 @@ require_once __DIR__.'/../../vendor/autoload.php';
 use WebFiori\Ai\Conversation\Conversation;
 use WebFiori\Ai\Conversation\InMemoryStorage;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
+
 
 $provider = new OpenAIClient([
     'api_key' => getenv('OPENAI_API_KEY'),

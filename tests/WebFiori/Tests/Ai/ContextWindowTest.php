@@ -20,6 +20,7 @@ use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 use WebFiori\Ai\Tool\Tool;
 
 /**
@@ -380,7 +381,7 @@ class ContextWindowTest extends TestCase {
      * @test
      */
     public function testProviderCountTokens() {
-        $provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
 
         $messages = [
             new Message('user', 'Hello world'),
@@ -395,7 +396,7 @@ class ContextWindowTest extends TestCase {
      * @test
      */
     public function testProviderCountTokensWithTools() {
-        $provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
 
         $messages = [new Message('user', 'Hi')];
         $tools = [new Tool('test', 'Description', ['type' => 'object'], fn($a) => '')];
@@ -410,7 +411,7 @@ class ContextWindowTest extends TestCase {
      * @test
      */
     public function testProviderGetRemainingTokensWithoutStrategy() {
-        $provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
 
         $remaining = $provider->getRemainingTokens([new Message('user', 'Hi')]);
 
@@ -421,7 +422,7 @@ class ContextWindowTest extends TestCase {
      * @test
      */
     public function testProviderGetRemainingTokensWithStrategy() {
-        $provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
         $provider->setContextWindowStrategy(new SlidingWindowStrategy(
             maxTokens: 1000,
             reserveForCompletion: 100
@@ -439,7 +440,7 @@ class ContextWindowTest extends TestCase {
      * @test
      */
     public function testProviderSetAndGetContextWindowStrategy() {
-        $provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
 
         $this->assertNull($provider->getContextWindowStrategy());
 
@@ -457,7 +458,7 @@ class ContextWindowTest extends TestCase {
      * @test
      */
     public function testProviderChatWithSlidingWindowStrategy() {
-        $provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
         $provider->setContextWindowStrategy(new SlidingWindowStrategy(
             maxTokens: 100,
             reserveForCompletion: 20
@@ -488,7 +489,7 @@ class ContextWindowTest extends TestCase {
      * @test
      */
     public function testProviderChatWithNoTruncationStrategyThrows() {
-        $provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
         $provider->setContextWindowStrategy(new NoTruncationStrategy(
             maxTokens: 20,
             reserveForCompletion: 5
@@ -510,7 +511,7 @@ class ContextWindowTest extends TestCase {
      * @test
      */
     public function testProviderChatWithoutStrategyPassesAllMessages() {
-        $provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
         // No strategy set
 
         $fakeHttp = new FakeHttpClient();
@@ -541,7 +542,7 @@ class ContextWindowTest extends TestCase {
      * @test
      */
     public function testProviderStreamChatWithStrategy() {
-        $provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
         $provider->setContextWindowStrategy(new SlidingWindowStrategy(
             maxTokens: 100,
             reserveForCompletion: 20
@@ -570,7 +571,7 @@ class ContextWindowTest extends TestCase {
      * @test
      */
     public function testTruncationLogsWarning() {
-        $provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
         $provider->setContextWindowStrategy(new SlidingWindowStrategy(
             maxTokens: 50,
             reserveForCompletion: 10

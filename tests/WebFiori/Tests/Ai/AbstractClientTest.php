@@ -23,6 +23,7 @@ use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\AbstractClient;
+use WebFiori\Ai\Provider\ClientConfig;
 use WebFiori\Ai\Usage;
 
 /**
@@ -203,7 +204,18 @@ class AbstractClientTest extends TestCase {
      * @return AbstractClient A concrete test provider instance.
      */
     private function createTestProvider(array $config): AbstractClient {
-        return new class($config) extends AbstractClient {
+        // Build a minimal typed config from the array for testing
+        $testConfig = new class($config) extends ClientConfig {
+            public function __construct(private array $data) {
+                parent::__construct($data['model'] ?? 'test-model');
+            }
+
+            public function toArray(): array {
+                return $this->data;
+            }
+        };
+
+        return new class($testConfig) extends AbstractClient {
             public function getName(): string {
                 return 'test';
             }

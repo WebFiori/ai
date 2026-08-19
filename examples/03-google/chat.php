@@ -9,6 +9,10 @@ require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
+use WebFiori\Ai\Provider\Google\GoogleApi;
+use WebFiori\Ai\Provider\Google\GoogleApiVersion;
+
 
 $provider = new GoogleClient([
     'api' => getenv('GCP_API') ?: 'gemini',

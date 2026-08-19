@@ -12,6 +12,10 @@ use WebFiori\Ai\Conversation\Conversation;
 use WebFiori\Ai\Conversation\InMemoryStorage;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
+use WebFiori\Ai\Provider\Google\GoogleApi;
+use WebFiori\Ai\Provider\Google\GoogleApiVersion;
+
 
 session_start();
 

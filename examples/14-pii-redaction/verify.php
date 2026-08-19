@@ -158,7 +158,7 @@ echo '   '.($result['latency_ms'] === 250 ? '✅' : '❌')." Numeric values pres
 // ─────────────────────────────────────────────────────────────────────────────
 echo "\n7. Provider integration (logs + metrics)\n";
 
-$client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+$client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
 $client->setRedactionConfig(new RedactionConfig(
     customRules: [
         new RedactionRule('employee_id', '/\bEMP-\d{5}\b/', '[EMP_ID]'),

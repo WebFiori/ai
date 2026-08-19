@@ -21,7 +21,7 @@ echo "=== Context Window Verification ===\n\n";
 
 // Test 1: Token counting
 echo "1. Token Counting\n";
-$provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+$provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
 
 $messages = [
     new Message('user', 'Hello'),
@@ -33,7 +33,7 @@ echo "   ✅ Token counting works\n\n";
 
 // Test 2: Sliding window truncation
 echo "2. Sliding Window Truncation\n";
-$provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+$provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
 $provider->setContextWindowStrategy(new SlidingWindowStrategy(
     maxTokens: 50,
     reserveForCompletion: 10,
@@ -78,7 +78,7 @@ echo "   Sent {$sentCount} of 4 messages\n\n";
 
 // Test 3: System message preservation
 echo "3. System Message Preservation\n";
-$provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+$provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
 $provider->setContextWindowStrategy(new SlidingWindowStrategy(
     maxTokens: 40,
     reserveForCompletion: 10,
@@ -110,7 +110,7 @@ if ($body['messages'][0]['role'] === 'system') {
 
 // Test 4: NoTruncationStrategy throws exception
 echo "4. NoTruncationStrategy Exception\n";
-$provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+$provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
 $provider->setContextWindowStrategy(new NoTruncationStrategy(
     maxTokens: 20,
     reserveForCompletion: 5,
@@ -135,7 +135,7 @@ try {
 
 // Test 5: getRemainingTokens
 echo "5. Get Remaining Tokens\n";
-$provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+$provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
 $provider->setContextWindowStrategy(new SlidingWindowStrategy(
     maxTokens: 1000,
     reserveForCompletion: 200,
@@ -152,7 +152,7 @@ if ($remaining !== null && $remaining > 0 && $remaining < 800) {
 
 // Test 6: No strategy = all messages pass through
 echo "6. No Strategy (passthrough)\n";
-$provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+$provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
 // No strategy set
 
 $fakeHttp = new FakeHttpClient();

@@ -15,6 +15,8 @@ require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Bedrock\BedrockClient;
+use WebFiori\Ai\Provider\Bedrock\BedrockClientConfig;
+
 
 $apiKey = getenv('BEDROCK_API_KEY');
 $region = getenv('AWS_REGION') ?: 'us-east-1';

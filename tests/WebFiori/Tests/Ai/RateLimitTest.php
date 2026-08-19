@@ -16,6 +16,7 @@ use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Http\RateLimitAwareHttpClient;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 
 /**
  * Behavioral tests for rate limit header tracking.
@@ -59,7 +60,7 @@ class RateLimitTest extends TestCase {
      */
     public function testEnableTrackingDoesNotDoubleWrap() {
         $inner = new FakeHttpClient();
-        $provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
         $provider->setHttpClient($inner);
 
         $provider->enableRateLimitTracking();
@@ -327,7 +328,7 @@ class RateLimitTest extends TestCase {
             'x-ratelimit-remaining-requests' => '100',
         ]));
 
-        $provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
         $provider->setHttpClient($inner);
 
         $provider->chat([new Message('user', 'Hello')]);
@@ -366,7 +367,7 @@ class RateLimitTest extends TestCase {
     }
 
     private function createProviderWithClient(FakeHttpClient $inner): OpenAIClient {
-        $provider = new OpenAIClient(['api_key' => 'test', 'model' => 'gpt-4o']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test', model: 'gpt-4o'));
         $provider->setHttpClient(new RateLimitAwareHttpClient($inner));
 
         return $provider;

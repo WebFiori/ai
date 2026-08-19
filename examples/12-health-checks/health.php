@@ -10,6 +10,10 @@
 require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Provider\Google\GoogleClient;
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
+use WebFiori\Ai\Provider\Google\GoogleApi;
+use WebFiori\Ai\Provider\Google\GoogleApiVersion;
+
 
 $credentials = __DIR__.'/../../vertex-ai-key.json';
 

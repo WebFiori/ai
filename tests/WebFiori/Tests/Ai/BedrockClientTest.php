@@ -19,6 +19,7 @@ use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Bedrock\ApiMethod;
 use WebFiori\Ai\Provider\Bedrock\BedrockClient;
+use WebFiori\Ai\Provider\Bedrock\BedrockClientConfig;
 
 /**
  * Unit tests for the Bedrock provider.
@@ -131,11 +132,11 @@ class BedrockClientTest extends TestCase {
      */
     public function testInvalidApiMethodThrows() {
         $this->expectException(InvalidConfigException::class);
-        new BedrockClient([
-            'api_key' => 'key',
-            'region' => 'us-east-1',
-            'api_method' => 'invalid_method',
-        ]);
+        new BedrockClient(new BedrockClientConfig(
+            region: 'us-east-1',
+            apiKey: 'key',
+            apiMethod: 'invalid_method',
+        ));
     }
 
     /**
@@ -190,7 +191,7 @@ class BedrockClientTest extends TestCase {
     public function testMissingBothAuthOptions() {
         // No explicit credentials = ADC will be tried at request time
         // Construction should succeed — no exception
-        $provider = new BedrockClient(['region' => 'us-east-1']);
+        $provider = new BedrockClient(new BedrockClientConfig(region: 'us-east-1'));
         $this->assertEquals('bedrock', $provider->getName());
     }
 
@@ -198,10 +199,10 @@ class BedrockClientTest extends TestCase {
      * @test
      */
     public function testApiKeyOnlyRequiresRegion() {
-        $provider = new BedrockClient([
-            'api_key' => 'test-key',
-            'region' => 'us-east-1',
-        ]);
+        $provider = new BedrockClient(new BedrockClientConfig(
+            region: 'us-east-1',
+            apiKey: 'test-key',
+        ));
         $this->assertEquals('bedrock', $provider->getName());
     }
 
@@ -210,10 +211,11 @@ class BedrockClientTest extends TestCase {
      */
     public function testMissingRegion() {
         $this->expectException(InvalidConfigException::class);
-        new BedrockClient([
-            'access_key' => 'access',
-            'secret_key' => 'secret',
-        ]);
+        new BedrockClient(new BedrockClientConfig(
+            region: '',
+            accessKey: 'access',
+            secretKey: 'secret',
+        ));
     }
 
     /**
@@ -221,7 +223,7 @@ class BedrockClientTest extends TestCase {
      */
     public function testMissingRegionWithApiKey() {
         $this->expectException(InvalidConfigException::class);
-        new BedrockClient(['api_key' => 'test-key']);
+        new BedrockClient(new BedrockClientConfig(region: '', apiKey: 'test-key'));
     }
 
     /**
@@ -255,13 +257,13 @@ class BedrockClientTest extends TestCase {
      * @return BedrockClient
      */
     private function createProvider(string $apiMethod = ApiMethod::CONVERSE): BedrockClient {
-        return new BedrockClient([
-            'access_key' => 'AKIAIOSFODNN7EXAMPLE',
-            'secret_key' => 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
-            'region'     => 'us-east-1',
-            'model'      => 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-            'api_method' => $apiMethod,
-        ]);
+        return new BedrockClient(new BedrockClientConfig(
+            region: 'us-east-1',
+            model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+            accessKey: 'AKIAIOSFODNN7EXAMPLE',
+            secretKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+            apiMethod: $apiMethod,
+        ));
     }
 
     /**
@@ -270,11 +272,11 @@ class BedrockClientTest extends TestCase {
      * @return BedrockClient
      */
     private function createProviderWithApiKey(): BedrockClient {
-        return new BedrockClient([
-            'api_key'    => 'test-bedrock-api-key',
-            'region'     => 'us-east-1',
-            'model'      => 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-            'api_method' => ApiMethod::CONVERSE,
-        ]);
+        return new BedrockClient(new BedrockClientConfig(
+            region: 'us-east-1',
+            model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+            apiKey: 'test-bedrock-api-key',
+            apiMethod: ApiMethod::CONVERSE,
+        ));
     }
 }

@@ -6,7 +6,9 @@ use PHPUnit\Framework\TestCase;
 use WebFiori\Ai\Exception\AuthenticationException;
 use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
+use WebFiori\Ai\Provider\Google\GoogleApi;
 use WebFiori\Ai\Provider\Google\GoogleClient;
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
 
 /**
  * Tests for Google Application Default Credentials (ADC) support.
@@ -44,18 +46,17 @@ class GoogleAdcTest extends TestCase {
 
     public function testConstructionWithoutCredentialsSucceeds(): void {
         // ADC will be tried at request time — construction should not throw
-        $client = new GoogleClient(['api' => 'gemini', 'model' => 'gemini-2.5-flash']);
+        $client = new GoogleClient(new GoogleClientConfig(model: 'gemini-2.5-flash'));
 
         $this->assertInstanceOf(GoogleClient::class, $client);
     }
 
     public function testVertexAiConstructionWithoutCredentialsSucceeds(): void {
-        $client = new GoogleClient([
-            'api'        => 'vertex_ai',
-            'project_id' => 'my-project',
-            'model'      => 'gemini-2.5-flash',
-        ]);
-
+        $client = new GoogleClient(new GoogleClientConfig(
+            model: 'gemini-2.5-flash',
+            projectId: 'my-project',
+            api: GoogleApi::VERTEX_AI,
+        ));
         $this->assertInstanceOf(GoogleClient::class, $client);
     }
 
@@ -85,7 +86,7 @@ class GoogleAdcTest extends TestCase {
             ]],
         ])));
 
-        $client = new GoogleClient(['api' => 'gemini', 'model' => 'gemini-2.5-flash']);
+        $client = new GoogleClient(new GoogleClientConfig(model: 'gemini-2.5-flash'));
         $client->setHttpClient($fakeHttp);
 
         $response = $client->chat([new \WebFiori\Ai\Message('user', 'Hi')]);
@@ -100,11 +101,10 @@ class GoogleAdcTest extends TestCase {
     public function testAdcIgnoresEnvVarIfFileDoesNotExist(): void {
         putenv('GOOGLE_APPLICATION_CREDENTIALS=/nonexistent/key.json');
 
-        $client = new GoogleClient([
-            'api'          => 'gemini',
-            'access_token' => 'explicit-token', // Falls back to explicit
-            'model'        => 'gemini-2.5-flash',
-        ]);
+        $client = new GoogleClient(new GoogleClientConfig(
+            model: 'gemini-2.5-flash',
+            accessToken: 'explicit-token', // Falls back to explicit
+        ));
 
         $fakeHttp = new FakeHttpClient();
         $fakeHttp->addResponse(new HttpResponse(200, [], json_encode([
@@ -138,11 +138,10 @@ class GoogleAdcTest extends TestCase {
             ]],
         ])));
 
-        $client = new GoogleClient([
-            'api'          => 'gemini',
-            'access_token' => 'explicit-priority-token',
-            'model'        => 'gemini-2.5-flash',
-        ]);
+        $client = new GoogleClient(new GoogleClientConfig(
+            model: 'gemini-2.5-flash',
+            accessToken: 'explicit-priority-token',
+        ));
         $client->setHttpClient($fakeHttp);
         $client->chat([new \WebFiori\Ai\Message('user', 'Hi')]);
 
@@ -175,11 +174,10 @@ class GoogleAdcTest extends TestCase {
             ]],
         ])));
 
-        $client = new GoogleClient([
-            'api'         => 'gemini',
-            'credentials' => $explicitKeyFile, // Explicit wins
-            'model'       => 'gemini-2.5-flash',
-        ]);
+        $client = new GoogleClient(new GoogleClientConfig(
+            model: 'gemini-2.5-flash',
+            credentials: $explicitKeyFile, // Explicit wins
+        ));
         $client->setHttpClient($fakeHttp);
         $client->chat([new \WebFiori\Ai\Message('user', 'Hi')]);
 
@@ -195,10 +193,7 @@ class GoogleAdcTest extends TestCase {
         $this->expectException(AuthenticationException::class);
         $this->expectExceptionMessageMatches('/No Google credentials found/');
 
-        $client = new GoogleClient([
-            'api'   => 'gemini',
-            'model' => 'gemini-2.5-flash',
-        ]);
+        $client = new GoogleClient(new GoogleClientConfig(model: 'gemini-2.5-flash'));
 
         // Mock: override ADC methods to return nothing
         $fakeHttp = new FakeHttpClient();
@@ -249,20 +244,11 @@ class GoogleAdcTest extends TestCase {
         ])));
 
         // Use a subclass that points to our test gcloud file
-        $client = new class(['api' => 'gemini', 'model' => 'gemini-2.5-flash'], $tmpGcloud) extends GoogleClient {
-            public function __construct(array $config, private string $gcloudPath) {
-                parent::__construct($config);
-            }
-
-            protected function getGcloudDefaultCredentialsPathPublic(): string {
-                return $this->gcloudPath;
-            }
-        };
-
-        // Can't easily override private method — test via env var path instead
+        // Anonymous class approach removed — constructor now requires typed config.
+        // Test via env var path instead.
         putenv("GOOGLE_APPLICATION_CREDENTIALS={$tmpGcloud}");
 
-        $client2 = new GoogleClient(['api' => 'gemini', 'model' => 'gemini-2.5-flash']);
+        $client2 = new GoogleClient(new GoogleClientConfig(model: 'gemini-2.5-flash'));
         $client2->setHttpClient($fakeHttp);
 
         $response = $client2->chat([new \WebFiori\Ai\Message('user', 'Hi')]);

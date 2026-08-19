@@ -16,6 +16,10 @@ require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
+use WebFiori\Ai\Provider\Google\GoogleApi;
+use WebFiori\Ai\Provider\Google\GoogleApiVersion;
+
 use WebFiori\Ai\Tool\LazyTool;
 use WebFiori\Ai\Tool\Tool;
 use WebFiori\Ai\Tool\ToolResult;

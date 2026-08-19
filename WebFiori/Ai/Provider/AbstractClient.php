@@ -75,18 +75,18 @@ abstract class AbstractClient implements ProviderInterface {
     private CacheKeyGenerator $cacheKeyGenerator;
 
     /**
-     * Provider configuration object.
-     *
-     * @var ClientConfig
-     */
-    private ClientConfig $configObject;
-
-    /**
      * Provider configuration options (array form for backward compatibility).
      *
      * @var array<string, mixed>
      */
     private array $config;
+
+    /**
+     * Provider configuration object.
+     *
+     * @var ClientConfig
+     */
+    private ClientConfig $configObject;
 
     /**
      * Context window management strategy.

@@ -11,6 +11,8 @@ require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Anthropic\AnthropicClient;
+use WebFiori\Ai\Provider\Anthropic\AnthropicClientConfig;
+
 use WebFiori\Ai\Tool\Tool;
 
 $client = new AnthropicClient([
