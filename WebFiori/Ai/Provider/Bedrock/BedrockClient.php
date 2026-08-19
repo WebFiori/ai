@@ -93,24 +93,23 @@ class BedrockClient extends AbstractClient {
     /**
      * Creates a new BedrockClient instance.
      *
-     * @param array<string, mixed> $config Provider configuration.
+     * @param BedrockClientConfig $config Provider configuration.
      *
      * @throws InvalidConfigException If required options are missing.
      */
-    public function __construct(array $config = []) {
+    public function __construct(BedrockClientConfig $config) {
         parent::__construct($config);
 
-        if (!empty($config['access_key'])) {
+        if ($config->accessKey !== null) {
             // Explicit credentials — use directly
-            $sessionToken = $config['session_token'] ?? null;
             $this->signer = new AwsSigner(
-                $config['access_key'],
-                $config['secret_key'],
-                $config['region'],
+                $config->accessKey,
+                $config->secretKey,
+                $config->region,
                 'bedrock',
-                $sessionToken
+                $config->sessionToken
             );
-        } elseif (empty($config['api_key'])) {
+        } elseif ($config->apiKey === null) {
             // No explicit credentials — try credential chain
             $chain = new AwsCredentialChain();
             $creds = $chain->resolve();
@@ -119,14 +118,14 @@ class BedrockClient extends AbstractClient {
                 $this->signer = new AwsSigner(
                     $creds['access_key'],
                     $creds['secret_key'],
-                    $config['region'],
+                    $config->region,
                     'bedrock',
                     $creds['session_token']
                 );
             }
         }
 
-        $this->strategy = $this->createStrategy($config['api_method'] ?? ApiMethod::CONVERSE);
+        $this->strategy = $this->createStrategy($config->apiMethod);
     }
 
     /**

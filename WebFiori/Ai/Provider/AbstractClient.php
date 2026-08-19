@@ -75,7 +75,14 @@ abstract class AbstractClient implements ProviderInterface {
     private CacheKeyGenerator $cacheKeyGenerator;
 
     /**
-     * Provider configuration options.
+     * Provider configuration object.
+     *
+     * @var ClientConfig
+     */
+    private ClientConfig $configObject;
+
+    /**
+     * Provider configuration options (array form for backward compatibility).
      *
      * @var array<string, mixed>
      */
@@ -112,25 +119,23 @@ abstract class AbstractClient implements ProviderInterface {
     /**
      * Creates a new provider instance.
      *
-     * @param array<string, mixed> $config Provider configuration. Common options:
-     *        - 'model': Default model to use for requests.
-     *        - 'timeout': Request timeout in seconds.
-     *        - 'connect_timeout': Connection timeout in seconds.
+     * @param ClientConfig $config Provider configuration object.
      *
      * @throws InvalidConfigException If required configuration is missing.
      */
-    public function __construct(array $config = []) {
-        $this->config = $config;
+    public function __construct(ClientConfig $config) {
+        $this->configObject = $config;
+        $this->config = $config->toArray();
         $this->httpClient = new CurlHttpClient(
-            $config['timeout'] ?? 120,
-            $config['connect_timeout'] ?? 10
+            $config->timeout,
+            $config->connectTimeout
         );
         $this->cacheConfig = new CacheConfig(enabled: false);
         $this->cacheKeyGenerator = new CacheKeyGenerator();
         $this->tokenEstimator = new TokenEstimator();
         $this->statusEmitter = new NullStatusEmitter();
         $this->initAuditTrait();
-        $this->validateConfig($config);
+        $this->validateConfig($this->config);
     }
 
     /**

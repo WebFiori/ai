@@ -51,6 +51,15 @@ use WebFiori\Ai\Usage;
  */
 class AnthropicClient extends AbstractClient {
     /**
+     * Creates a new AnthropicClient instance.
+     *
+     * @param AnthropicClientConfig $config Provider configuration.
+     */
+    public function __construct(AnthropicClientConfig $config) {
+        parent::__construct($config);
+    }
+
+    /**
      * Returns the provider name.
      *
      * @return string The provider identifier.

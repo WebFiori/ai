@@ -76,6 +76,15 @@ class GoogleClient extends AbstractClient {
     private int $tokenExpiresAt = 0;
 
     /**
+     * Creates a new GoogleClient instance.
+     *
+     * @param GoogleClientConfig $config Provider configuration.
+     */
+    public function __construct(GoogleClientConfig $config) {
+        parent::__construct($config);
+    }
+
+    /**
      * Returns the provider name.
      *
      * @return string The provider identifier.
@@ -854,10 +863,16 @@ class GoogleClient extends AbstractClient {
      * When 'api' is set to 'gemini', uses generativelanguage.googleapis.com.
      * Otherwise uses the Google aiplatform.googleapis.com endpoint.
      *
-     * @return bool True if using the Gemini API, false for Google.
+     * @return bool True if using the Gemini API, false for Vertex AI.
      */
     private function isGeminiApi(): bool {
-        return $this->getConfig('api', 'gemini') === 'gemini';
+        $api = $this->getConfig('api', GoogleApi::GEMINI->value);
+
+        if ($api instanceof GoogleApi) {
+            return $api === GoogleApi::GEMINI;
+        }
+
+        return $api === 'gemini' || $api === GoogleApi::GEMINI->value;
     }
 
     /**

@@ -19,6 +19,7 @@ use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolResult;
 
@@ -463,13 +464,13 @@ class GoogleClientTest extends TestCase {
      * @return GoogleClient The configured provider instance.
      */
     private function createProvider(): GoogleClient {
-        return new GoogleClient([
-            'api' => 'vertex_ai',
-            'project_id' => 'my-project',
-            'location' => 'us-central1',
-            'model' => 'gemini-1.5-pro',
-            'access_token' => 'test-access-token',
-        ]);
+        return new GoogleClient(new GoogleClientConfig(
+            model: 'gemini-1.5-pro',
+            projectId: 'my-project',
+            location: 'us-central1',
+            accessToken: 'test-access-token',
+            api: \WebFiori\Ai\Provider\Google\GoogleApi::VERTEX_AI,
+        ));
     }
 
     /**
