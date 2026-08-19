@@ -177,19 +177,10 @@ class InteractionsMessageFormatter {
             ],
         ];
 
-        // Append image parts for multimodal tool results
-        foreach ($result->getParts() as $part) {
-            if ($part->getType() === ContentPart::TYPE_IMAGE_BASE64) {
-                $data = $part->getData();
-                $formatted['result'][] = [
-                    'type' => 'image',
-                    'image' => [
-                        'image_bytes' => $data['data'] ?? '',
-                        'mime_type' => $part->getMimeType() ?? 'image/png',
-                    ],
-                ];
-            }
-        }
+        // NOTE: The Interactions API currently only supports 'text' in function_result.
+        // Image parts in ToolResult are intentionally omitted here as the API
+        // does not yet have a stable format for multimodal function results.
+        // This will be updated when the API documents the correct image format.
 
         return $formatted;
     }

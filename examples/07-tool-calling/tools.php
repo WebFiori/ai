@@ -28,7 +28,7 @@ $provider = new GoogleClient(new GoogleClientConfig(
     credentials: __DIR__.'/../../keys/vertex-ai-key.json',
     projectId: 'webfiori',
     location: 'us-central1',
-    api: \WebFiori\Ai\Provider\Google\GoogleApi::VERTEX_AI,
+    api: WebFiori\Ai\Provider\Google\GoogleApi::VERTEX_AI,
 ));
 
 // Define tools using the Tool class
@@ -42,7 +42,8 @@ $weatherTool = new Tool(
         ],
         'required' => ['location'],
     ],
-    function (array $args): string {
+    function (array $args): string
+    {
         $location = $args['location'] ?? 'Unknown';
         $data = [
             'location' => $location,
@@ -65,7 +66,8 @@ $timeTool = new Tool(
         ],
         'required' => ['timezone'],
     ],
-    function (array $args): string {
+    function (array $args): string
+    {
         $timezone = $args['timezone'] ?? 'UTC';
 
         return json_encode(['timezone' => $timezone, 'time' => date('H:i:s')]);
@@ -83,10 +85,12 @@ $databaseTool = new LazyTool(
         ],
         'required' => ['query'],
     ],
-    function () {
+    function ()
+    {
         echo "  [LazyTool: Database connection initialized]\n";
 
-        return function (array $args): string {
+        return function (array $args): string
+        {
             $query = $args['query'] ?? '';
 
             return json_encode([
@@ -112,7 +116,8 @@ $chartTool = new Tool(
         ],
         'required' => ['title'],
     ],
-    function (array $args): ToolResponse {
+    function (array $args): ToolResponse
+    {
         $title = $args['title'] ?? 'Chart';
 
         // In a real scenario this would generate an actual image.

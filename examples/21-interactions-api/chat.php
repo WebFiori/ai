@@ -17,7 +17,6 @@
 require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
-use WebFiori\Ai\Provider\Google\GoogleApi;
 use WebFiori\Ai\Provider\Google\GoogleApiVersion;
 use WebFiori\Ai\Provider\Google\GoogleClient;
 use WebFiori\Ai\Provider\Google\GoogleClientConfig;
@@ -95,11 +94,13 @@ echo 'AI: ';
 
 $client->streamChat(
     [new Message('user', 'Count from 1 to 5.')],
-    function (string $token) {
+    function (string $token)
+    {
         echo $token;
         flush();
     },
-    function ($response) {
+    function ($response)
+    {
         echo PHP_EOL.'Interaction ID: '.$response->getRequestId().PHP_EOL;
     }
 );
