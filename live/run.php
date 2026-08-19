@@ -20,13 +20,12 @@
  *   source keys/env.sh && php live/run.php
  *   source keys/env.sh && php live/run.php bedrock
  */
-
 $suite = $argv[1] ?? 'all';
 
 $suites = [
-    'gemini2'  => 'live/01-gemini2-chat.php',
-    'gemini3'  => 'live/02-gemini3-interactions.php',
-    'bedrock'  => 'live/03-bedrock-chat.php',
+    'gemini2' => 'live/01-gemini2-chat.php',
+    'gemini3' => 'live/02-gemini3-interactions.php',
+    'bedrock' => 'live/03-bedrock-chat.php',
     'fallback' => 'live/04-fallback.php',
 ];
 

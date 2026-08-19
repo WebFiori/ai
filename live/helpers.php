@@ -16,7 +16,7 @@ define('GEMINI_3_MODEL', 'gemini-2.5-flash-lite'); // Update when gemini-3.x is 
 define('BEDROCK_REGION', 'us-east-1');
 // Note: Update this to a model currently active on the account.
 // The test key may be restricted to specific model versions.
-define('BEDROCK_MODEL', 'anthropic.claude-3-5-sonnet-20241022-v2:0');
+define('BEDROCK_MODEL', 'us.amazon.nova-lite-v1:0');
 
 // ─── Output helpers ───────────────────────────────────────────────────────────
 
@@ -26,6 +26,7 @@ function pass(string $label): void {
 
 function fail(string $label, string $reason = ''): void {
     echo "\033[31m  ❌ FAIL\033[0m  {$label}";
+
     if ($reason) {
         echo " — {$reason}";
     }
@@ -39,24 +40,25 @@ function section(string $title): void {
 function run(string $label, callable $test): void {
     try {
         $result = $test();
+
         if ($result === false) {
             fail($label);
         } else {
             pass($label);
         }
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         fail($label, get_class($e).': '.$e->getMessage());
     }
 }
 
 // ─── Shared config builders ───────────────────────────────────────────────────
 
+use WebFiori\Ai\Provider\Bedrock\BedrockClient;
+use WebFiori\Ai\Provider\Bedrock\BedrockClientConfig;
 use WebFiori\Ai\Provider\Google\GoogleApi;
 use WebFiori\Ai\Provider\Google\GoogleApiVersion;
 use WebFiori\Ai\Provider\Google\GoogleClient;
 use WebFiori\Ai\Provider\Google\GoogleClientConfig;
-use WebFiori\Ai\Provider\Bedrock\BedrockClient;
-use WebFiori\Ai\Provider\Bedrock\BedrockClientConfig;
 
 function gemini2Client(): GoogleClient {
     return new GoogleClient(new GoogleClientConfig(
@@ -80,13 +82,17 @@ function gemini3Client(): GoogleClient {
 }
 
 function bedrockClient(): BedrockClient {
-    $apiKey = getenv('AWS_BEARER_TOKEN');
-    if (!$apiKey) {
-        throw new \RuntimeException('AWS_BEARER_TOKEN not set. Run: source keys/env.sh');
+    $accessKey = getenv('AWS_ACCESS_KEY_ID');
+    $secretKey = getenv('AWS_SECRET_ACCESS_KEY');
+
+    if (!$accessKey || !$secretKey) {
+        throw new RuntimeException('AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY not set. Run: source keys/env.sh');
     }
+
     return new BedrockClient(new BedrockClientConfig(
         region: BEDROCK_REGION,
         model: BEDROCK_MODEL,
-        apiKey: $apiKey,
+        accessKey: $accessKey,
+        secretKey: $secretKey,
     ));
 }

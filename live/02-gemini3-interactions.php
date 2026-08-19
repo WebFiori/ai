@@ -33,13 +33,15 @@ try {
 
 if (!$modelAvailable) {
     echo "\n";
+
     return;
 }
 
 section('Gemini 3.x — Interactions API');
 
 // ─── 1. Basic chat via Interactions API ───────────────────────────────────────
-run('Basic chat (Interactions API)', function () {
+run('Basic chat (Interactions API)', function ()
+{
     $response = gemini3Client()->chat([
         new Message('system', 'You are a helpful assistant. Keep responses concise.'),
         new Message('user', 'What is PHP in one sentence?'),
@@ -49,13 +51,15 @@ run('Basic chat (Interactions API)', function () {
     assert($response->getRequestId() !== null, 'No interaction ID returned');
     echo "    → Interaction ID: {$response->getRequestId()}\n";
     echo "    → ".substr($response->getMessage()->getContent(), 0, 80)."\n";
+
     if ($response->getUsage()) {
         echo "    → Tokens: {$response->getUsage()->getTotalTokens()}\n";
     }
 });
 
 // ─── 2. Raw steps stored on message ───────────────────────────────────────────
-run('Raw steps preserved for stateless replay', function () {
+run('Raw steps preserved for stateless replay', function ()
+{
     $response = gemini3Client()->chat([
         new Message('user', 'Say hello in exactly 3 words.'),
     ]);
@@ -67,7 +71,8 @@ run('Raw steps preserved for stateless replay', function () {
 });
 
 // ─── 3. Multi-turn stateless conversation ─────────────────────────────────────
-run('Multi-turn stateless conversation', function () {
+run('Multi-turn stateless conversation', function ()
+{
     $client = gemini3Client();
 
     // Turn 1
@@ -86,7 +91,8 @@ run('Multi-turn stateless conversation', function () {
 });
 
 // ─── 4. Tool calling ──────────────────────────────────────────────────────────
-run('Tool calling (manual execution)', function () {
+run('Tool calling (manual execution)', function ()
+{
     $weatherTool = new Tool(
         'get_weather',
         'Returns current weather for a given city.',
@@ -107,7 +113,8 @@ run('Tool calling (manual execution)', function () {
 });
 
 // ─── 5. Tool auto-execute loop ────────────────────────────────────────────────
-run('Tool auto-execute loop', function () {
+run('Tool auto-execute loop', function ()
+{
     $weatherTool = new Tool(
         'get_weather',
         'Returns current weather for a city.',
@@ -126,16 +133,19 @@ run('Tool auto-execute loop', function () {
 });
 
 // ─── 6. Streaming ─────────────────────────────────────────────────────────────
-run('Streaming (Interactions API)', function () {
+run('Streaming (Interactions API)', function ()
+{
     $tokens = [];
     $interactionId = null;
 
     gemini3Client()->streamChat(
         [new Message('user', 'Count from 1 to 3.')],
-        function (string $token) use (&$tokens) {
+        function (string $token) use (&$tokens)
+        {
             $tokens[] = $token;
         },
-        function ($response) use (&$interactionId) {
+        function ($response) use (&$interactionId)
+        {
             $interactionId = $response->getRequestId();
         }
     );

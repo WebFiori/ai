@@ -11,12 +11,12 @@ require_once __DIR__.'/helpers.php';
 
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Tool\Tool;
-use WebFiori\Ai\Tool\ToolResult;
 
 section('Gemini 2.x — generateContent API');
 
 // ─── 1. Basic chat ────────────────────────────────────────────────────────────
-run('Basic chat completion', function () {
+run('Basic chat completion', function ()
+{
     $response = gemini2Client()->chat([
         new Message('system', 'You are a helpful assistant. Keep responses concise.'),
         new Message('user', 'What is PHP in one sentence?'),
@@ -29,16 +29,19 @@ run('Basic chat completion', function () {
 });
 
 // ─── 2. Streaming ─────────────────────────────────────────────────────────────
-run('Streaming chat', function () {
+run('Streaming chat', function ()
+{
     $tokens = [];
     $completed = false;
 
     gemini2Client()->streamChat(
         [new Message('user', 'Count from 1 to 5.')],
-        function (string $token) use (&$tokens) {
+        function (string $token) use (&$tokens)
+        {
             $tokens[] = $token;
         },
-        function ($response) use (&$completed) {
+        function ($response) use (&$completed)
+        {
             $completed = true;
         }
     );
@@ -50,7 +53,8 @@ run('Streaming chat', function () {
 });
 
 // ─── 3. Multi-turn conversation ───────────────────────────────────────────────
-run('Multi-turn conversation', function () {
+run('Multi-turn conversation', function ()
+{
     $client = gemini2Client();
     $messages = [
         new Message('user', 'My name is Ibrahim.'),
@@ -67,7 +71,8 @@ run('Multi-turn conversation', function () {
 });
 
 // ─── 4. Tool calling (manual) ─────────────────────────────────────────────────
-run('Tool calling (manual execution)', function () {
+run('Tool calling (manual execution)', function ()
+{
     $client = gemini2Client();
     $weatherTool = new Tool(
         'get_weather',
@@ -92,7 +97,8 @@ run('Tool calling (manual execution)', function () {
 });
 
 // ─── 5. Tool auto-execute ─────────────────────────────────────────────────────
-run('Tool calling (auto-execute)', function () {
+run('Tool calling (auto-execute)', function ()
+{
     $weatherTool = new Tool(
         'get_weather',
         'Returns current weather for a given city.',
@@ -115,7 +121,8 @@ run('Tool calling (auto-execute)', function () {
 });
 
 // ─── 6. JSON mode ─────────────────────────────────────────────────────────────
-run('JSON mode (structured output)', function () {
+run('JSON mode (structured output)', function ()
+{
     $response = gemini2Client()->chat(
         [new Message('user', 'Return a JSON object with keys "name" and "language" for PHP.')],
         ['json_mode' => true]

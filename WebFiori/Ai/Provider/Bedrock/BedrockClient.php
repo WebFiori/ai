@@ -164,10 +164,10 @@ class BedrockClient extends AbstractClient {
      *
      * @return array<string, string> Request headers.
      */
-    public function getBedrockHeaders(string $method, string $url, string $body): array {
+    public function getBedrockHeaders(string $method, string $url, string $body, string $accept = 'application/json'): array {
         $headers = [
             'Content-Type' => 'application/json',
-            'Accept' => 'application/json',
+            'Accept' => $accept,
         ];
 
         if ($this->signer === null) {

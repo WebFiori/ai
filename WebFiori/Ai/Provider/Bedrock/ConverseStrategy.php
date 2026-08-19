@@ -78,9 +78,10 @@ class ConverseStrategy implements InvocationStrategyInterface {
         $url = $client->getBedrockEndpoint($modelId, 'converse-stream');
         $jsonBody = json_encode($body);
 
-        // Converse stream uses AWS Event Stream binary framing
-        $headers = $client->getBedrockHeaders('POST', $url, $jsonBody);
-        $headers['Accept'] = 'application/vnd.amazon.eventstream';
+        // Pass the event stream Accept header before signing so it is
+        // included in the SigV4 canonical headers — otherwise the signature
+        // mismatch error occurs because Accept differs at signing vs send time.
+        $headers = $client->getBedrockHeaders('POST', $url, $jsonBody, 'application/vnd.amazon.eventstream');
 
         return new HttpRequest(
             'POST',

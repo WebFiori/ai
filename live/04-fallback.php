@@ -17,14 +17,12 @@ use WebFiori\Ai\Provider\Fallback\CircuitBreakerConfig;
 use WebFiori\Ai\Provider\Fallback\FallbackConfig;
 use WebFiori\Ai\Provider\Fallback\FallbackProvider;
 use WebFiori\Ai\Provider\Fallback\FallbackStrategy;
-use WebFiori\Ai\Provider\Google\GoogleApi;
-use WebFiori\Ai\Provider\Google\GoogleClient;
-use WebFiori\Ai\Provider\Google\GoogleClientConfig;
 
 section('FallbackProvider — Resilience');
 
 // ─── 1. Sequential fallback — primary succeeds ────────────────────────────────
-run('Sequential fallback (primary succeeds)', function () {
+run('Sequential fallback (primary succeeds)', function ()
+{
     $primary = gemini2Client();
     $fallback = new FallbackProvider([$primary]);
 
@@ -37,10 +35,12 @@ run('Sequential fallback (primary succeeds)', function () {
 });
 
 // ─── 2. Metrics callback ──────────────────────────────────────────────────────
-run('Metrics callback receives correct data', function () {
+run('Metrics callback receives correct data', function ()
+{
     $metrics = [];
     $config = new FallbackConfig();
-    $config->setMetricsCallback(function ($provider, $success, $latency, $error) use (&$metrics) {
+    $config->setMetricsCallback(function ($provider, $success, $latency, $error) use (&$metrics)
+    {
         $metrics[] = compact('provider', 'success', 'latency');
     });
 
@@ -54,7 +54,8 @@ run('Metrics callback receives correct data', function () {
 });
 
 // ─── 3. Circuit breaker — healthy provider stays closed ───────────────────────
-run('Circuit breaker stays closed for healthy provider', function () {
+run('Circuit breaker stays closed for healthy provider', function ()
+{
     $config = new FallbackConfig(
         circuitBreaker: new CircuitBreakerConfig(failureThreshold: 3)
     );
@@ -71,7 +72,8 @@ run('Circuit breaker stays closed for healthy provider', function () {
 });
 
 // ─── 4. Round-robin distribution ──────────────────────────────────────────────
-run('Round-robin distributes across providers', function () {
+run('Round-robin distributes across providers', function ()
+{
     $p1 = gemini2Client();
     $p2 = gemini2Client();
 
@@ -79,6 +81,7 @@ run('Round-robin distributes across providers', function () {
     $fallback = new FallbackProvider([$p1, $p2], $config);
 
     $used = [];
+
     for ($i = 0; $i < 4; $i++) {
         $fallback->chat([new Message('user', 'Hi.')]);
         $used[] = $fallback->getLastUsedProvider();
@@ -90,7 +93,8 @@ run('Round-robin distributes across providers', function () {
 });
 
 // ─── 5. Health check aggregation ──────────────────────────────────────────────
-run('Health check aggregates all providers', function () {
+run('Health check aggregates all providers', function ()
+{
     $fallback = new FallbackProvider([gemini2Client(), gemini2Client()]);
     $result = $fallback->healthCheck(5);
 

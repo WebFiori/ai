@@ -28,18 +28,20 @@ try {
         echo "          Update BEDROCK_MODEL in live/helpers.php.\n\n";
         $bedrockAvailable = false;
     }
-} catch (\RuntimeException $e) {
+} catch (RuntimeException $e) {
     echo "  \033[33m⚠  SKIP\033[0m  {$e->getMessage()}\n\n";
     $bedrockAvailable = false;
 }
 
 if (!$bedrockAvailable) {
     echo "\n";
+
     return;
 }
 
 // ─── 1. Basic chat ────────────────────────────────────────────────────────────
-run('Basic chat completion', function () {
+run('Basic chat completion', function ()
+{
     $response = bedrockClient()->chat([
         new Message('system', 'You are a helpful assistant. Keep responses concise.'),
         new Message('user', 'What is PHP in one sentence?'),
@@ -47,22 +49,26 @@ run('Basic chat completion', function () {
 
     assert($response->getMessage()->getContent() !== '', 'Empty response');
     echo "    → ".substr($response->getMessage()->getContent(), 0, 100)."\n";
+
     if ($response->getUsage()) {
         echo "    → Tokens: {$response->getUsage()->getTotalTokens()}\n";
     }
 });
 
 // ─── 2. Streaming ─────────────────────────────────────────────────────────────
-run('Streaming chat', function () {
+run('Streaming chat', function ()
+{
     $tokens = [];
     $completed = false;
 
     bedrockClient()->streamChat(
         [new Message('user', 'Count from 1 to 5.')],
-        function (string $token) use (&$tokens) {
+        function (string $token) use (&$tokens)
+        {
             $tokens[] = $token;
         },
-        function ($response) use (&$completed) {
+        function ($response) use (&$completed)
+        {
             $completed = true;
         }
     );
@@ -74,7 +80,8 @@ run('Streaming chat', function () {
 });
 
 // ─── 3. Tool calling ──────────────────────────────────────────────────────────
-run('Tool calling (auto-execute)', function () {
+run('Tool calling (auto-execute)', function ()
+{
     $weatherTool = new Tool(
         'get_weather',
         'Returns current weather for a city.',
@@ -93,10 +100,12 @@ run('Tool calling (auto-execute)', function () {
 });
 
 // ─── 4. Health check ──────────────────────────────────────────────────────────
-run('Health check', function () {
+run('Health check', function ()
+{
     $result = bedrockClient()->healthCheck(5);
     echo "    → Available: ".($result->isAvailable() ? 'yes' : 'no')."\n";
     echo "    → Latency: {$result->getLatencyMs()}ms\n";
+
     if (!$result->isAvailable()) {
         echo "    → Error: {$result->getError()}\n";
     }
