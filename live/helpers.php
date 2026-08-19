@@ -1,0 +1,92 @@
+<?php
+
+/**
+ * Live test helpers — shared utilities for all live test scripts.
+ */
+
+require_once __DIR__.'/../vendor/autoload.php';
+
+// ─── Credentials ──────────────────────────────────────────────────────────────
+
+define('KEY_PATH', __DIR__.'/../keys/vertex-ai-key.json');
+define('GCP_PROJECT', 'webfiori');
+define('GCP_LOCATION', 'us-central1');
+define('GEMINI_2_MODEL', 'gemini-2.5-flash');
+define('GEMINI_3_MODEL', 'gemini-2.5-flash-lite'); // Update when gemini-3.x is available
+define('BEDROCK_REGION', 'us-east-1');
+// Note: Update this to a model currently active on the account.
+// The test key may be restricted to specific model versions.
+define('BEDROCK_MODEL', 'anthropic.claude-3-5-sonnet-20241022-v2:0');
+
+// ─── Output helpers ───────────────────────────────────────────────────────────
+
+function pass(string $label): void {
+    echo "\033[32m  ✅ PASS\033[0m  {$label}\n";
+}
+
+function fail(string $label, string $reason = ''): void {
+    echo "\033[31m  ❌ FAIL\033[0m  {$label}";
+    if ($reason) {
+        echo " — {$reason}";
+    }
+    echo "\n";
+}
+
+function section(string $title): void {
+    echo "\n\033[1;36m══ {$title} ══\033[0m\n";
+}
+
+function run(string $label, callable $test): void {
+    try {
+        $result = $test();
+        if ($result === false) {
+            fail($label);
+        } else {
+            pass($label);
+        }
+    } catch (\Throwable $e) {
+        fail($label, get_class($e).': '.$e->getMessage());
+    }
+}
+
+// ─── Shared config builders ───────────────────────────────────────────────────
+
+use WebFiori\Ai\Provider\Google\GoogleApi;
+use WebFiori\Ai\Provider\Google\GoogleApiVersion;
+use WebFiori\Ai\Provider\Google\GoogleClient;
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
+use WebFiori\Ai\Provider\Bedrock\BedrockClient;
+use WebFiori\Ai\Provider\Bedrock\BedrockClientConfig;
+
+function gemini2Client(): GoogleClient {
+    return new GoogleClient(new GoogleClientConfig(
+        model: GEMINI_2_MODEL,
+        projectId: GCP_PROJECT,
+        location: GCP_LOCATION,
+        credentials: KEY_PATH,
+        api: GoogleApi::VERTEX_AI,
+    ));
+}
+
+function gemini3Client(): GoogleClient {
+    return new GoogleClient(new GoogleClientConfig(
+        model: GEMINI_3_MODEL,
+        projectId: GCP_PROJECT,
+        location: GCP_LOCATION,
+        credentials: KEY_PATH,
+        api: GoogleApi::VERTEX_AI,
+        apiVersion: GoogleApiVersion::INTERACTIONS,
+    ));
+}
+
+function bedrockClient(): BedrockClient {
+    $apiKey = getenv('AWS_BEARER_TOKEN');
+    if (!$apiKey) {
+        throw new \RuntimeException('AWS_BEARER_TOKEN not set. Run: source keys/env.sh');
+    }
+    return new BedrockClient(new BedrockClientConfig(
+        region: BEDROCK_REGION,
+        model: BEDROCK_MODEL,
+        apiKey: $apiKey,
+    ));
+}
