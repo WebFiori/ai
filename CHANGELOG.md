@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Features
+
+* **resilience:** Implement provider fallback with automatic failover ([#31](https://github.com/WebFiori/ai/issues/31))
+  - `FallbackProvider` wraps multiple providers with automatic failover
+  - Three routing strategies: `sequential`, `round_robin`, `weighted`
+  - Circuit breaker pattern to avoid hammering failing providers
+  - Configurable failure conditions (which exceptions trigger failover)
+  - Metrics callback for observability
+  - Full `ProviderInterface` implementation - transparent to callers
+
 ## [0.5.1](https://github.com/WebFiori/ai/compare/v0.5.0...v0.5.1) (2026-08-16)
 
 

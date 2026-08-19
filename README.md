@@ -29,6 +29,7 @@ A provider-agnostic AI library for PHP. Supports chat completions, embeddings, i
 - **Image Generation** — Generate images from text prompts
 - **Tool/Function Calling** — Define tools the AI can invoke during conversation
 - **Conversation Management** — Built-in conversation history with swappable storage
+- **Provider Fallback** — Automatic failover with circuit breaker pattern for resilience
 - **Enterprise Ready** — Retry logic, rate limiting, caching, health checks, metrics, audit logging
 
 ## Supported PHP Versions
@@ -95,6 +96,22 @@ $client = new GoogleClient([
 $response = $client->chat([
     new Message('user', 'What is PHP?'),
 ]);
+```
+
+### Provider Fallback
+
+```php
+use WebFiori\Ai\Provider\Fallback\FallbackProvider;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\Anthropic\AnthropicClient;
+
+// Automatic failover: tries OpenAI first, then Anthropic if OpenAI fails
+$provider = new FallbackProvider([
+    new OpenAIClient(['api_key' => '...', 'model' => 'gpt-4o']),
+    new AnthropicClient(['api_key' => '...', 'model' => 'claude-sonnet-4-20250514']),
+]);
+
+$response = $provider->chat([new Message('user', 'Hello!')]);
 ```
 
 ## Documentation

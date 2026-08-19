@@ -115,7 +115,7 @@ class TextChunker {
             if ($chunkText !== '') {
                 // Generate unique ID based on source and position
                 $sourceKey = $metadata['source'] ?? 'doc';
-                $id = md5($sourceKey . '-' . $position . '-' . $index);
+                $id = md5($sourceKey.'-'.$position.'-'.$index);
 
                 $chunks[] = new ChunkResult(
                     id: $id,

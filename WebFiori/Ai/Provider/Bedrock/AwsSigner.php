@@ -64,10 +64,10 @@ class AwsSigner {
      * @param string|null $sessionToken Optional session token for temporary credentials.
      */
     public function __construct(string $accessKey, string $secretKey, string $region, string $service = 'bedrock', ?string $sessionToken = null) {
-        $this->accessKey    = $accessKey;
-        $this->secretKey    = $secretKey;
-        $this->region       = $region;
-        $this->service      = $service;
+        $this->accessKey = $accessKey;
+        $this->secretKey = $secretKey;
+        $this->region = $region;
+        $this->service = $service;
         $this->sessionToken = $sessionToken;
     }
 

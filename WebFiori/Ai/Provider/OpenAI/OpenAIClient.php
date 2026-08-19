@@ -26,10 +26,10 @@ use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\AbstractClient;
-use WebFiori\Ai\Tool\ToolCall;
-use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Tool\BuiltInToolInterface;
 use WebFiori\Ai\Tool\OpenAIBuiltInTool;
+use WebFiori\Ai\Tool\ToolCall;
+use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Usage;
 
 /**
@@ -153,6 +153,34 @@ class OpenAIClient extends AbstractClient {
         } elseif (!empty($options['json_mode'])) {
             $body['response_format'] = ['type' => 'json_object'];
         }
+    }
+
+    /**
+     * Formats built-in tool identifiers into the OpenAI tools format.
+     *
+     * OpenAI built-in tools use a 'type' field directly (no 'function' wrapper).
+     *
+     * @param BuiltInToolInterface[] $builtInTools The built-in tools.
+     *
+     * @return array<int, array<string, mixed>> The formatted tools array.
+     *
+     * @throws UnsupportedFeatureException If a built-in tool is not an OpenAIBuiltInTool.
+     */
+    private function formatBuiltInTools(array $builtInTools): array {
+        $formatted = [];
+
+        foreach ($builtInTools as $tool) {
+            if (!($tool instanceof OpenAIBuiltInTool)) {
+                throw new UnsupportedFeatureException(
+                    'built_in_tools:'.get_class($tool),
+                    'OpenAIClient'
+                );
+            }
+
+            $formatted[] = ['type' => $tool->getValue()];
+        }
+
+        return $formatted;
     }
 
     /**
@@ -333,34 +361,6 @@ class OpenAIClient extends AbstractClient {
                     'parameters' => $tool->getParameters(),
                 ],
             ];
-        }
-
-        return $formatted;
-    }
-
-    /**
-     * Formats built-in tool identifiers into the OpenAI tools format.
-     *
-     * OpenAI built-in tools use a 'type' field directly (no 'function' wrapper).
-     *
-     * @param BuiltInToolInterface[] $builtInTools The built-in tools.
-     *
-     * @return array<int, array<string, mixed>> The formatted tools array.
-     *
-     * @throws UnsupportedFeatureException If a built-in tool is not an OpenAIBuiltInTool.
-     */
-    private function formatBuiltInTools(array $builtInTools): array {
-        $formatted = [];
-
-        foreach ($builtInTools as $tool) {
-            if (!($tool instanceof OpenAIBuiltInTool)) {
-                throw new UnsupportedFeatureException(
-                    'built_in_tools:' . get_class($tool),
-                    'OpenAIClient'
-                );
-            }
-
-            $formatted[] = ['type' => $tool->getValue()];
         }
 
         return $formatted;

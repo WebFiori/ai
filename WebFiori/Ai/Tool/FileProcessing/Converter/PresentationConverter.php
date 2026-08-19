@@ -28,6 +28,52 @@ use ZipArchive;
  */
 class PresentationConverter extends AbstractConverter {
     /**
+     * Converts presentation content to plain text, slide by slide.
+     *
+     * @param string $content Raw file bytes.
+     * @param ConversionOptions $options Conversion options.
+     *
+     * @return ConversionResult
+     */
+    public function convert(string $content, ConversionOptions $options): ConversionResult {
+        if (!extension_loaded('zip')) {
+            throw new RuntimeException('The "zip" PHP extension is required for PresentationConverter.');
+        }
+        $format = $this->resolveFormat($options->getOutputFormat());
+        $pageRange = $options->getExtra('page_range', null);
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'wf_ppt_');
+        file_put_contents($tmpFile, $content);
+
+        try {
+            [$slides, $totalSlides, $slideTitles] = $this->extractSlides($tmpFile, $pageRange);
+        } finally {
+            unlink($tmpFile);
+        }
+
+        $lines = [];
+
+        foreach ($slides as $slideNum => $slideText) {
+            $lines[] = "--- Slide {$slideNum} ---";
+            $lines[] = $slideText;
+            $lines[] = '';
+        }
+
+        $metadata = [
+            'total_slides' => $totalSlides,
+            'extracted_slides' => count($slides),
+            'slide_titles' => $slideTitles,
+        ];
+
+        return $this->makeResult(
+            content: trim(implode("\n", $lines)),
+            maxOutput: $options->getMaxOutput(),
+            mimeType: $this->getSupportedMimeTypes()[0],
+            format: $format,
+            metadata: $metadata,
+        );
+    }
+    /**
      * Returns the default output format.
      *
      * @return string
@@ -54,53 +100,6 @@ class PresentationConverter extends AbstractConverter {
         return [
             'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         ];
-    }
-
-    /**
-     * Converts presentation content to plain text, slide by slide.
-     *
-     * @param string $content Raw file bytes.
-     * @param ConversionOptions $options Conversion options.
-     *
-     * @return ConversionResult
-     */
-    public function convert(string $content, ConversionOptions $options): ConversionResult {
-        if (!extension_loaded('zip')) {
-            throw new RuntimeException('The "zip" PHP extension is required for PresentationConverter.');
-        }
-        $format    = $this->resolveFormat($options->getOutputFormat());
-        $pageRange = $options->getExtra('page_range', null);
-
-        $tmpFile = tempnam(sys_get_temp_dir(), 'wf_ppt_');
-        file_put_contents($tmpFile, $content);
-
-        try {
-            [$slides, $totalSlides, $slideTitles] = $this->extractSlides($tmpFile, $pageRange);
-        } finally {
-            unlink($tmpFile);
-        }
-
-        $lines = [];
-
-        foreach ($slides as $slideNum => $slideText) {
-            $lines[] = "--- Slide {$slideNum} ---";
-            $lines[] = $slideText;
-            $lines[] = '';
-        }
-
-        $metadata = [
-            'total_slides'     => $totalSlides,
-            'extracted_slides' => count($slides),
-            'slide_titles'     => $slideTitles,
-        ];
-
-        return $this->makeResult(
-            content: trim(implode("\n", $lines)),
-            maxOutput: $options->getMaxOutput(),
-            mimeType: $this->getSupportedMimeTypes()[0],
-            format: $format,
-            metadata: $metadata,
-        );
     }
 
     /**
@@ -131,7 +130,7 @@ class PresentationConverter extends AbstractConverter {
             }
 
             $allowedSlides = $this->parsePageRange($pageRange, $totalSlides);
-            $slides      = [];
+            $slides = [];
             $slideTitles = [];
 
             for ($i = 1; $i <= $totalSlides; $i++) {
@@ -196,35 +195,6 @@ class PresentationConverter extends AbstractConverter {
     }
 
     /**
-     * Parses a slide XML and extracts all text.
-     *
-     * @param string $slideXml
-     *
-     * @return string
-     */
-    private function parseSlideXml(string $slideXml): string {
-        $doc = simplexml_load_string($slideXml);
-
-        if ($doc === false) {
-            return '';
-        }
-
-        $doc->registerXPathNamespace('a', 'http://schemas.openxmlformats.org/drawingml/2006/main');
-
-        $textParts = [];
-
-        foreach ($doc->xpath('//a:t') as $t) {
-            $text = trim((string) $t);
-
-            if ($text !== '') {
-                $textParts[] = $text;
-            }
-        }
-
-        return implode(' ', $textParts);
-    }
-
-    /**
      * Parses a page range string into an array of slide numbers.
      *
      * Supports formats: "1-5", "2,4,6", "1-3,5,7-9"
@@ -257,5 +227,34 @@ class PresentationConverter extends AbstractConverter {
         }
 
         return array_unique($result);
+    }
+
+    /**
+     * Parses a slide XML and extracts all text.
+     *
+     * @param string $slideXml
+     *
+     * @return string
+     */
+    private function parseSlideXml(string $slideXml): string {
+        $doc = simplexml_load_string($slideXml);
+
+        if ($doc === false) {
+            return '';
+        }
+
+        $doc->registerXPathNamespace('a', 'http://schemas.openxmlformats.org/drawingml/2006/main');
+
+        $textParts = [];
+
+        foreach ($doc->xpath('//a:t') as $t) {
+            $text = trim((string) $t);
+
+            if ($text !== '') {
+                $textParts[] = $text;
+            }
+        }
+
+        return implode(' ', $textParts);
     }
 }

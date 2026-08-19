@@ -28,48 +28,48 @@ class FileTypeDetector {
      */
     private const EXTENSION_MAP = [
         // Text
-        'txt'  => 'text/plain',
-        'csv'  => 'text/csv',
+        'txt' => 'text/plain',
+        'csv' => 'text/csv',
         'json' => 'application/json',
-        'xml'  => 'application/xml',
+        'xml' => 'application/xml',
         'html' => 'text/html',
-        'htm'  => 'text/html',
-        'md'   => 'text/markdown',
+        'htm' => 'text/html',
+        'md' => 'text/markdown',
         'yaml' => 'application/x-yaml',
-        'yml'  => 'application/x-yaml',
+        'yml' => 'application/x-yaml',
         // Code
-        'php'  => 'text/x-php',
-        'py'   => 'text/x-python',
-        'js'   => 'text/javascript',
-        'ts'   => 'text/typescript',
-        'css'  => 'text/css',
-        'sql'  => 'text/x-sql',
-        'sh'   => 'text/x-shellscript',
+        'php' => 'text/x-php',
+        'py' => 'text/x-python',
+        'js' => 'text/javascript',
+        'ts' => 'text/typescript',
+        'css' => 'text/css',
+        'sql' => 'text/x-sql',
+        'sh' => 'text/x-shellscript',
         // Office Open XML
         'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         // ODF
-        'ods'  => 'application/vnd.oasis.opendocument.spreadsheet',
-        'odt'  => 'application/vnd.oasis.opendocument.text',
-        'odp'  => 'application/vnd.oasis.opendocument.presentation',
+        'ods' => 'application/vnd.oasis.opendocument.spreadsheet',
+        'odt' => 'application/vnd.oasis.opendocument.text',
+        'odp' => 'application/vnd.oasis.opendocument.presentation',
         // Legacy Office (binary)
-        'xls'  => 'application/vnd.ms-excel',
-        'doc'  => 'application/msword',
-        'ppt'  => 'application/vnd.ms-powerpoint',
+        'xls' => 'application/vnd.ms-excel',
+        'doc' => 'application/msword',
+        'ppt' => 'application/vnd.ms-powerpoint',
         // Archives
-        'zip'  => 'application/zip',
-        'tar'  => 'application/x-tar',
-        'gz'   => 'application/gzip',
+        'zip' => 'application/zip',
+        'tar' => 'application/x-tar',
+        'gz' => 'application/gzip',
         // Images
-        'jpg'  => 'image/jpeg',
+        'jpg' => 'image/jpeg',
         'jpeg' => 'image/jpeg',
-        'png'  => 'image/png',
-        'gif'  => 'image/gif',
+        'png' => 'image/png',
+        'gif' => 'image/gif',
         'webp' => 'image/webp',
         // Documents
-        'pdf'  => 'application/pdf',
-        'rtf'  => 'application/rtf',
+        'pdf' => 'application/pdf',
+        'rtf' => 'application/rtf',
     ];
 
     /**
@@ -112,10 +112,10 @@ class FileTypeDetector {
         $isText = $this->isTextMime($mime);
 
         return [
-            'mime'      => $mime,
+            'mime' => $mime,
             'extension' => $extension,
-            'isText'    => $isText,
-            'isUrl'     => $isUrl,
+            'isText' => $isText,
+            'isUrl' => $isUrl,
         ];
     }
 

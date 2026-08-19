@@ -81,8 +81,8 @@ class FileVectorStore implements VectorStorageInterface {
         }
 
         $this->storagePath = rtrim($storagePath, DIRECTORY_SEPARATOR);
-        $this->vectorsPath = $this->storagePath . DIRECTORY_SEPARATOR . 'vectors';
-        $this->manifestPath = $this->storagePath . DIRECTORY_SEPARATOR . 'manifest.json';
+        $this->vectorsPath = $this->storagePath.DIRECTORY_SEPARATOR.'vectors';
+        $this->manifestPath = $this->storagePath.DIRECTORY_SEPARATOR.'manifest.json';
 
         if (!is_dir($this->storagePath)) {
             if (!$createIfMissing) {
@@ -110,7 +110,7 @@ class FileVectorStore implements VectorStorageInterface {
      */
     public function clear(): void {
         foreach ($this->manifest as $entry) {
-            $filePath = $this->vectorsPath . DIRECTORY_SEPARATOR . $entry['file'];
+            $filePath = $this->vectorsPath.DIRECTORY_SEPARATOR.$entry['file'];
 
             if (file_exists($filePath)) {
                 unlink($filePath);
@@ -142,7 +142,7 @@ class FileVectorStore implements VectorStorageInterface {
             return false;
         }
 
-        $filePath = $this->vectorsPath . DIRECTORY_SEPARATOR . $this->manifest[$id]['file'];
+        $filePath = $this->vectorsPath.DIRECTORY_SEPARATOR.$this->manifest[$id]['file'];
 
         if (file_exists($filePath)) {
             unlink($filePath);
@@ -217,7 +217,8 @@ class FileVectorStore implements VectorStorageInterface {
             );
         }
 
-        usort($results, function (VectorRecord $a, VectorRecord $b): int {
+        usort($results, function (VectorRecord $a, VectorRecord $b): int
+        {
             return $b->getScore() <=> $a->getScore();
         });
 
@@ -235,11 +236,11 @@ class FileVectorStore implements VectorStorageInterface {
      */
     public function store(string $id, array $vector, array $metadata = []): void {
         $filename = $this->generateFilename($id);
-        $filePath = $this->vectorsPath . DIRECTORY_SEPARATOR . $filename;
+        $filePath = $this->vectorsPath.DIRECTORY_SEPARATOR.$filename;
 
         // Delete old file if ID exists with different filename
         if (isset($this->manifest[$id]) && $this->manifest[$id]['file'] !== $filename) {
-            $oldPath = $this->vectorsPath . DIRECTORY_SEPARATOR . $this->manifest[$id]['file'];
+            $oldPath = $this->vectorsPath.DIRECTORY_SEPARATOR.$this->manifest[$id]['file'];
 
             if (file_exists($oldPath)) {
                 unlink($oldPath);
@@ -274,11 +275,11 @@ class FileVectorStore implements VectorStorageInterface {
         foreach ($records as $record) {
             $id = $record->getId();
             $filename = $this->generateFilename($id);
-            $filePath = $this->vectorsPath . DIRECTORY_SEPARATOR . $filename;
+            $filePath = $this->vectorsPath.DIRECTORY_SEPARATOR.$filename;
 
             // Delete old file if ID exists with different filename
             if (isset($this->manifest[$id]) && $this->manifest[$id]['file'] !== $filename) {
-                $oldPath = $this->vectorsPath . DIRECTORY_SEPARATOR . $this->manifest[$id]['file'];
+                $oldPath = $this->vectorsPath.DIRECTORY_SEPARATOR.$this->manifest[$id]['file'];
 
                 if (file_exists($oldPath)) {
                     unlink($oldPath);
@@ -340,7 +341,7 @@ class FileVectorStore implements VectorStorageInterface {
      * @return string The filename (without path).
      */
     private function generateFilename(string $id): string {
-        return md5($id) . '.json';
+        return md5($id).'.json';
     }
 
     /**
@@ -382,7 +383,7 @@ class FileVectorStore implements VectorStorageInterface {
             return null;
         }
 
-        $filePath = $this->vectorsPath . DIRECTORY_SEPARATOR . $this->manifest[$id]['file'];
+        $filePath = $this->vectorsPath.DIRECTORY_SEPARATOR.$this->manifest[$id]['file'];
 
         if (!file_exists($filePath)) {
             return null;
@@ -434,13 +435,13 @@ class FileVectorStore implements VectorStorageInterface {
      */
     private function saveManifest(): void {
         $content = json_encode($this->manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-        $tempPath = $this->manifestPath . '.tmp';
+        $tempPath = $this->manifestPath.'.tmp';
 
         if (file_put_contents($tempPath, $content) === false) {
             throw new RuntimeException("Failed to write manifest temp file: {$tempPath}");
         }
 
-        $handle = fopen($this->manifestPath . '.lock', 'c');
+        $handle = fopen($this->manifestPath.'.lock', 'c');
 
         if ($handle === false) {
             throw new RuntimeException("Failed to create manifest lock file");
@@ -467,7 +468,7 @@ class FileVectorStore implements VectorStorageInterface {
      * @param string $content File content.
      */
     private function writeFileAtomic(string $path, string $content): void {
-        $tempPath = $path . '.tmp';
+        $tempPath = $path.'.tmp';
 
         if (file_put_contents($tempPath, $content) === false) {
             throw new RuntimeException("Failed to write temp file: {$tempPath}");

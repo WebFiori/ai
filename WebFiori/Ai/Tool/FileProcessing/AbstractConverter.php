@@ -43,7 +43,7 @@ abstract class AbstractConverter implements ConverterInterface {
         if ($originalSize > $maxOutput) {
             $content = mb_substr($content, 0, $maxOutput);
             $content .= sprintf(
-                "\n\n[...content truncated at %s characters. Original size: %s characters. " .
+                "\n\n[...content truncated at %s characters. Original size: %s characters. ".
                 "Use max_output option to increase the limit or request a specific section.]",
                 number_format($maxOutput),
                 number_format($originalSize)

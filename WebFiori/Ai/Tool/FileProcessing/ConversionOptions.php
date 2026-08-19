@@ -55,15 +55,6 @@ class ConversionOptions {
     }
 
     /**
-     * Returns converter-specific extra options.
-     *
-     * @return array<string, mixed>
-     */
-    public function getExtras(): array {
-        return $this->extras;
-    }
-
-    /**
      * Returns a specific extra option by key.
      *
      * @param string $key The option key.
@@ -73,6 +64,15 @@ class ConversionOptions {
      */
     public function getExtra(string $key, mixed $default = null): mixed {
         return $this->extras[$key] ?? $default;
+    }
+
+    /**
+     * Returns converter-specific extra options.
+     *
+     * @return array<string, mixed>
+     */
+    public function getExtras(): array {
+        return $this->extras;
     }
 
     /**

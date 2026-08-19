@@ -157,7 +157,7 @@ class RetrievalTool implements ToolInterface {
                 ],
                 'top_k' => [
                     'type' => 'integer',
-                    'description' => 'Maximum number of results to return (default: ' . $this->defaultTopK . ')',
+                    'description' => 'Maximum number of results to return (default: '.$this->defaultTopK.')',
                 ],
             ],
             'required' => ['query'],

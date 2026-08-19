@@ -33,18 +33,17 @@ use SQLite3;
  */
 class SqliteVectorStore implements VectorStorageInterface {
     /**
-     * SQLite3 database connection.
-     *
-     * @var SQLite3
-     */
-    private SQLite3 $db;
-
-    /**
      * Path to the SQLite database file.
      *
      * @var string
      */
     private string $databasePath;
+    /**
+     * SQLite3 database connection.
+     *
+     * @var SQLite3
+     */
+    private SQLite3 $db;
 
     /**
      * Creates a new SqliteVectorStore instance.
@@ -181,17 +180,17 @@ class SqliteVectorStore implements VectorStorageInterface {
             $conditions = [];
 
             foreach ($filter as $key => $value) {
-                $escapedPath = SQLite3::escapeString('$.' . $key);
+                $escapedPath = SQLite3::escapeString('$.'.$key);
 
                 if (is_string($value)) {
                     $escapedValue = SQLite3::escapeString($value);
                     $conditions[] = "json_extract(metadata, '{$escapedPath}') = '{$escapedValue}'";
                 } else {
-                    $conditions[] = "json_extract(metadata, '{$escapedPath}') = " . (is_bool($value) ? (int) $value : $value);
+                    $conditions[] = "json_extract(metadata, '{$escapedPath}') = ".(is_bool($value) ? (int) $value : $value);
                 }
             }
 
-            $sql .= ' WHERE ' . implode(' AND ', $conditions);
+            $sql .= ' WHERE '.implode(' AND ', $conditions);
         }
 
         $result = $this->db->query($sql);
@@ -209,7 +208,8 @@ class SqliteVectorStore implements VectorStorageInterface {
             );
         }
 
-        usort($results, function (VectorRecord $a, VectorRecord $b): int {
+        usort($results, function (VectorRecord $a, VectorRecord $b): int
+        {
             return $b->getScore() <=> $a->getScore();
         });
 

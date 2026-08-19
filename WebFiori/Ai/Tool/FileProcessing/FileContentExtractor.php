@@ -57,6 +57,13 @@ class FileContentExtractor implements ToolInterface {
     private ?string $defaultOutputFormat = null;
 
     /**
+     * File type detector.
+     *
+     * @var FileTypeDetector
+     */
+    private FileTypeDetector $detector;
+
+    /**
      * Global max output in characters.
      *
      * @var int
@@ -69,13 +76,6 @@ class FileContentExtractor implements ToolInterface {
      * @var ConverterRegistry
      */
     private ConverterRegistry $registry;
-
-    /**
-     * File type detector.
-     *
-     * @var FileTypeDetector
-     */
-    private FileTypeDetector $detector;
 
     /**
      * Creates a new FileContentExtractor instance with built-in converters.
@@ -129,7 +129,7 @@ class FileContentExtractor implements ToolInterface {
 
             // Use text converter for text files with no specific converter
             if ($converter === null) {
-                $converter = new Converter\TextConverter();
+                $converter = new TextConverter();
             }
 
             // Build options (priority: model arg → global → default 50000)
@@ -153,11 +153,11 @@ class FileContentExtractor implements ToolInterface {
             $result = $converter->convert($rawContent, $options);
 
             $response = [
-                'content'    => $result->getContent(),
-                'format'     => $result->getFormat(),
-                'mime_type'  => $result->getMimeType(),
-                'file_name'  => basename($filePath),
-                'truncated'  => $result->isTruncated(),
+                'content' => $result->getContent(),
+                'format' => $result->getFormat(),
+                'mime_type' => $result->getMimeType(),
+                'file_name' => basename($filePath),
+                'truncated' => $result->isTruncated(),
             ];
 
             if ($result->isTruncated()) {
@@ -171,13 +171,13 @@ class FileContentExtractor implements ToolInterface {
             return json_encode($response, JSON_UNESCAPED_UNICODE);
         } catch (UnsupportedFeatureException $e) {
             return json_encode([
-                'error'     => $e->getMessage(),
+                'error' => $e->getMessage(),
                 'file_name' => basename($filePath),
-                'hint'      => 'Register a custom converter for this file type using registerConverter().',
+                'hint' => 'Register a custom converter for this file type using registerConverter().',
             ]);
         } catch (RuntimeException $e) {
             return json_encode([
-                'error'     => $e->getMessage(),
+                'error' => $e->getMessage(),
                 'file_name' => basename($filePath),
             ]);
         }
@@ -190,8 +190,8 @@ class FileContentExtractor implements ToolInterface {
      */
     public function getDescription(): string {
         return 'Extracts readable text content from a file or URL. '
-             . 'Use this when you receive a file path or URL and need to read its content. '
-             . 'Supports text files, spreadsheets (xlsx), documents (docx), presentations (pptx), and more.';
+             .'Use this when you receive a file path or URL and need to read its content. '
+             .'Supports text files, spreadsheets (xlsx), documents (docx), presentations (pptx), and more.';
     }
 
     /**
@@ -213,20 +213,20 @@ class FileContentExtractor implements ToolInterface {
             'type' => 'object',
             'properties' => [
                 'file_path' => [
-                    'type'        => 'string',
+                    'type' => 'string',
                     'description' => 'Absolute local file path or HTTP(S) URL to the file.',
                 ],
                 'output_format' => [
-                    'type'        => 'string',
-                    'enum'        => ['auto', 'plain_text', 'csv', 'markdown_table', 'json'],
+                    'type' => 'string',
+                    'enum' => ['auto', 'plain_text', 'csv', 'markdown_table', 'json'],
                     'description' => 'Preferred output format. Defaults to auto (converter decides).',
                 ],
                 'max_output' => [
-                    'type'        => 'integer',
+                    'type' => 'integer',
                     'description' => 'Maximum characters to return. Default: 50000.',
                 ],
                 'options' => [
-                    'type'        => 'object',
+                    'type' => 'object',
                     'description' => 'Extra options: sheet_name, max_rows, page_range, include_metadata.',
                 ],
             ],
@@ -364,7 +364,7 @@ class FileContentExtractor implements ToolInterface {
         }
 
         throw new RuntimeException(
-            "Access denied: '{$path}' is outside the allowed directories. " .
+            "Access denied: '{$path}' is outside the allowed directories. ".
             "Call setAllowedPaths() to configure allowed directories."
         );
     }

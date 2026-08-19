@@ -28,6 +28,15 @@ class ConverterRegistry {
     private array $entries = [];
 
     /**
+     * Returns the number of registered converters.
+     *
+     * @return int
+     */
+    public function count(): int {
+        return count($this->entries);
+    }
+
+    /**
      * Registers a converter.
      *
      * @param ConverterInterface $converter The converter to register.
@@ -37,7 +46,7 @@ class ConverterRegistry {
     public function register(ConverterInterface $converter, int $priority = 10): void {
         $this->entries[] = [
             'converter' => $converter,
-            'priority'  => $priority,
+            'priority' => $priority,
         ];
 
         // Sort descending by priority so resolve() can return the first match
@@ -64,7 +73,7 @@ class ConverterRegistry {
 
         foreach ($this->entries as $entry) {
             $converter = $entry['converter'];
-            $priority  = $entry['priority'];
+            $priority = $entry['priority'];
 
             // Extension match
             if ($extension !== '' && in_array($extension, $converter->getSupportedExtensions(), true)) {
@@ -89,14 +98,5 @@ class ConverterRegistry {
         }
 
         return $mimeMatch;
-    }
-
-    /**
-     * Returns the number of registered converters.
-     *
-     * @return int
-     */
-    public function count(): int {
-        return count($this->entries);
     }
 }

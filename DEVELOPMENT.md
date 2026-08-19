@@ -82,7 +82,7 @@ feat(scope): short description
 Closes #issue-number
 ```
 
-Common scopes: `cache`, `context`, `audit`, `redaction`, `metrics`, `http`, `google`, `openai`, `bedrock`, `anthropic`
+Common scopes: `cache`, `context`, `audit`, `redaction`, `metrics`, `http`, `google`, `openai`, `bedrock`, `anthropic`, `fallback`, `resilience`
 
 ### 8. Pull Request
 

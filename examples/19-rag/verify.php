@@ -6,7 +6,7 @@
  * Tests all RAG functionality using FakeHttpClient - no API keys required.
  * Run with: php verify.php
  */
-require_once __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Embedding\FileVectorStore;
 use WebFiori\Ai\Embedding\InMemoryVectorStore;
@@ -45,7 +45,7 @@ function assert_true(bool $condition, string $message = ''): void {
 
 function assert_equals($expected, $actual, string $message = ''): void {
     if ($expected !== $actual) {
-        throw new Exception($message ?: "Expected " . var_export($expected, true) . ", got " . var_export($actual, true));
+        throw new Exception($message ?: "Expected ".var_export($expected, true).", got ".var_export($actual, true));
     }
 }
 
@@ -54,7 +54,8 @@ echo "=== RAG Verification ===\n\n";
 // --- TextChunker Tests ---
 echo "TextChunker:\n";
 
-test('chunks text into pieces', function () {
+test('chunks text into pieces', function ()
+{
     $chunker = new TextChunker(chunkSize: 50, overlap: 10);
     $text = 'First sentence here. Second sentence follows. Third one now. Fourth comes along.';
 
@@ -65,7 +66,8 @@ test('chunks text into pieces', function () {
     assert_equals('test.txt', $chunks[0]->getMetadata()['source']);
 });
 
-test('preserves text content across chunks', function () {
+test('preserves text content across chunks', function ()
+{
     $chunker = new TextChunker(chunkSize: 100, overlap: 20);
     $text = 'The quick brown fox jumps over the lazy dog. This is a test sentence for chunking.';
 
@@ -87,7 +89,8 @@ test('preserves text content across chunks', function () {
     }
 });
 
-test('handles empty text', function () {
+test('handles empty text', function ()
+{
     $chunker = new TextChunker();
 
     $chunks = $chunker->chunk('');
@@ -95,7 +98,8 @@ test('handles empty text', function () {
     assert_equals([], $chunks);
 });
 
-test('handles Unicode text', function () {
+test('handles Unicode text', function ()
+{
     $chunker = new TextChunker(chunkSize: 50, overlap: 10);
     $text = 'مرحبا بالعالم. هذا نص عربي.';
 
@@ -108,10 +112,11 @@ test('handles Unicode text', function () {
 // --- FileVectorStore Tests ---
 echo "\nFileVectorStore:\n";
 
-$tempDir = sys_get_temp_dir() . '/rag-verify-' . uniqid();
+$tempDir = sys_get_temp_dir().'/rag-verify-'.uniqid();
 
-test('stores and retrieves vectors', function () use ($tempDir) {
-    $store = new FileVectorStore($tempDir . '/file-store');
+test('stores and retrieves vectors', function () use ($tempDir)
+{
+    $store = new FileVectorStore($tempDir.'/file-store');
 
     $store->store('chunk-1', [1.0, 0.0, 0.0], ['text' => 'About water quality.', 'source' => 'doc.pdf']);
     $store->store('chunk-2', [0.0, 1.0, 0.0], ['text' => 'About energy usage.', 'source' => 'doc.pdf']);
@@ -122,8 +127,9 @@ test('stores and retrieves vectors', function () use ($tempDir) {
     assert_equals('About water quality.', $record->getMetadata()['text']);
 });
 
-test('queries by similarity', function () use ($tempDir) {
-    $store = new FileVectorStore($tempDir . '/file-store');
+test('queries by similarity', function () use ($tempDir)
+{
+    $store = new FileVectorStore($tempDir.'/file-store');
 
     // Query for water (similar to chunk-1)
     $results = $store->query([0.9, 0.1, 0.0], topK: 1);
@@ -132,8 +138,9 @@ test('queries by similarity', function () use ($tempDir) {
     assert_equals('chunk-1', $results[0]->getId());
 });
 
-test('filters by metadata', function () use ($tempDir) {
-    $store = new FileVectorStore($tempDir . '/file-store-filter');
+test('filters by metadata', function () use ($tempDir)
+{
+    $store = new FileVectorStore($tempDir.'/file-store-filter');
 
     $store->store('a', [1.0, 0.0], ['text' => 'A', 'category' => 'water']);
     $store->store('b', [0.9, 0.1], ['text' => 'B', 'category' => 'energy']);
@@ -147,8 +154,9 @@ test('filters by metadata', function () use ($tempDir) {
 // --- SqliteVectorStore Tests ---
 echo "\nSqliteVectorStore:\n";
 
-test('stores and retrieves vectors', function () use ($tempDir) {
-    $store = new SqliteVectorStore($tempDir . '/sqlite-store.db');
+test('stores and retrieves vectors', function () use ($tempDir)
+{
+    $store = new SqliteVectorStore($tempDir.'/sqlite-store.db');
 
     $store->store('chunk-1', [1.0, 0.0, 0.0], ['text' => 'SQLite water info.']);
     $store->store('chunk-2', [0.0, 1.0, 0.0], ['text' => 'SQLite energy info.']);
@@ -159,8 +167,9 @@ test('stores and retrieves vectors', function () use ($tempDir) {
     assert_equals('SQLite water info.', $record->getMetadata()['text']);
 });
 
-test('queries with multi-field filter', function () use ($tempDir) {
-    $store = new SqliteVectorStore($tempDir . '/sqlite-filter.db');
+test('queries with multi-field filter', function () use ($tempDir)
+{
+    $store = new SqliteVectorStore($tempDir.'/sqlite-filter.db');
 
     $store->store('a', [1.0, 0.0], ['text' => 'A', 'category' => 'water', 'year' => 2024]);
     $store->store('b', [0.9, 0.1], ['text' => 'B', 'category' => 'water', 'year' => 2023]);
@@ -174,7 +183,8 @@ test('queries with multi-field filter', function () use ($tempDir) {
 // --- Retriever Tests ---
 echo "\nRetriever:\n";
 
-test('retrieves relevant chunks', function () {
+test('retrieves relevant chunks', function ()
+{
     // Setup store with known vectors
     $store = new InMemoryVectorStore();
     $store->store('water-1', [1.0, 0.0, 0.0], ['text' => 'Water quality standards.']);
@@ -199,7 +209,8 @@ test('retrieves relevant chunks', function () {
     assert_true(str_contains($results[0]->getText(), 'Water'));
 });
 
-test('respects minimum score threshold', function () {
+test('respects minimum score threshold', function ()
+{
     $store = new InMemoryVectorStore();
     $store->store('high', [1.0, 0.0], ['text' => 'High relevance.']);
     $store->store('low', [0.0, 1.0], ['text' => 'Low relevance.']);
@@ -226,8 +237,10 @@ test('respects minimum score threshold', function () {
 // --- RetrievalTool Tests ---
 echo "\nRetrievalTool:\n";
 
-test('exposes correct tool interface', function () {
-    $mockRetriever = new class implements RetrieverInterface {
+test('exposes correct tool interface', function ()
+{
+    $mockRetriever = new class implements RetrieverInterface
+    {
         public function retrieve(string $query, int $topK = 5, array $filter = []): array {
             return [];
         }
@@ -243,11 +256,13 @@ test('exposes correct tool interface', function () {
     assert_true(in_array('query', $params['required']));
 });
 
-test('executes search and returns JSON', function () {
-    $mockRetriever = new class implements RetrieverInterface {
+test('executes search and returns JSON', function ()
+{
+    $mockRetriever = new class implements RetrieverInterface
+    {
         public function retrieve(string $query, int $topK = 5, array $filter = []): array {
             return [
-                new RetrievalResult('id1', 'Result about ' . $query, 0.9, ['source' => 'doc.pdf']),
+                new RetrievalResult('id1', 'Result about '.$query, 0.9, ['source' => 'doc.pdf']),
             ];
         }
     };
@@ -262,8 +277,10 @@ test('executes search and returns JSON', function () {
     assert_true(str_contains($data['results'][0]['text'], 'water'));
 });
 
-test('handles empty results gracefully', function () {
-    $mockRetriever = new class implements RetrieverInterface {
+test('handles empty results gracefully', function ()
+{
+    $mockRetriever = new class implements RetrieverInterface
+    {
         public function retrieve(string $query, int $topK = 5, array $filter = []): array {
             return [];
         }
@@ -281,7 +298,8 @@ test('handles empty results gracefully', function () {
 // --- End-to-End Flow ---
 echo "\nEnd-to-End Flow:\n";
 
-test('complete RAG pipeline', function () use ($tempDir) {
+test('complete RAG pipeline', function () use ($tempDir)
+{
     // 1. Chunk document
     $chunker = new TextChunker(chunkSize: 100, overlap: 20);
     $document = "GRI 303 Water Standard. Organizations must disclose water withdrawal. Water discharge must be reported. Energy consumption is covered in GRI 302.";
@@ -291,7 +309,7 @@ test('complete RAG pipeline', function () use ($tempDir) {
     assert_true(count($chunks) >= 1);
 
     // 2. Store chunks (using mock embeddings for simplicity)
-    $store = new SqliteVectorStore($tempDir . '/e2e.db');
+    $store = new SqliteVectorStore($tempDir.'/e2e.db');
 
     foreach ($chunks as $i => $chunk) {
         // Simple mock: first chunk gets [1,0], others get [0,1]
@@ -331,7 +349,7 @@ function removeDir(string $path): void {
             continue;
         }
 
-        $itemPath = $path . DIRECTORY_SEPARATOR . $item;
+        $itemPath = $path.DIRECTORY_SEPARATOR.$item;
         is_dir($itemPath) ? removeDir($itemPath) : unlink($itemPath);
     }
 

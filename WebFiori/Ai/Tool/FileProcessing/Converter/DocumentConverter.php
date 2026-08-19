@@ -28,6 +28,48 @@ use ZipArchive;
  */
 class DocumentConverter extends AbstractConverter {
     /**
+     * Converts document content to plain text.
+     *
+     * @param string $content Raw file bytes.
+     * @param ConversionOptions $options Conversion options.
+     *
+     * @return ConversionResult
+     */
+    public function convert(string $content, ConversionOptions $options): ConversionResult {
+        if (!extension_loaded('zip')) {
+            throw new RuntimeException('The "zip" PHP extension is required for DocumentConverter.');
+        }
+        $format = $this->resolveFormat($options->getOutputFormat());
+        $includeMetadata = (bool) $options->getExtra('include_metadata', true); // default true now
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'wf_doc_');
+        file_put_contents($tmpFile, $content);
+
+        try {
+            [$text, $metadata] = $this->extractText($tmpFile, $includeMetadata);
+        } finally {
+            unlink($tmpFile);
+        }
+
+        // Always add structural metadata
+        $words = $text !== '' ? str_word_count($text) : 0;
+        $paragraphs = $text !== '' ? max(1, substr_count($text, "\n\n") + 1) : 0;
+
+        $metadata = array_merge([
+            'word_count' => $words,
+            'paragraph_count' => $paragraphs,
+            'char_count' => mb_strlen($text),
+        ], $metadata);
+
+        return $this->makeResult(
+            content: $text,
+            maxOutput: $options->getMaxOutput(),
+            mimeType: $this->getSupportedMimeTypes()[0],
+            format: $format,
+            metadata: $metadata,
+        );
+    }
+    /**
      * Returns the default output format.
      *
      * @return string
@@ -55,49 +97,6 @@ class DocumentConverter extends AbstractConverter {
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             'application/vnd.oasis.opendocument.text',
         ];
-    }
-
-    /**
-     * Converts document content to plain text.
-     *
-     * @param string $content Raw file bytes.
-     * @param ConversionOptions $options Conversion options.
-     *
-     * @return ConversionResult
-     */
-    public function convert(string $content, ConversionOptions $options): ConversionResult {
-        if (!extension_loaded('zip')) {
-            throw new RuntimeException('The "zip" PHP extension is required for DocumentConverter.');
-        }
-        $format          = $this->resolveFormat($options->getOutputFormat());
-        $includeMetadata = (bool) $options->getExtra('include_metadata', true); // default true now
-
-        $tmpFile = tempnam(sys_get_temp_dir(), 'wf_doc_');
-        file_put_contents($tmpFile, $content);
-
-        try {
-            [$text, $metadata] = $this->extractText($tmpFile, $includeMetadata);
-        } finally {
-            unlink($tmpFile);
-        }
-
-        // Always add structural metadata
-        $words      = $text !== '' ? str_word_count($text) : 0;
-        $paragraphs = $text !== '' ? max(1, substr_count($text, "\n\n") + 1) : 0;
-
-        $metadata = array_merge([
-            'word_count'      => $words,
-            'paragraph_count' => $paragraphs,
-            'char_count'      => mb_strlen($text),
-        ], $metadata);
-
-        return $this->makeResult(
-            content: $text,
-            maxOutput: $options->getMaxOutput(),
-            mimeType: $this->getSupportedMimeTypes()[0],
-            format: $format,
-            metadata: $metadata,
-        );
     }
 
     /**
@@ -181,8 +180,8 @@ class DocumentConverter extends AbstractConverter {
                     $core->registerXPathNamespace('dc', 'http://purl.org/dc/elements/1.1/');
                     $core->registerXPathNamespace('cp', 'http://schemas.openxmlformats.org/package/2006/metadata/core-properties');
 
-                    $metadata['title']   = (string) ($core->xpath('//dc:title')[0] ?? '');
-                    $metadata['author']  = (string) ($core->xpath('//dc:creator')[0] ?? '');
+                    $metadata['title'] = (string) ($core->xpath('//dc:title')[0] ?? '');
+                    $metadata['author'] = (string) ($core->xpath('//dc:creator')[0] ?? '');
                     $metadata['created'] = (string) ($core->xpath('//cp:created')[0] ?? '');
                 }
             }

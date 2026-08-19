@@ -29,6 +29,61 @@ use ZipArchive;
  */
 class SpreadsheetConverter extends AbstractConverter {
     /**
+     * Converts spreadsheet content to the requested format.
+     *
+     * @param string $content Raw file bytes.
+     * @param ConversionOptions $options Conversion options.
+     *
+     * @return ConversionResult
+     */
+    public function convert(string $content, ConversionOptions $options): ConversionResult {
+        if (!extension_loaded('zip')) {
+            throw new RuntimeException('The "zip" PHP extension is required for SpreadsheetConverter.');
+        }
+        $format = $this->resolveFormat($options->getOutputFormat());
+        $maxRows = (int) $options->getExtra('max_rows', PHP_INT_MAX);
+        $sheetName = $options->getExtra('sheet_name', null);
+
+        // Write to temp file for ZipArchive
+        $tmpFile = tempnam(sys_get_temp_dir(), 'wf_sheet_');
+        file_put_contents($tmpFile, $content);
+
+        try {
+            $allSheetNames = $this->extractSheetNames($tmpFile);
+            $rows = $this->extractRows($tmpFile, $sheetName, $maxRows);
+        } finally {
+            unlink($tmpFile);
+        }
+
+        $extractedRows = count($rows);
+        $metadata = [
+            'sheet_names' => $allSheetNames,
+            'sheet_count' => count($allSheetNames),
+            'current_sheet' => $sheetName ?? ($allSheetNames[0] ?? null),
+            'rows_extracted' => $extractedRows,
+        ];
+
+        // If max_rows was applied, include it so model knows extraction was capped
+        if ($maxRows !== PHP_INT_MAX) {
+            $metadata['max_rows_applied'] = $maxRows;
+        }
+
+        $text = match ($format) {
+            'markdown_table' => $this->toMarkdownTable($rows),
+            'json' => json_encode($rows, JSON_UNESCAPED_UNICODE),
+            'plain_text' => $this->toPlainText($rows),
+            default => $this->toCsv($rows),
+        };
+
+        return $this->makeResult(
+            content: $text,
+            maxOutput: $options->getMaxOutput(),
+            mimeType: $this->getSupportedMimeTypes()[0],
+            format: $format,
+            metadata: $metadata,
+        );
+    }
+    /**
      * Returns the default output format.
      *
      * @return string
@@ -56,106 +111,6 @@ class SpreadsheetConverter extends AbstractConverter {
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'application/vnd.oasis.opendocument.spreadsheet',
         ];
-    }
-
-    /**
-     * Converts spreadsheet content to the requested format.
-     *
-     * @param string $content Raw file bytes.
-     * @param ConversionOptions $options Conversion options.
-     *
-     * @return ConversionResult
-     */
-    public function convert(string $content, ConversionOptions $options): ConversionResult {
-        if (!extension_loaded('zip')) {
-            throw new RuntimeException('The "zip" PHP extension is required for SpreadsheetConverter.');
-        }
-        $format    = $this->resolveFormat($options->getOutputFormat());
-        $maxRows   = (int) $options->getExtra('max_rows', PHP_INT_MAX);
-        $sheetName = $options->getExtra('sheet_name', null);
-
-        // Write to temp file for ZipArchive
-        $tmpFile = tempnam(sys_get_temp_dir(), 'wf_sheet_');
-        file_put_contents($tmpFile, $content);
-
-        try {
-            $allSheetNames = $this->extractSheetNames($tmpFile);
-            $rows          = $this->extractRows($tmpFile, $sheetName, $maxRows);
-        } finally {
-            unlink($tmpFile);
-        }
-
-        $extractedRows = count($rows);
-        $metadata = [
-            'sheet_names'     => $allSheetNames,
-            'sheet_count'     => count($allSheetNames),
-            'current_sheet'   => $sheetName ?? ($allSheetNames[0] ?? null),
-            'rows_extracted'  => $extractedRows,
-        ];
-
-        // If max_rows was applied, include it so model knows extraction was capped
-        if ($maxRows !== PHP_INT_MAX) {
-            $metadata['max_rows_applied'] = $maxRows;
-        }
-
-        $text = match ($format) {
-            'markdown_table' => $this->toMarkdownTable($rows),
-            'json'           => json_encode($rows, JSON_UNESCAPED_UNICODE),
-            'plain_text'     => $this->toPlainText($rows),
-            default          => $this->toCsv($rows),
-        };
-
-        return $this->makeResult(
-            content: $text,
-            maxOutput: $options->getMaxOutput(),
-            mimeType: $this->getSupportedMimeTypes()[0],
-            format: $format,
-            metadata: $metadata,
-        );
-    }
-
-    /**
-     * Extracts all sheet names from an XLSX workbook.
-     *
-     * @param string $filePath Path to the XLSX file.
-     *
-     * @return string[] Sheet names in order.
-     */
-    private function extractSheetNames(string $filePath): array {
-        $zip = new ZipArchive();
-
-        if ($zip->open($filePath) !== true) {
-            return [];
-        }
-
-        try {
-            $workbook = $zip->getFromName('xl/workbook.xml');
-
-            if ($workbook === false) {
-                return [];
-            }
-
-            $wbXml = simplexml_load_string($workbook);
-
-            if ($wbXml === false) {
-                return [];
-            }
-
-            $names = [];
-
-            foreach ($wbXml->sheets->sheet ?? [] as $sheet) {
-                $attrs = $sheet->attributes();
-                $name  = (string) ($attrs['name'] ?? '');
-
-                if ($name !== '') {
-                    $names[] = $name;
-                }
-            }
-
-            return $names;
-        } finally {
-            $zip->close();
-        }
     }
 
     /**
@@ -231,6 +186,50 @@ class SpreadsheetConverter extends AbstractConverter {
         }
 
         return $strings;
+    }
+
+    /**
+     * Extracts all sheet names from an XLSX workbook.
+     *
+     * @param string $filePath Path to the XLSX file.
+     *
+     * @return string[] Sheet names in order.
+     */
+    private function extractSheetNames(string $filePath): array {
+        $zip = new ZipArchive();
+
+        if ($zip->open($filePath) !== true) {
+            return [];
+        }
+
+        try {
+            $workbook = $zip->getFromName('xl/workbook.xml');
+
+            if ($workbook === false) {
+                return [];
+            }
+
+            $wbXml = simplexml_load_string($workbook);
+
+            if ($wbXml === false) {
+                return [];
+            }
+
+            $names = [];
+
+            foreach ($wbXml->sheets->sheet ?? [] as $sheet) {
+                $attrs = $sheet->attributes();
+                $name = (string) ($attrs['name'] ?? '');
+
+                if ($name !== '') {
+                    $names[] = $name;
+                }
+            }
+
+            return $names;
+        } finally {
+            $zip->close();
+        }
     }
 
     /**
@@ -340,9 +339,10 @@ class SpreadsheetConverter extends AbstractConverter {
         $lines = [];
 
         foreach ($rows as $row) {
-            $escaped = array_map(function (string $cell): string {
+            $escaped = array_map(function (string $cell): string
+            {
                 if (str_contains($cell, ',') || str_contains($cell, '"') || str_contains($cell, "\n")) {
-                    return '"' . str_replace('"', '""', $cell) . '"';
+                    return '"'.str_replace('"', '""', $cell).'"';
                 }
 
                 return $cell;
@@ -371,10 +371,10 @@ class SpreadsheetConverter extends AbstractConverter {
         $colCount = count($header);
 
         // Header row
-        $lines[] = '| ' . implode(' | ', $header) . ' |';
+        $lines[] = '| '.implode(' | ', $header).' |';
 
         // Separator
-        $lines[] = '| ' . implode(' | ', array_fill(0, $colCount, '---')) . ' |';
+        $lines[] = '| '.implode(' | ', array_fill(0, $colCount, '---')).' |';
 
         // Data rows
         foreach (array_slice($rows, 1) as $row) {
@@ -383,7 +383,7 @@ class SpreadsheetConverter extends AbstractConverter {
                 $row[] = '';
             }
 
-            $lines[] = '| ' . implode(' | ', $row) . ' |';
+            $lines[] = '| '.implode(' | ', $row).' |';
         }
 
         return implode("\n", $lines);

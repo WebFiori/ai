@@ -29,12 +29,13 @@ namespace WebFiori\Ai\Tool;
  */
 enum AnthropicBuiltInTool: string implements BuiltInToolInterface {
     /**
-     * Enables computer use — mouse and keyboard control.
+     * Returns the provider-specific identifier.
      *
-     * Allows Claude to interact with a computer desktop by taking
-     * screenshots and performing mouse/keyboard actions.
+     * @return string The tool identifier for the Anthropic API.
      */
-    case COMPUTER = 'computer';
+    public function getValue(): string {
+        return $this->value;
+    }
 
     /**
      * Enables bash command execution.
@@ -43,6 +44,13 @@ enum AnthropicBuiltInTool: string implements BuiltInToolInterface {
      * environment.
      */
     case BASH = 'bash';
+    /**
+     * Enables computer use — mouse and keyboard control.
+     *
+     * Allows Claude to interact with a computer desktop by taking
+     * screenshots and performing mouse/keyboard actions.
+     */
+    case COMPUTER = 'computer';
 
     /**
      * Enables text file editing.
@@ -51,13 +59,4 @@ enum AnthropicBuiltInTool: string implements BuiltInToolInterface {
      * editor operations (view, create, str_replace, insert).
      */
     case TEXT_EDITOR = 'text_editor';
-
-    /**
-     * Returns the provider-specific identifier.
-     *
-     * @return string The tool identifier for the Anthropic API.
-     */
-    public function getValue(): string {
-        return $this->value;
-    }
 }

@@ -26,12 +26,13 @@ namespace WebFiori\Ai\Tool;
  */
 enum OpenAIBuiltInTool: string implements BuiltInToolInterface {
     /**
-     * Enables web search.
+     * Returns the provider-specific identifier.
      *
-     * Allows the model to search the web for current information
-     * to ground its responses.
+     * @return string The tool identifier for the OpenAI API.
      */
-    case WEB_SEARCH = 'web_search_preview';
+    public function getValue(): string {
+        return $this->value;
+    }
 
     /**
      * Enables the code interpreter.
@@ -48,13 +49,11 @@ enum OpenAIBuiltInTool: string implements BuiltInToolInterface {
      * OpenAI's built-in vector store.
      */
     case FILE_SEARCH = 'file_search';
-
     /**
-     * Returns the provider-specific identifier.
+     * Enables web search.
      *
-     * @return string The tool identifier for the OpenAI API.
+     * Allows the model to search the web for current information
+     * to ground its responses.
      */
-    public function getValue(): string {
-        return $this->value;
-    }
+    case WEB_SEARCH = 'web_search_preview';
 }
