@@ -201,6 +201,171 @@ class GoogleClient extends AbstractClient {
     }
 
     /**
+     * Handles SSE streaming for the generateContent API (candidates[] format).
+     */
+    private function doGenerateContentStreamChat(
+        HttpRequest $request,
+        callable $onToken,
+        ?callable $onComplete,
+        ?callable $onError
+    ): void {
+        $accumulatedContent = '';
+        $model = $this->getConfig('model', 'gemini-2.5-flash');
+        $finishReason = null;
+        $usage = null;
+
+        $parser = new SseParser(
+            function (string $data) use ($onToken, &$accumulatedContent, &$finishReason, &$usage)
+            {
+                $json = json_decode($data, true);
+
+                if ($json === null) {
+                    return;
+                }
+
+                $candidates = $json['candidates'] ?? [];
+
+                if (empty($candidates)) {
+                    return;
+                }
+
+                $candidate = $candidates[0];
+                $parts = $candidate['content']['parts'] ?? [];
+
+                foreach ($parts as $part) {
+                    if (isset($part['text']) && $part['text'] !== '') {
+                        $token = $part['text'];
+                        $accumulatedContent .= $token;
+                        $onToken($token);
+                    }
+                }
+
+                if (isset($candidate['finishReason'])) {
+                    $finishReason = $this->mapFinishReason($candidate['finishReason']);
+                }
+
+                if (isset($json['usageMetadata'])) {
+                    $usage = new Usage(
+                        $json['usageMetadata']['promptTokenCount'] ?? 0,
+                        $json['usageMetadata']['candidatesTokenCount'] ?? 0
+                    );
+                }
+            }
+        );
+
+        try {
+            $this->getHttpClient()->sendStreaming($request, function (string $chunk) use ($parser)
+            {
+                $parser->feed($chunk);
+            });
+
+            if ($onComplete !== null) {
+                $message = new Message('assistant', $accumulatedContent);
+                $response = new ChatResponse($message, $model, $usage, $finishReason);
+                $onComplete($response);
+            }
+        } catch (StreamingException $e) {
+            if ($onError !== null) {
+                $onError($e);
+            } else {
+                throw $e;
+            }
+        }
+    }
+
+    /**
+     * Handles SSE streaming for the Interactions API (steps[] format).
+     */
+    private function doInteractionsStreamChat(
+        HttpRequest $request,
+        callable $onToken,
+        ?callable $onComplete,
+        ?callable $onError
+    ): void {
+        $accumulatedContent = '';
+        $toolCalls = [];
+        $allSteps = [];
+        $model = json_decode($request->getBody(), true)['model'] ?? $this->getConfig('model', 'gemini-2.5-flash');
+        $interactionId = null;
+        $usage = null;
+        $finishReason = 'stop';
+
+        $parser = new SseParser(
+            function (string $data) use ($onToken, &$accumulatedContent, &$toolCalls, &$allSteps, &$model, &$interactionId, &$usage, &$finishReason)
+            {
+                $json = json_decode($data, true);
+
+                if ($json === null) {
+                    return;
+                }
+
+                if (isset($json['id'])) {
+                    $interactionId = $json['id'];
+                }
+
+                if (isset($json['model'])) {
+                    $model = $json['model'];
+                }
+
+                $steps = $json['steps'] ?? [];
+
+                foreach ($steps as $step) {
+                    $allSteps[] = $step;
+                    $type = $step['type'] ?? '';
+
+                    if ($type === 'text' && isset($step['text']) && $step['text'] !== '') {
+                        $token = $step['text'];
+                        $accumulatedContent .= $token;
+                        $onToken($token);
+                    } elseif ($type === 'function_call') {
+                        $toolCall = new ToolCall(
+                            $step['id'] ?? uniqid('call_'),
+                            $step['name'] ?? '',
+                            $step['arguments'] ?? []
+                        );
+                        $toolCall->setRawPart($step);
+                        $toolCalls[] = $toolCall;
+                        $finishReason = 'tool_calls';
+                    }
+                    // thought steps: skip from tokens, include in allSteps only
+                }
+
+                if (isset($json['usage'])) {
+                    $usage = new Usage(
+                        $json['usage']['input_tokens'] ?? 0,
+                        $json['usage']['output_tokens'] ?? 0
+                    );
+                }
+            }
+        );
+
+        try {
+            $this->getHttpClient()->sendStreaming($request, function (string $chunk) use ($parser)
+            {
+                $parser->feed($chunk);
+            });
+
+            $message = new Message('assistant', $accumulatedContent, $toolCalls);
+
+            if (!empty($allSteps)) {
+                $message->setRawSteps($allSteps);
+            }
+
+            $response = new ChatResponse($message, $model, $usage, $finishReason, $interactionId);
+
+            if ($onComplete !== null) {
+                $onComplete($response);
+            }
+        } catch (StreamingException $e) {
+            if ($onError !== null) {
+                $onError($e);
+            } else {
+                throw $e;
+            }
+        }
+    }
+
+    /**
      * Extracts the system instruction from messages.
      *
      * Google handles system messages as a separate top-level field.
@@ -1311,68 +1476,16 @@ class GoogleClient extends AbstractClient {
         ?callable $onComplete,
         ?callable $onError
     ): void {
-        $accumulatedContent = '';
-        $model = $this->getConfig('model', 'gemini-2.5-flash');
-        $finishReason = null;
-        $usage = null;
+        // Detect which streaming format based on request body
+        $body = json_decode($request->getBody(), true) ?? [];
 
-        $parser = new SseParser(
-            function (string $data) use ($onToken, &$accumulatedContent, &$finishReason, &$usage)
-            {
-                $json = json_decode($data, true);
+        if (isset($body['input'])) {
+            $this->doInteractionsStreamChat($request, $onToken, $onComplete, $onError);
 
-                if ($json === null) {
-                    return;
-                }
-
-                $candidates = $json['candidates'] ?? [];
-
-                if (empty($candidates)) {
-                    return;
-                }
-
-                $candidate = $candidates[0];
-                $parts = $candidate['content']['parts'] ?? [];
-
-                foreach ($parts as $part) {
-                    if (isset($part['text']) && $part['text'] !== '') {
-                        $token = $part['text'];
-                        $accumulatedContent .= $token;
-                        $onToken($token);
-                    }
-                }
-
-                if (isset($candidate['finishReason'])) {
-                    $finishReason = $this->mapFinishReason($candidate['finishReason']);
-                }
-
-                if (isset($json['usageMetadata'])) {
-                    $usage = new Usage(
-                        $json['usageMetadata']['promptTokenCount'] ?? 0,
-                        $json['usageMetadata']['candidatesTokenCount'] ?? 0
-                    );
-                }
-            }
-        );
-
-        try {
-            $this->getHttpClient()->sendStreaming($request, function (string $chunk) use ($parser)
-            {
-                $parser->feed($chunk);
-            });
-
-            if ($onComplete !== null) {
-                $message = new Message('assistant', $accumulatedContent);
-                $response = new ChatResponse($message, $model, $usage, $finishReason);
-                $onComplete($response);
-            }
-        } catch (StreamingException $e) {
-            if ($onError !== null) {
-                $onError($e);
-            } else {
-                throw $e;
-            }
+            return;
         }
+
+        $this->doGenerateContentStreamChat($request, $onToken, $onComplete, $onError);
     }
 
     /**
