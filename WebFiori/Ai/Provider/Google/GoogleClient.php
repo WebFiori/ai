@@ -1212,6 +1212,25 @@ class GoogleClient extends AbstractClient {
         array $options
     ): HttpRequest {
         $body = json_decode($previousRequest->getBody(), true) ?? [];
+
+        // Interactions API: merge into input[] using the message formatter
+        if (isset($body['input'])) {
+            $formatter = new InteractionsMessageFormatter();
+            $newInput = $formatter->format($newMessages);
+
+            if (!empty($newInput)) {
+                $body['input'] = array_merge($body['input'], $newInput);
+            }
+
+            return new HttpRequest(
+                $previousRequest->getMethod(),
+                $previousRequest->getUrl(),
+                $previousRequest->getHeaders(),
+                json_encode($body)
+            );
+        }
+
+        // generateContent API: merge into contents[]
         $formattedNew = $this->formatMessagesForIncremental($newMessages);
 
         if (!empty($formattedNew)) {

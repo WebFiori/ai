@@ -270,7 +270,7 @@ abstract class AbstractClient implements ProviderInterface {
                             'tool',
                             '',
                             [],
-                            new ToolResult($toolCallId, $result['output'])
+                            new ToolResult($toolCallId, $result['output'], $result['name'])
                         );
                     }
 
