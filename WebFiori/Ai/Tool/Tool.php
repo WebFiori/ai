@@ -82,7 +82,7 @@ class Tool implements ToolInterface {
      *
      * @return string The result of the tool execution.
      */
-    public function execute(array $arguments): string {
+    public function execute(array $arguments): string|ToolResponse {
         return ($this->handler)($arguments);
     }
 

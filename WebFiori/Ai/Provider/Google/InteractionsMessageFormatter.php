@@ -168,7 +168,7 @@ class InteractionsMessageFormatter {
      * @return array<string, mixed> The formatted function_result input item.
      */
     private function formatToolResult(ToolResult $result): array {
-        return [
+        $formatted = [
             'type' => 'function_result',
             'name' => $result->getName(),
             'call_id' => $result->getToolCallId(),
@@ -176,6 +176,22 @@ class InteractionsMessageFormatter {
                 ['type' => 'text', 'text' => $result->getContent()],
             ],
         ];
+
+        // Append image parts for multimodal tool results
+        foreach ($result->getParts() as $part) {
+            if ($part->getType() === ContentPart::TYPE_IMAGE_BASE64) {
+                $data = $part->getData();
+                $formatted['result'][] = [
+                    'type' => 'image',
+                    'image' => [
+                        'image_bytes' => $data['data'] ?? '',
+                        'mime_type' => $part->getMimeType() ?? 'image/png',
+                    ],
+                ];
+            }
+        }
+
+        return $formatted;
     }
 
     /**
