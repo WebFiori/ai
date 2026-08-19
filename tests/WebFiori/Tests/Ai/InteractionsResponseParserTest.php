@@ -276,6 +276,32 @@ class InteractionsResponseParserTest extends TestCase {
         $this->assertEquals('my-default-model', $response->getModel());
     }
 
+    public function testFinishReasonStopForNonTextLastStep(): void {
+        // Last step is a thought, not text — still returns 'stop'
+        $data = [
+            'id' => 'int_011',
+            'model' => 'gemini-3.5-flash',
+            'steps' => [
+                ['type' => 'text', 'text' => 'Here is the answer.'],
+                ['type' => 'thought', 'text' => 'Done.'],
+            ],
+            'usage' => ['input_tokens' => 5, 'output_tokens' => 5, 'total_tokens' => 10],
+        ];
+
+        $response = $this->parser->parse($data, 'gemini-3.5-flash');
+        $this->assertEquals('stop', $response->getFinishReason());
+    }
+
+    public function testInteractionIdNullWhenNotInResponse(): void {
+        $data = [
+            'model' => 'gemini-3.5-flash',
+            'steps' => [['type' => 'text', 'text' => 'Hi']],
+        ];
+
+        $response = $this->parser->parse($data, 'gemini-3.5-flash');
+        $this->assertNull($response->getRequestId());
+    }
+
     // =========================================================================
     // Integration: GoogleClient uses parser for gemini-3.x responses
     // =========================================================================

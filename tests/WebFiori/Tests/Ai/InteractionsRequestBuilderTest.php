@@ -201,6 +201,64 @@ class InteractionsRequestBuilderTest extends TestCase {
         $this->assertEquals('low', $body['generation_config']['thinking_level']);
     }
 
+    public function testChatRequestWithStopSequences(): void {
+        $messages = [new Message('user', 'Hi')];
+        $request = $this->builder->buildChatRequest(
+            'gemini-3.5-flash',
+            $messages,
+            ['stop' => ['END', 'STOP']],
+            'https://example.com',
+            []
+        );
+
+        $body = json_decode($request->getBody(), true);
+        $this->assertEquals(['END', 'STOP'], $body['generation_config']['stop_sequences']);
+    }
+
+    public function testChatRequestWithStopString(): void {
+        $messages = [new Message('user', 'Hi')];
+        $request = $this->builder->buildChatRequest(
+            'gemini-3.5-flash',
+            $messages,
+            ['stop' => 'STOP'],
+            'https://example.com',
+            []
+        );
+
+        $body = json_decode($request->getBody(), true);
+        $this->assertEquals(['STOP'], $body['generation_config']['stop_sequences']);
+    }
+
+    public function testChatRequestWithTopP(): void {
+        $messages = [new Message('user', 'Hi')];
+        $request = $this->builder->buildChatRequest(
+            'gemini-3.5-flash',
+            $messages,
+            ['top_p' => 0.9],
+            'https://example.com',
+            []
+        );
+
+        $body = json_decode($request->getBody(), true);
+        $this->assertEquals(0.9, $body['generation_config']['top_p']);
+    }
+
+    public function testBuildStreamChatRequestDirectly(): void {
+        $messages = [new Message('user', 'Hi')];
+        $request = $this->builder->buildStreamChatRequest(
+            'gemini-3.5-flash',
+            $messages,
+            [],
+            'https://generativelanguage.googleapis.com/v1beta/interactions:stream',
+            ['Content-Type' => 'application/json']
+        );
+
+        $this->assertEquals('POST', $request->getMethod());
+        $this->assertStringContainsString('interactions:stream', $request->getUrl());
+        $body = json_decode($request->getBody(), true);
+        $this->assertEquals('gemini-3.5-flash', $body['model']);
+    }
+
     public function testStreamRequestBodyMatchesChatBody(): void {
         $messages = [new Message('user', 'Hi')];
         $streamRequest = $this->builder->buildStreamChatRequest(

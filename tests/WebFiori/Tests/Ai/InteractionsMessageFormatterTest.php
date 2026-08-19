@@ -158,7 +158,58 @@ class InteractionsMessageFormatterTest extends TestCase {
     }
 
     // =========================================================================
-    // Tool results
+    // Multimodal user messages
+    // =========================================================================
+
+    public function testUserMessageWithImageBase64(): void {
+        $messages = [
+            new Message('user', [
+                ContentPart::text('What is this?'),
+                ContentPart::imageBase64('abc123', 'image/png'),
+            ]),
+        ];
+
+        $input = $this->formatter->format($messages);
+
+        $this->assertEquals('user_input', $input[0]['type']);
+        $this->assertCount(2, $input[0]['content']);
+        $this->assertEquals('text', $input[0]['content'][0]['type']);
+        $this->assertEquals('image', $input[0]['content'][1]['type']);
+        $this->assertArrayHasKey('image', $input[0]['content'][1]);
+        $this->assertEquals('image/png', $input[0]['content'][1]['image']['mime_type']);
+    }
+
+    public function testUserMessageWithImageUrl(): void {
+        $messages = [
+            new Message('user', [
+                ContentPart::imageUrl('https://example.com/photo.jpg'),
+            ]),
+        ];
+
+        $input = $this->formatter->format($messages);
+
+        $this->assertEquals('image_url', $input[0]['content'][0]['type']);
+        $this->assertEquals('https://example.com/photo.jpg', $input[0]['content'][0]['image_url']);
+    }
+
+    public function testUserMessageWithDocument(): void {
+        $messages = [
+            new Message('user', [
+                ContentPart::text('Summarize this PDF.'),
+                ContentPart::document(base64_encode('pdf content'), 'application/pdf'),
+            ]),
+        ];
+
+        $input = $this->formatter->format($messages);
+
+        $this->assertCount(2, $input[0]['content']);
+        $this->assertEquals('file', $input[0]['content'][1]['type']);
+        $this->assertArrayHasKey('file', $input[0]['content'][1]);
+        $this->assertEquals('application/pdf', $input[0]['content'][1]['file']['mime_type']);
+    }
+
+    // =========================================================================
+    // ToolResult message
     // =========================================================================
 
     public function testToolResultMessage(): void {

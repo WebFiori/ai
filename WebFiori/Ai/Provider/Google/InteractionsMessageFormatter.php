@@ -121,26 +121,33 @@ class InteractionsMessageFormatter {
      */
     private function formatContentPart(ContentPart $part): array {
         switch ($part->getType()) {
-            case 'image':
+            case ContentPart::TYPE_IMAGE_BASE64:
+                $data = $part->getData();
+
                 return [
                     'type' => 'image',
                     'image' => [
-                        'image_bytes' => base64_encode($part->getData() ?? ''),
+                        'image_bytes' => $data['data'] ?? '',
                         'mime_type' => $part->getMimeType() ?? 'image/jpeg',
                     ],
                 ];
 
-            case 'image_url':
+            case ContentPart::TYPE_IMAGE_URL:
+                $data = $part->getData();
+
                 return [
                     'type' => 'image_url',
-                    'image_url' => $part->getUrl(),
+                    'image_url' => $data['url'] ?? '',
                 ];
 
-            case 'file':
+            case ContentPart::TYPE_DOCUMENT:
+            case ContentPart::TYPE_FILE_GCS:
+                $data = $part->getData();
+
                 return [
                     'type' => 'file',
                     'file' => [
-                        'file_bytes' => base64_encode($part->getData() ?? ''),
+                        'file_bytes' => $data['data'] ?? '',
                         'mime_type' => $part->getMimeType() ?? 'application/octet-stream',
                     ],
                 ];
