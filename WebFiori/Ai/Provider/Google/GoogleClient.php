@@ -26,6 +26,8 @@ use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\AbstractClient;
+use WebFiori\Ai\Provider\Google\GoogleApi;
+use WebFiori\Ai\Provider\Google\GoogleApiVersion;
 use WebFiori\Ai\Tool\BuiltInToolInterface;
 use WebFiori\Ai\Tool\GoogleBuiltInTool;
 use WebFiori\Ai\Tool\ToolCall;
@@ -876,6 +878,40 @@ class GoogleClient extends AbstractClient {
     }
 
     /**
+     * Resolves the API version to use for a given model.
+     *
+     * If the config specifies an explicit version (not AUTO), that version is
+     * returned. Otherwise, the version is auto-detected from the model name:
+     * - gemini-3.x and above → INTERACTIONS
+     * - all other models → GENERATE_CONTENT
+     *
+     * @param string $model The model name (e.g., 'gemini-2.5-flash', 'gemini-3.5-flash').
+     *
+     * @return GoogleApiVersion The resolved API version.
+     */
+    private function resolveApiVersion(string $model): GoogleApiVersion {
+        $configured = $this->getConfig('api_version', GoogleApiVersion::AUTO->value);
+
+        // Normalize to enum
+        if ($configured instanceof GoogleApiVersion) {
+            $version = $configured;
+        } else {
+            $version = GoogleApiVersion::from((string) $configured);
+        }
+
+        if ($version !== GoogleApiVersion::AUTO) {
+            return $version;
+        }
+
+        // Auto-detect: gemini-3.x and above use Interactions API
+        if (preg_match('/^gemini-(\d+)/', $model, $m) && (int) $m[1] >= 3) {
+            return GoogleApiVersion::INTERACTIONS;
+        }
+
+        return GoogleApiVersion::GENERATE_CONTENT;
+    }
+
+    /**
      * Maps Google finish reason to a normalized string.
      *
      * @param string $reason The Google finish reason.
@@ -949,6 +985,14 @@ class GoogleClient extends AbstractClient {
      */
     protected function buildChatRequest(array $messages, array $options): HttpRequest {
         $model = $options['model'] ?? $this->getConfig('model', 'gemini-2.5-flash');
+
+        if ($this->resolveApiVersion($model) === GoogleApiVersion::INTERACTIONS) {
+            throw new \WebFiori\Ai\Exception\UnsupportedFeatureException(
+                'Interactions API (gemini-3.x+) is not yet implemented. Coming in v0.5.2.',
+                'google'
+            );
+        }
+
         $body = [
             'contents' => $this->formatContents($messages),
         ];
@@ -1140,6 +1184,14 @@ class GoogleClient extends AbstractClient {
      */
     protected function buildStreamChatRequest(array $messages, array $options): HttpRequest {
         $model = $options['model'] ?? $this->getConfig('model', 'gemini-2.5-flash');
+
+        if ($this->resolveApiVersion($model) === GoogleApiVersion::INTERACTIONS) {
+            throw new \WebFiori\Ai\Exception\UnsupportedFeatureException(
+                'Interactions API streaming (gemini-3.x+) is not yet implemented. Coming in v0.5.2.',
+                'google'
+            );
+        }
+
         $body = [
             'contents' => $this->formatContents($messages),
         ];
