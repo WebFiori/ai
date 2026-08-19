@@ -314,13 +314,14 @@ abstract class AbstractClient implements ProviderInterface {
                 ]
             ));
 
-            // Attach request ID to response
+            // Attach request ID to response — preserve provider-assigned ID
+            // (e.g., interaction_id from Google Interactions API) if present
             $response = new ChatResponse(
                 $response->getMessage(),
                 $response->getModel(),
                 $response->getUsage(),
                 $response->getFinishReason(),
-                $requestId
+                $response->getRequestId() ?? $requestId
             );
 
             // Store in cache

@@ -894,6 +894,21 @@ class GoogleClient extends AbstractClient {
     }
 
     /**
+     * Returns the Interactions API response parser instance.
+     *
+     * @return InteractionsResponseParser The response parser.
+     */
+    private function getInteractionsResponseParser(): InteractionsResponseParser {
+        static $parser = null;
+
+        if ($parser === null) {
+            $parser = new InteractionsResponseParser();
+        }
+
+        return $parser;
+    }
+
+    /**
      * Returns whether the Gemini API endpoint should be used.
      *
      * When 'api' is set to 'gemini', uses generativelanguage.googleapis.com.
@@ -1401,6 +1416,15 @@ class GoogleClient extends AbstractClient {
      */
     protected function parseChatResponse(HttpResponse $response): ChatResponse {
         $data = $response->getJson();
+
+        // Route to Interactions parser if the response contains steps[]
+        // (Interactions API format) instead of candidates[] (generateContent format)
+        if (isset($data['steps'])) {
+            return $this->getInteractionsResponseParser()->parse(
+                $data,
+                $this->getConfig('model', 'gemini-2.5-flash')
+            );
+        }
 
         $candidates = $data['candidates'] ?? [];
 
