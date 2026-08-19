@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.5.2](https://github.com/WebFiori/ai/compare/v0.5.1...v0.5.2) (2026-08-19)
+
+
+### Features
+
+* **google:** Add Interactions API message formatter ([#100](https://github.com/WebFiori/ai/issues/100)) ([5e3ef81](https://github.com/WebFiori/ai/commit/5e3ef81e868aa8ad79b9f149d8a1ab7820ed1f5e))
+* **google:** Add Interactions API request builder ([#101](https://github.com/WebFiori/ai/issues/101)) ([39cadfd](https://github.com/WebFiori/ai/commit/39cadfd784083543998db71afb4653ad22bc88dd))
+* **google:** Add Interactions API response parser ([#102](https://github.com/WebFiori/ai/issues/102)) ([75e3e5e](https://github.com/WebFiori/ai/commit/75e3e5e582d31681e2cd0e5a5b5c95aedd139cdc))
+* **google:** Auto-detect API version from model name ([#99](https://github.com/WebFiori/ai/issues/99)) ([b2b3583](https://github.com/WebFiori/ai/commit/b2b35830a870dd8f3fbcec434abef0c48fc44b36))
+* **google:** implement Gemini native image generation ([03d8fbb](https://github.com/WebFiori/ai/commit/03d8fbb4231c5f00b8628d58018dfd2a4d9f66d7))
+* **google:** implement Gemini native image generation ([8a4aab6](https://github.com/WebFiori/ai/commit/8a4aab694605082b59ebd26cb5884ad7530446e6))
+* **google:** Interactions API streaming support ([#104](https://github.com/WebFiori/ai/issues/104)) ([64d3bcb](https://github.com/WebFiori/ai/commit/64d3bcb83a089046682f06f954ad506272a73573))
+* **google:** Support tool execution loop for Interactions API ([#103](https://github.com/WebFiori/ai/issues/103)) ([ade0b99](https://github.com/WebFiori/ai/commit/ade0b995f5f024b2965735d21aa6cbc092c88c7e))
+* **resilience:** Implement provider fallback with automatic failover ([ad1f219](https://github.com/WebFiori/ai/commit/ad1f21930a639bacf2e9baee669aa86988cff513)), closes [#31](https://github.com/WebFiori/ai/issues/31)
+* **tools:** enrich FileProcessing converter metadata ([d222111](https://github.com/WebFiori/ai/commit/d2221118f0e4172770fce1c6c9af8675ac85b47a))
+* **tools:** enrich FileProcessing converter metadata ([b03a800](https://github.com/WebFiori/ai/commit/b03a8000c5b9b49bdd0aa487e59d49a8fa29b6e4))
+
+
+### Bug Fixes
+
+* **bedrock:** Fix SigV4 signature mismatch in streaming requests ([d4565dd](https://github.com/WebFiori/ai/commit/d4565dd023df3a3d0cf40b490ab9fccac57fe0f2))
+* **google:** Update Interactions API to match real gemini-3.5-flash format ([fa33c22](https://github.com/WebFiori/ai/commit/fa33c22419076a3bfe766dd1de6128ffe662bef1))
+
+
+### Miscellaneous Chores
+
+* **main:** release 0.5.1 ([93e71cf](https://github.com/WebFiori/ai/commit/93e71cfc4a145eff64277cfe3456a233dda6ea8a))
+* **main:** release 0.5.1 ([10b9b07](https://github.com/WebFiori/ai/commit/10b9b072f4b5e3e282f280114fa3e6c5a5663570))
+* Merge pull request [#105](https://github.com/WebFiori/ai/issues/105) from WebFiori/dev ([7850f73](https://github.com/WebFiori/ai/commit/7850f73fb56ec42532525c4cba96fd251a5d4db4))
+* Merge pull request [#107](https://github.com/WebFiori/ai/issues/107) from WebFiori/dev ([3b2d179](https://github.com/WebFiori/ai/commit/3b2d17904fdee2522b0e6aa133ca72bd39201399))
+* Move credential files to keys/ directory ([b258f2b](https://github.com/WebFiori/ai/commit/b258f2b0806687e1b5e1a2d19e723650d79e8149))
+
 ## [0.5.1](https://github.com/WebFiori/ai/compare/v0.5.1...v0.5.1) (2026-08-19)
 
 
