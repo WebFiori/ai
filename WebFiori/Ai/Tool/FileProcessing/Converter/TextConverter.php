@@ -25,6 +25,35 @@ use WebFiori\Ai\Tool\FileProcessing\ConversionResult;
  */
 class TextConverter extends AbstractConverter {
     /**
+     * Returns content as-is (already readable).
+     *
+     * @param string $content Raw file bytes.
+     * @param ConversionOptions $options Conversion options.
+     *
+     * @return ConversionResult
+     */
+    public function convert(string $content, ConversionOptions $options): ConversionResult {
+        $format = $this->resolveFormat($options->getOutputFormat());
+
+        $lineCount = $content !== '' ? substr_count($content, "\n") + 1 : 0;
+        $charCount = mb_strlen($content);
+        $wordCount = $content !== '' ? str_word_count($content) : 0;
+
+        $metadata = [
+            'line_count' => $lineCount,
+            'word_count' => $wordCount,
+            'char_count' => $charCount,
+        ];
+
+        return $this->makeResult(
+            content: $content,
+            maxOutput: $options->getMaxOutput(),
+            mimeType: 'text/plain',
+            format: $format,
+            metadata: $metadata,
+        );
+    }
+    /**
      * Returns the default output format.
      *
      * @return string
@@ -62,35 +91,5 @@ class TextConverter extends AbstractConverter {
             'application/x-python', 'application/x-sql',
             'image/svg+xml',
         ];
-    }
-
-    /**
-     * Returns content as-is (already readable).
-     *
-     * @param string $content Raw file bytes.
-     * @param ConversionOptions $options Conversion options.
-     *
-     * @return ConversionResult
-     */
-    public function convert(string $content, ConversionOptions $options): ConversionResult {
-        $format = $this->resolveFormat($options->getOutputFormat());
-
-        $lineCount = $content !== '' ? substr_count($content, "\n") + 1 : 0;
-        $charCount = mb_strlen($content);
-        $wordCount = $content !== '' ? str_word_count($content) : 0;
-
-        $metadata = [
-            'line_count' => $lineCount,
-            'word_count' => $wordCount,
-            'char_count' => $charCount,
-        ];
-
-        return $this->makeResult(
-            content: $content,
-            maxOutput: $options->getMaxOutput(),
-            mimeType: 'text/plain',
-            format: $format,
-            metadata: $metadata,
-        );
     }
 }

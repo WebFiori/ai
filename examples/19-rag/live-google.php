@@ -7,31 +7,31 @@
  *
  * Run: php examples/19-rag/live-google.php
  */
-require_once __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Embedding\SqliteVectorStore;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
-use WebFiori\Ai\Rag\Retriever;
 use WebFiori\Ai\Rag\RetrievalTool;
+use WebFiori\Ai\Rag\Retriever;
 use WebFiori\Ai\Rag\TextChunker;
 
 // -------------------------------------------------------
 // Setup: two clients — one for embedding, one for chat
 // -------------------------------------------------------
-$credentials = __DIR__ . '/../../vertex-ai-key.json';
+$credentials = __DIR__.'/../../vertex-ai-key.json';
 
 $embedClient = new GoogleClient([
-    'api'             => 'gemini',
-    'credentials'     => $credentials,
-    'model'           => 'gemini-embedding-001',
+    'api' => 'gemini',
+    'credentials' => $credentials,
+    'model' => 'gemini-embedding-001',
     'embedding_model' => 'gemini-embedding-001',
 ]);
 
 $chatClient = new GoogleClient([
-    'api'         => 'gemini',
+    'api' => 'gemini',
     'credentials' => $credentials,
-    'model'       => 'gemini-2.5-flash',
+    'model' => 'gemini-2.5-flash',
 ]);
 
 // -------------------------------------------------------
@@ -56,7 +56,7 @@ GRI 303 also requires disclosure of any significant impacts on water bodies,
 including the size, protected status, and biodiversity value of affected water bodies.
 TEXT;
 
-$dbPath = sys_get_temp_dir() . '/rag-live-test-' . uniqid() . '.db';
+$dbPath = sys_get_temp_dir().'/rag-live-test-'.uniqid().'.db';
 
 // -------------------------------------------------------
 // Step 1: Chunk the document
@@ -64,12 +64,12 @@ $dbPath = sys_get_temp_dir() . '/rag-live-test-' . uniqid() . '.db';
 echo "=== Step 1: Chunking document ===\n";
 
 $chunker = new TextChunker(chunkSize: 300, overlap: 60);
-$chunks  = $chunker->chunk($document, ['source' => 'gri-303.txt']);
+$chunks = $chunker->chunk($document, ['source' => 'gri-303.txt']);
 
-echo "Created " . count($chunks) . " chunks:\n";
+echo "Created ".count($chunks)." chunks:\n";
 
 foreach ($chunks as $chunk) {
-    echo "  [{$chunk->getIndex()}] offset={$chunk->getCharOffset()} tokens≈{$chunk->getTokenEstimate()} | " . mb_substr($chunk->getText(), 0, 60) . "...\n";
+    echo "  [{$chunk->getIndex()}] offset={$chunk->getCharOffset()} tokens≈{$chunk->getTokenEstimate()} | ".mb_substr($chunk->getText(), 0, 60)."...\n";
 }
 
 // -------------------------------------------------------
@@ -83,10 +83,10 @@ foreach ($chunks as $chunk) {
     echo "  Embedding chunk {$chunk->getIndex()}... ";
     $vector = $embedClient->embed($chunk->getText())->getVector();
     $store->store($chunk->getId(), $vector, $chunk->getAllMetadata());
-    echo "done (dims=" . count($vector) . ")\n";
+    echo "done (dims=".count($vector).")\n";
 }
 
-echo "Stored " . $store->count() . " vectors in SQLite.\n";
+echo "Stored ".$store->count()." vectors in SQLite.\n";
 
 // -------------------------------------------------------
 // Step 3: Setup RAG tool
@@ -95,7 +95,7 @@ echo "\n=== Step 3: Setting up RAG tool ===\n";
 
 $retriever = new Retriever($embedClient, $store, [
     'embedding_model' => 'gemini-embedding-001',
-    'min_score'       => 0.5,
+    'min_score' => 0.5,
 ]);
 
 $ragTool = new RetrievalTool(
@@ -116,7 +116,7 @@ $questions = [
 ];
 
 foreach ($questions as $i => $question) {
-    echo "\n=== Question " . ($i + 1) . " ===\n";
+    echo "\n=== Question ".($i + 1)." ===\n";
     echo "Q: {$question}\n\n";
 
     $response = $chatClient->chat(
@@ -125,25 +125,26 @@ foreach ($questions as $i => $question) {
             new Message('user', $question),
         ],
         options: [
-            'tools'               => [$ragTool],
-            'auto_execute_tools'  => true,
+            'tools' => [$ragTool],
+            'auto_execute_tools' => true,
         ],
     );
 
-    echo "A: " . $response->getMessage()->getContent() . "\n";
-    echo "Tokens: " . ($response->getUsage()?->getTotalTokens() ?? 'n/a') . "\n";
+    echo "A: ".$response->getMessage()->getContent()."\n";
+    echo "Tokens: ".($response->getUsage()?->getTotalTokens() ?? 'n/a')."\n";
 }
 
 // -------------------------------------------------------
 // Cleanup
 // -------------------------------------------------------
 unlink($dbPath);
-if (file_exists($dbPath . '-wal')) {
-    unlink($dbPath . '-wal');
+
+if (file_exists($dbPath.'-wal')) {
+    unlink($dbPath.'-wal');
 }
 
-if (file_exists($dbPath . '-shm')) {
-    unlink($dbPath . '-shm');
+if (file_exists($dbPath.'-shm')) {
+    unlink($dbPath.'-shm');
 }
 
 echo "\n✅ Done.\n";

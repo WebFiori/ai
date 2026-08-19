@@ -37,8 +37,6 @@ use WebFiori\Ai\Provider\ProviderInterface;
  * @author Ibrahim
  */
 class Retriever implements RetrieverInterface {
-    use MetricsTrait;
-
     /**
      * Optional cache for query embeddings.
      *
@@ -73,6 +71,13 @@ class Retriever implements RetrieverInterface {
      * @var VectorStorageInterface
      */
     private VectorStorageInterface $store;
+
+    /**
+     * Track whether the last embedding was a cache hit.
+     *
+     * @var bool
+     */
+    private bool $wasCacheHit = false;
 
     /**
      * Creates a new Retriever instance.
@@ -209,13 +214,6 @@ class Retriever implements RetrieverInterface {
     }
 
     /**
-     * Track whether the last embedding was a cache hit.
-     *
-     * @var bool
-     */
-    private bool $wasCacheHit = false;
-
-    /**
      * Gets the embedding for a query, using cache if available.
      *
      * @param string $query The query text.
@@ -227,7 +225,7 @@ class Retriever implements RetrieverInterface {
 
         // Check cache
         if ($this->cache !== null) {
-            $cacheKey = 'embed:' . md5($query . ':' . ($this->embeddingModel ?? 'default'));
+            $cacheKey = 'embed:'.md5($query.':'.($this->embeddingModel ?? 'default'));
             $cached = $this->cache->get($cacheKey);
 
             if ($cached !== null) {
@@ -254,4 +252,5 @@ class Retriever implements RetrieverInterface {
 
         return $vector;
     }
+    use MetricsTrait;
 }

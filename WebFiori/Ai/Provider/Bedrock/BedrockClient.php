@@ -435,7 +435,7 @@ class BedrockClient extends AbstractClient {
 
         // Explicit api_key or access_key+secret_key are valid
         // No credentials = credential chain will be tried at request time (IAM roles, env vars, ~/.aws/credentials)
-        $hasApiKey  = !empty($config['api_key']);
+        $hasApiKey = !empty($config['api_key']);
         $hasExplicitKey = !empty($config['access_key']);
 
         if ($hasExplicitKey && empty($config['secret_key'])) {

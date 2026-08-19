@@ -30,12 +30,13 @@ namespace WebFiori\Ai\Tool;
  */
 enum GoogleBuiltInTool: string implements BuiltInToolInterface {
     /**
-     * Enables Google Search grounding.
+     * Returns the provider-specific identifier.
      *
-     * The model can search the web to ground its responses in current
-     * information. Responses include search result citations.
+     * @return string The tool identifier for the Google API.
      */
-    case GOOGLE_SEARCH = 'google_search';
+    public function getValue(): string {
+        return $this->value;
+    }
 
     /**
      * Enables server-side code execution.
@@ -44,6 +45,13 @@ enum GoogleBuiltInTool: string implements BuiltInToolInterface {
      * data analysis, or other computational tasks.
      */
     case CODE_EXECUTION = 'code_execution';
+    /**
+     * Enables Google Search grounding.
+     *
+     * The model can search the web to ground its responses in current
+     * information. Responses include search result citations.
+     */
+    case GOOGLE_SEARCH = 'google_search';
 
     /**
      * Enables URL context retrieval.
@@ -52,13 +60,4 @@ enum GoogleBuiltInTool: string implements BuiltInToolInterface {
      * the conversation.
      */
     case URL_CONTEXT = 'url_context';
-
-    /**
-     * Returns the provider-specific identifier.
-     *
-     * @return string The tool identifier for the Google API.
-     */
-    public function getValue(): string {
-        return $this->value;
-    }
 }

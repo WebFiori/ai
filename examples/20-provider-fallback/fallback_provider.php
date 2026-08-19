@@ -7,19 +7,19 @@
  * automatic failover for production-ready AI applications.
  */
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__.'/../vendor/autoload.php';
 
+use WebFiori\Ai\Exception\HttpException;
+use WebFiori\Ai\Exception\ProviderException;
+use WebFiori\Ai\Exception\RateLimitException;
 use WebFiori\Ai\Message;
+use WebFiori\Ai\Provider\Anthropic\AnthropicClient;
 use WebFiori\Ai\Provider\Fallback\CircuitBreakerConfig;
 use WebFiori\Ai\Provider\Fallback\FallbackConfig;
 use WebFiori\Ai\Provider\Fallback\FallbackProvider;
 use WebFiori\Ai\Provider\Fallback\FallbackStrategy;
-use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
-use WebFiori\Ai\Provider\Anthropic\AnthropicClient;
 use WebFiori\Ai\Provider\Google\GoogleClient;
-use WebFiori\Ai\Exception\ProviderException;
-use WebFiori\Ai\Exception\HttpException;
-use WebFiori\Ai\Exception\RateLimitException;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 
 // =============================================================================
 // Example 1: Basic Sequential Fallback
@@ -56,11 +56,11 @@ try {
     $response = $provider->chat([
         new Message('user', 'What is the capital of France?'),
     ]);
-    
-    echo "Response: " . $response->getMessage()->getContent() . "\n";
-    echo "Provider used: " . $provider->getLastUsedProvider() . "\n\n";
+
+    echo "Response: ".$response->getMessage()->getContent()."\n";
+    echo "Provider used: ".$provider->getLastUsedProvider()."\n\n";
 } catch (ProviderException $e) {
-    echo "All providers failed: " . $e->getMessage() . "\n\n";
+    echo "All providers failed: ".$e->getMessage()."\n\n";
 }
 
 // =============================================================================
@@ -79,7 +79,7 @@ $loadBalancedProvider = new FallbackProvider(
 for ($i = 1; $i <= 4; $i++) {
     try {
         $loadBalancedProvider->chat([new Message('user', 'Hi')]);
-        echo "Request $i handled by: " . $loadBalancedProvider->getLastUsedProvider() . "\n";
+        echo "Request $i handled by: ".$loadBalancedProvider->getLastUsedProvider()."\n";
     } catch (ProviderException $e) {
         echo "Request $i failed\n";
     }
@@ -104,6 +104,7 @@ $weightedProvider = new FallbackProvider(
 );
 
 $counts = ['openai' => 0, 'anthropic' => 0];
+
 for ($i = 0; $i < 100; $i++) {
     try {
         $weightedProvider->chat([new Message('user', 'Hi')]);
@@ -114,6 +115,7 @@ for ($i = 0; $i < 100; $i++) {
 }
 
 echo "Distribution over 100 requests:\n";
+
 foreach ($counts as $name => $count) {
     echo "  $name: $count%\n";
 }
@@ -147,7 +149,7 @@ echo "  - Closes after 2 successes\n\n";
 // Check circuit states
 foreach ($resilientProvider->getCircuitBreakers() as $index => $cb) {
     $providerName = $resilientProvider->getProvider($index)->getName();
-    echo "  $providerName circuit: " . $cb->getState()->value . "\n";
+    echo "  $providerName circuit: ".$cb->getState()->value."\n";
 }
 echo "\n";
 
@@ -167,6 +169,7 @@ $config->setMetricsCallback(function (
 ) {
     $status = $success ? 'SUCCESS' : 'FAILED';
     echo "[METRIC] Provider: $providerName | Status: $status | Latency: {$latencyMs}ms";
+
     if ($error) {
         echo " | Error: $error";
     }
@@ -178,7 +181,7 @@ $observableProvider = new FallbackProvider([$openai, $anthropic], $config);
 try {
     $observableProvider->chat([new Message('user', 'Hello')]);
 } catch (ProviderException $e) {
-    echo "Request failed: " . $e->getMessage() . "\n";
+    echo "Request failed: ".$e->getMessage()."\n";
 }
 echo "\n";
 
@@ -213,10 +216,11 @@ echo "=== Example 7: Health Checks ===\n\n";
 $healthResult = $provider->healthCheck(timeout: 5);
 
 echo "Fallback provider health:\n";
-echo "  Available: " . ($healthResult->isAvailable() ? 'Yes' : 'No') . "\n";
-echo "  Latency: " . $healthResult->getLatencyMs() . "ms\n";
+echo "  Available: ".($healthResult->isAvailable() ? 'Yes' : 'No')."\n";
+echo "  Latency: ".$healthResult->getLatencyMs()."ms\n";
+
 if ($healthResult->getError()) {
-    echo "  Error: " . $healthResult->getError() . "\n";
+    echo "  Error: ".$healthResult->getError()."\n";
 }
 echo "\n";
 

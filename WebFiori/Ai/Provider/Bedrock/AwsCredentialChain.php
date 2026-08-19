@@ -32,13 +32,6 @@ class AwsCredentialChain {
     private const METADATA_BASE_URL = 'http://169.254.169.254/latest/meta-data/iam/security-credentials/';
 
     /**
-     * Metadata service token URL (IMDSv2).
-     *
-     * @var string
-     */
-    private const METADATA_TOKEN_URL = 'http://169.254.169.254/latest/api/token';
-
-    /**
      * Metadata service connect timeout in seconds.
      *
      * @var int
@@ -46,51 +39,11 @@ class AwsCredentialChain {
     private const METADATA_TIMEOUT = 2;
 
     /**
-     * Resolves credentials from the standard AWS credential chain.
+     * Metadata service token URL (IMDSv2).
      *
-     * @return array{access_key: string, secret_key: string, session_token: string|null}|null
-     *         Resolved credentials, or null if none found.
+     * @var string
      */
-    public function resolve(): ?array {
-        // 1. Environment variables
-        $creds = $this->fromEnvironment();
-
-        if ($creds !== null) {
-            return $creds;
-        }
-
-        // 2. Credentials file
-        $creds = $this->fromCredentialsFile();
-
-        if ($creds !== null) {
-            return $creds;
-        }
-
-        // 3. Instance metadata service
-        return $this->fromMetadataService();
-    }
-
-    /**
-     * Resolves credentials from environment variables.
-     *
-     * @return array{access_key: string, secret_key: string, session_token: string|null}|null
-     */
-    public function fromEnvironment(): ?array {
-        $accessKey = getenv('AWS_ACCESS_KEY_ID');
-        $secretKey = getenv('AWS_SECRET_ACCESS_KEY');
-
-        if (empty($accessKey) || empty($secretKey)) {
-            return null;
-        }
-
-        $sessionToken = getenv('AWS_SESSION_TOKEN') ?: null;
-
-        return [
-            'access_key'    => $accessKey,
-            'secret_key'    => $secretKey,
-            'session_token' => $sessionToken ?: null,
-        ];
-    }
+    private const METADATA_TOKEN_URL = 'http://169.254.169.254/latest/api/token';
 
     /**
      * Resolves credentials from the AWS credentials file.
@@ -118,6 +71,28 @@ class AwsCredentialChain {
     }
 
     /**
+     * Resolves credentials from environment variables.
+     *
+     * @return array{access_key: string, secret_key: string, session_token: string|null}|null
+     */
+    public function fromEnvironment(): ?array {
+        $accessKey = getenv('AWS_ACCESS_KEY_ID');
+        $secretKey = getenv('AWS_SECRET_ACCESS_KEY');
+
+        if (empty($accessKey) || empty($secretKey)) {
+            return null;
+        }
+
+        $sessionToken = getenv('AWS_SESSION_TOKEN') ?: null;
+
+        return [
+            'access_key' => $accessKey,
+            'secret_key' => $secretKey,
+            'session_token' => $sessionToken ?: null,
+        ];
+    }
+
+    /**
      * Resolves credentials from the EC2/ECS instance metadata service (IMDSv2).
      *
      * @return array{access_key: string, secret_key: string, session_token: string|null}|null
@@ -140,7 +115,7 @@ class AwsCredentialChain {
         $roleName = trim(explode("\n", $roleName)[0]);
 
         // Step 3: Get credentials for the role
-        $credentialsJson = $this->fetchMetadata(self::METADATA_BASE_URL . $roleName, $token);
+        $credentialsJson = $this->fetchMetadata(self::METADATA_BASE_URL.$roleName, $token);
 
         if ($credentialsJson === null) {
             return null;
@@ -153,8 +128,8 @@ class AwsCredentialChain {
         }
 
         return [
-            'access_key'    => $data['AccessKeyId'] ?? '',
-            'secret_key'    => $data['SecretAccessKey'] ?? '',
+            'access_key' => $data['AccessKeyId'] ?? '',
+            'secret_key' => $data['SecretAccessKey'] ?? '',
             'session_token' => $data['Token'] ?? null,
         ];
     }
@@ -168,31 +143,37 @@ class AwsCredentialChain {
         if (PHP_OS_FAMILY === 'Windows') {
             $home = getenv('USERPROFILE') ?: '';
 
-            return $home . DIRECTORY_SEPARATOR . '.aws' . DIRECTORY_SEPARATOR . 'credentials';
+            return $home.DIRECTORY_SEPARATOR.'.aws'.DIRECTORY_SEPARATOR.'credentials';
         }
 
         $home = getenv('HOME') ?: '';
 
-        return $home . '/.aws/credentials';
+        return $home.'/.aws/credentials';
     }
 
     /**
-     * Fetches the IMDSv2 session token.
+     * Resolves credentials from the standard AWS credential chain.
      *
-     * @return string|null The session token, or null if metadata service is unavailable.
+     * @return array{access_key: string, secret_key: string, session_token: string|null}|null
+     *         Resolved credentials, or null if none found.
      */
-    private function fetchMetadataToken(): ?string {
-        $context = stream_context_create([
-            'http' => [
-                'method'  => 'PUT',
-                'header'  => "X-aws-ec2-metadata-token-ttl-seconds: 21600\r\n",
-                'timeout' => self::METADATA_TIMEOUT,
-            ],
-        ]);
+    public function resolve(): ?array {
+        // 1. Environment variables
+        $creds = $this->fromEnvironment();
 
-        $token = @file_get_contents(self::METADATA_TOKEN_URL, false, $context);
+        if ($creds !== null) {
+            return $creds;
+        }
 
-        return $token !== false ? $token : null;
+        // 2. Credentials file
+        $creds = $this->fromCredentialsFile();
+
+        if ($creds !== null) {
+            return $creds;
+        }
+
+        // 3. Instance metadata service
+        return $this->fromMetadataService();
     }
 
     /**
@@ -206,8 +187,8 @@ class AwsCredentialChain {
     private function fetchMetadata(string $url, string $token): ?string {
         $context = stream_context_create([
             'http' => [
-                'method'  => 'GET',
-                'header'  => "X-aws-ec2-metadata-token: {$token}\r\n",
+                'method' => 'GET',
+                'header' => "X-aws-ec2-metadata-token: {$token}\r\n",
                 'timeout' => self::METADATA_TIMEOUT,
             ],
         ]);
@@ -215,6 +196,25 @@ class AwsCredentialChain {
         $result = @file_get_contents($url, false, $context);
 
         return $result !== false ? $result : null;
+    }
+
+    /**
+     * Fetches the IMDSv2 session token.
+     *
+     * @return string|null The session token, or null if metadata service is unavailable.
+     */
+    private function fetchMetadataToken(): ?string {
+        $context = stream_context_create([
+            'http' => [
+                'method' => 'PUT',
+                'header' => "X-aws-ec2-metadata-token-ttl-seconds: 21600\r\n",
+                'timeout' => self::METADATA_TIMEOUT,
+            ],
+        ]);
+
+        $token = @file_get_contents(self::METADATA_TOKEN_URL, false, $context);
+
+        return $token !== false ? $token : null;
     }
 
     /**
@@ -257,10 +257,10 @@ class AwsCredentialChain {
                 [$key, $value] = array_map('trim', explode('=', $line, 2));
 
                 match ($key) {
-                    'aws_access_key_id'     => $accessKey = $value,
+                    'aws_access_key_id' => $accessKey = $value,
                     'aws_secret_access_key' => $secretKey = $value,
-                    'aws_session_token'     => $sessionToken = $value,
-                    default                 => null,
+                    'aws_session_token' => $sessionToken = $value,
+                    default => null,
                 };
             }
         }
@@ -270,8 +270,8 @@ class AwsCredentialChain {
         }
 
         return [
-            'access_key'    => $accessKey,
-            'secret_key'    => $secretKey,
+            'access_key' => $accessKey,
+            'secret_key' => $secretKey,
             'session_token' => $sessionToken,
         ];
     }

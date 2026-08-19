@@ -212,6 +212,60 @@ class AnthropicClient extends AbstractClient {
     }
 
     /**
+     * Formats built-in tool identifiers into the Anthropic tools format.
+     *
+     * Anthropic built-in tools use a 'type' field with a versioned name
+     * (e.g., 'computer_20241022', 'bash_20241022', 'text_editor_20241022').
+     *
+     * @param BuiltInToolInterface[] $builtInTools The built-in tools.
+     *
+     * @return array<int, array<string, mixed>> The formatted tools array.
+     *
+     * @throws UnsupportedFeatureException If a built-in tool is not an AnthropicBuiltInTool.
+     */
+    private function formatBuiltInTools(array $builtInTools): array {
+        // Versioned type names required by Anthropic API
+        $typeMap = [
+            'computer' => 'computer_20241022',
+            'bash' => 'bash_20241022',
+            'text_editor' => 'text_editor_20241022',
+        ];
+
+        $formatted = [];
+
+        foreach ($builtInTools as $tool) {
+            if (!($tool instanceof AnthropicBuiltInTool)) {
+                throw new UnsupportedFeatureException(
+                    'built_in_tools:'.get_class($tool),
+                    'AnthropicClient'
+                );
+            }
+
+            $type = $typeMap[$tool->getValue()] ?? null;
+
+            if ($type === null) {
+                throw new UnsupportedFeatureException(
+                    'built_in_tools:'.$tool->getValue(),
+                    'AnthropicClient'
+                );
+            }
+
+            $entry = ['type' => $type, 'name' => $tool->getValue()];
+
+            // computer_use requires display dimensions
+            if ($tool === AnthropicBuiltInTool::COMPUTER) {
+                $entry['display_width_px'] = 1024;
+                $entry['display_height_px'] = 768;
+                $entry['display_number'] = 1;
+            }
+
+            $formatted[] = $entry;
+        }
+
+        return $formatted;
+    }
+
+    /**
      * Formats ContentPart objects into Anthropic content array format.
      *
      * @param \WebFiori\Ai\ContentPart[] $parts The content parts.
@@ -438,60 +492,6 @@ class AnthropicClient extends AbstractClient {
                 'description' => $tool->getDescription(),
                 'input_schema' => $tool->getParameters(),
             ];
-        }
-
-        return $formatted;
-    }
-
-    /**
-     * Formats built-in tool identifiers into the Anthropic tools format.
-     *
-     * Anthropic built-in tools use a 'type' field with a versioned name
-     * (e.g., 'computer_20241022', 'bash_20241022', 'text_editor_20241022').
-     *
-     * @param BuiltInToolInterface[] $builtInTools The built-in tools.
-     *
-     * @return array<int, array<string, mixed>> The formatted tools array.
-     *
-     * @throws UnsupportedFeatureException If a built-in tool is not an AnthropicBuiltInTool.
-     */
-    private function formatBuiltInTools(array $builtInTools): array {
-        // Versioned type names required by Anthropic API
-        $typeMap = [
-            'computer'    => 'computer_20241022',
-            'bash'        => 'bash_20241022',
-            'text_editor' => 'text_editor_20241022',
-        ];
-
-        $formatted = [];
-
-        foreach ($builtInTools as $tool) {
-            if (!($tool instanceof AnthropicBuiltInTool)) {
-                throw new UnsupportedFeatureException(
-                    'built_in_tools:' . get_class($tool),
-                    'AnthropicClient'
-                );
-            }
-
-            $type = $typeMap[$tool->getValue()] ?? null;
-
-            if ($type === null) {
-                throw new UnsupportedFeatureException(
-                    'built_in_tools:' . $tool->getValue(),
-                    'AnthropicClient'
-                );
-            }
-
-            $entry = ['type' => $type, 'name' => $tool->getValue()];
-
-            // computer_use requires display dimensions
-            if ($tool === AnthropicBuiltInTool::COMPUTER) {
-                $entry['display_width_px']  = 1024;
-                $entry['display_height_px'] = 768;
-                $entry['display_number']    = 1;
-            }
-
-            $formatted[] = $entry;
         }
 
         return $formatted;

@@ -266,7 +266,7 @@ class FallbackProvider implements ProviderInterface {
             false,
             $elapsedMs,
             'fallback_health_check',
-            'All providers unavailable: ' . implode('; ', $errors)
+            'All providers unavailable: '.implode('; ', $errors)
         );
     }
 
@@ -314,13 +314,30 @@ class FallbackProvider implements ProviderInterface {
         array $options = []
     ): void {
         $this->executeWithFallback(
-            function (ProviderInterface $provider) use ($messages, $onToken, $onComplete, $onError, $options) {
+            function (ProviderInterface $provider) use ($messages, $onToken, $onComplete, $onError, $options)
+            {
                 $provider->streamChat($messages, $onToken, $onComplete, $onError, $options);
 
                 // Return a dummy value since streamChat is void
                 return true;
             }
         );
+    }
+
+    /**
+     * Emits metrics via the configured callback.
+     *
+     * @param string $providerName The provider name.
+     * @param bool $success Whether the request succeeded.
+     * @param int $latencyMs Latency in milliseconds.
+     * @param string|null $error Error message, if any.
+     */
+    private function emitMetrics(string $providerName, bool $success, int $latencyMs, ?string $error): void {
+        $callback = $this->config->getMetricsCallback();
+
+        if ($callback !== null) {
+            $callback($providerName, $success, $latencyMs, $error);
+        }
     }
 
     /**
@@ -413,22 +430,6 @@ class FallbackProvider implements ProviderInterface {
         ]);
 
         throw $lastException ?? new \RuntimeException('All providers failed');
-    }
-
-    /**
-     * Emits metrics via the configured callback.
-     *
-     * @param string $providerName The provider name.
-     * @param bool $success Whether the request succeeded.
-     * @param int $latencyMs Latency in milliseconds.
-     * @param string|null $error Error message, if any.
-     */
-    private function emitMetrics(string $providerName, bool $success, int $latencyMs, ?string $error): void {
-        $callback = $this->config->getMetricsCallback();
-
-        if ($callback !== null) {
-            $callback($providerName, $success, $latencyMs, $error);
-        }
     }
 
     /**

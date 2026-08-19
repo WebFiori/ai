@@ -10,7 +10,6 @@
  */
 namespace WebFiori\Ai\Provider\Fallback;
 
-use WebFiori\Ai\Exception\AiException;
 use WebFiori\Ai\Exception\HttpException;
 use WebFiori\Ai\Exception\ProviderException;
 use WebFiori\Ai\Exception\RateLimitException;
