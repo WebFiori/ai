@@ -108,7 +108,7 @@ class LazyTool implements ToolInterface {
      *
      * @return string The result of the tool execution.
      */
-    public function execute(array $arguments): string {
+    public function execute(array $arguments): string|ToolResponse {
         $this->ensureInitialized();
 
         if ($this->instance !== null) {

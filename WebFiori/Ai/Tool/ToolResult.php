@@ -10,11 +10,15 @@
  */
 namespace WebFiori\Ai\Tool;
 
+use WebFiori\Ai\ContentPart;
+
 /**
  * Represents the result of executing a tool.
  *
  * After a tool is executed, a ToolResult is created and included in the
  * conversation so the AI model can use the output in its response.
+ * When a tool returns a ToolResponse with images or other content parts,
+ * those are carried here so providers can format multimodal function responses.
  *
  * @author Ibrahim
  */
@@ -34,6 +38,13 @@ class ToolResult {
     private string $name;
 
     /**
+     * Additional content parts for multimodal tool results (images, etc.).
+     *
+     * @var ContentPart[]
+     */
+    private array $parts;
+
+    /**
      * The ID of the tool call this result corresponds to.
      *
      * @var string
@@ -47,11 +58,13 @@ class ToolResult {
      * @param string $content The content/output produced by the tool execution.
      * @param string $name The name of the tool. Defaults to empty string for
      *        backward compatibility.
+     * @param ContentPart[] $parts Optional content parts for multimodal results.
      */
-    public function __construct(string $toolCallId, string $content, string $name = '') {
+    public function __construct(string $toolCallId, string $content, string $name = '', array $parts = []) {
         $this->toolCallId = $toolCallId;
         $this->content = $content;
         $this->name = $name;
+        $this->parts = $parts;
     }
 
     /**
@@ -73,11 +86,29 @@ class ToolResult {
     }
 
     /**
+     * Returns additional content parts for multimodal tool results.
+     *
+     * @return ContentPart[] The content parts, or empty array if text-only.
+     */
+    public function getParts(): array {
+        return $this->parts;
+    }
+
+    /**
      * Returns the ID of the tool call this result corresponds to.
      *
      * @return string The tool call ID.
      */
     public function getToolCallId(): string {
         return $this->toolCallId;
+    }
+
+    /**
+     * Returns whether this result carries multimodal content parts.
+     *
+     * @return bool True if there are content parts beyond plain text.
+     */
+    public function isMultimodal(): bool {
+        return !empty($this->parts);
     }
 }

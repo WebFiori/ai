@@ -40,6 +40,7 @@ use WebFiori\Ai\Status;
 use WebFiori\Ai\StatusEmitterInterface;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolInterface;
+use WebFiori\Ai\Tool\ToolResponse;
 use WebFiori\Ai\Tool\ToolResult;
 
 /**
@@ -270,7 +271,7 @@ abstract class AbstractClient implements ProviderInterface {
                             'tool',
                             '',
                             [],
-                            new ToolResult($toolCallId, $result['output'], $result['name'])
+                            new ToolResult($toolCallId, $result['output'], $result['name'], $result['parts'])
                         );
                     }
 
@@ -1159,9 +1160,17 @@ abstract class AbstractClient implements ProviderInterface {
                 'duration_ms' => $duration,
             ]);
 
+            // Capture ToolResponse parts for multimodal results
+            $parts = [];
+
+            if ($output instanceof ToolResponse && $output->isMultimodal()) {
+                $parts = $output->getParts();
+            }
+
             $results[$toolCall->getId()] = [
                 'name' => $toolCall->getName(),
-                'output' => $output,
+                'output' => (string) $output,
+                'parts' => $parts,
                 'duration_ms' => $duration,
             ];
         }

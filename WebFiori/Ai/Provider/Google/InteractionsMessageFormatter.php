@@ -168,7 +168,7 @@ class InteractionsMessageFormatter {
      * @return array<string, mixed> The formatted function_result input item.
      */
     private function formatToolResult(ToolResult $result): array {
-        return [
+        $formatted = [
             'type' => 'function_result',
             'name' => $result->getName(),
             'call_id' => $result->getToolCallId(),
@@ -176,6 +176,13 @@ class InteractionsMessageFormatter {
                 ['type' => 'text', 'text' => $result->getContent()],
             ],
         ];
+
+        // NOTE: The Interactions API currently only supports 'text' in function_result.
+        // Image parts in ToolResult are intentionally omitted here as the API
+        // does not yet have a stable format for multimodal function results.
+        // This will be updated when the API documents the correct image format.
+
+        return $formatted;
     }
 
     /**

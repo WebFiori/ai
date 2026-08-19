@@ -22,12 +22,16 @@ interface ToolInterface {
     /**
      * Executes the tool with the given arguments.
      *
+     * May return a plain string or a {@see ToolResponse} for multimodal
+     * results (e.g., text + extracted images). `ToolResponse` implements
+     * `__toString()` so it works transparently in string contexts.
+     *
      * @param array<string, mixed> $arguments The arguments provided by the AI model,
      *        matching the parameter schema defined in {@see getParameters()}.
      *
-     * @return string The result of the tool execution, to be sent back to the AI model.
+     * @return string|ToolResponse The result of the tool execution.
      */
-    public function execute(array $arguments): string;
+    public function execute(array $arguments): string|ToolResponse;
 
     /**
      * Returns a human-readable description of what the tool does.

@@ -11,6 +11,7 @@
 namespace WebFiori\Ai\Provider\Google;
 
 use WebFiori\Ai\ChatResponse;
+use WebFiori\Ai\ContentPart;
 use WebFiori\Ai\EmbeddingResponse;
 use WebFiori\Ai\Exception\AuthenticationException;
 use WebFiori\Ai\Exception\InvalidConfigException;
@@ -544,7 +545,7 @@ class GoogleClient extends AbstractClient {
     /**
      * Formats ContentPart objects into Google parts format.
      *
-     * @param \WebFiori\Ai\ContentPart[] $contentParts The content parts.
+     * @param ContentPart[] $contentParts The content parts.
      *
      * @return array<int, array<string, mixed>> The formatted parts array.
      */
@@ -555,7 +556,7 @@ class GoogleClient extends AbstractClient {
         $urlIndexes = [];
 
         foreach ($contentParts as $index => $part) {
-            if ($part->getType() === \WebFiori\Ai\ContentPart::TYPE_IMAGE_URL) {
+            if ($part->getType() === ContentPart::TYPE_IMAGE_URL) {
                 $urlIndexes[$index] = $part->getData()['url'];
             }
         }
@@ -576,12 +577,12 @@ class GoogleClient extends AbstractClient {
         // Build parts array
         foreach ($contentParts as $index => $part) {
             switch ($part->getType()) {
-                case \WebFiori\Ai\ContentPart::TYPE_TEXT:
+                case ContentPart::TYPE_TEXT:
                     $parts[] = ['text' => $part->getData()['text']];
 
                     break;
 
-                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_URL:
+                case ContentPart::TYPE_IMAGE_URL:
                     $fileData = $fetchedByIndex[$index] ?? null;
 
                     if ($fileData !== null) {
@@ -595,8 +596,8 @@ class GoogleClient extends AbstractClient {
 
                     break;
 
-                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_BASE64:
-                case \WebFiori\Ai\ContentPart::TYPE_DOCUMENT:
+                case ContentPart::TYPE_IMAGE_BASE64:
+                case ContentPart::TYPE_DOCUMENT:
                     $data = $part->getData();
                     $parts[] = [
                         'inlineData' => [
@@ -607,7 +608,7 @@ class GoogleClient extends AbstractClient {
 
                     break;
 
-                case \WebFiori\Ai\ContentPart::TYPE_FILE_GCS:
+                case ContentPart::TYPE_FILE_GCS:
                     $data = $part->getData();
                     $parts[] = [
                         'fileData' => [
@@ -685,16 +686,39 @@ class GoogleClient extends AbstractClient {
 
             if ($message->getToolResult() !== null) {
                 $result = $message->getToolResult();
-                $decoded = json_decode($result->getContent(), true);
 
-                if (!is_array($decoded) || array_is_list($decoded)) {
-                    $decoded = ['result' => $result->getContent()];
+                // Build the response body — support both text-only and multimodal
+                if ($result->isMultimodal()) {
+                    // Multimodal: send text + inline image/data parts
+                    $responseContent = [['text' => $result->getContent()]];
+
+                    foreach ($result->getParts() as $contentPart) {
+                        if ($contentPart->getType() === ContentPart::TYPE_IMAGE_BASE64) {
+                            $data = $contentPart->getData();
+                            $responseContent[] = [
+                                'inlineData' => [
+                                    'mimeType' => $contentPart->getMimeType() ?? 'image/png',
+                                    'data' => $data['data'] ?? '',
+                                ],
+                            ];
+                        }
+                    }
+
+                    $responseBody = ['content' => $responseContent];
+                } else {
+                    $decoded = json_decode($result->getContent(), true);
+
+                    if (!is_array($decoded) || array_is_list($decoded)) {
+                        $decoded = ['result' => $result->getContent()];
+                    }
+
+                    $responseBody = (object) $decoded;
                 }
 
                 $part = [
                     'functionResponse' => [
                         'name' => $result->getToolCallId(),
-                        'response' => (object) $decoded,
+                        'response' => $responseBody,
                     ],
                 ];
 

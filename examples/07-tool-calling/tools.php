@@ -9,27 +9,27 @@
  * 1. Defining tools with the Tool class
  * 2. Manual tool calling loop
  * 3. Auto-execute mode (library handles the loop)
- * 4. Connection reuse for better performance
+ * 4. ToolResponse — returning text + images from tools
  * 5. LazyTool for deferred instantiation
  */
 require_once __DIR__.'/../../vendor/autoload.php';
 
+use WebFiori\Ai\ContentPart;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
-
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
 use WebFiori\Ai\Tool\LazyTool;
 use WebFiori\Ai\Tool\Tool;
+use WebFiori\Ai\Tool\ToolResponse;
 use WebFiori\Ai\Tool\ToolResult;
 
-$provider = new GoogleClient([
-    'api' => 'gemini',
-    'credentials' => __DIR__.'/../../vertex-ai-key.json',
-    'model' => 'gemini-2.5-flash',
-]);
-
-// Enable connection reuse for better performance with multiple tool calls
-// This avoids TCP+TLS handshake overhead on subsequent requests (~300ms saved per request)
-$provider->enableConnectionReuse();
+$provider = new GoogleClient(new GoogleClientConfig(
+    model: 'gemini-2.5-flash',
+    credentials: __DIR__.'/../../keys/vertex-ai-key.json',
+    projectId: 'webfiori',
+    location: 'us-central1',
+    api: WebFiori\Ai\Provider\Google\GoogleApi::VERTEX_AI,
+));
 
 // Define tools using the Tool class
 $weatherTool = new Tool(
@@ -45,7 +45,6 @@ $weatherTool = new Tool(
     function (array $args): string
     {
         $location = $args['location'] ?? 'Unknown';
-        // Simulated weather data
         $data = [
             'location' => $location,
             'temperature' => rand(15, 30),
@@ -75,8 +74,7 @@ $timeTool = new Tool(
     }
 );
 
-// LazyTool: Tool is only instantiated when actually called
-// Useful for tools with expensive constructors (DB connections, API clients)
+// LazyTool: only instantiated when called — useful for expensive constructors
 $databaseTool = new LazyTool(
     'search_database',
     'Search the product database',
@@ -89,8 +87,6 @@ $databaseTool = new LazyTool(
     ],
     function ()
     {
-        // This closure is only called if the AI decides to use this tool
-        // Expensive initialization would go here (DB connection, etc.)
         echo "  [LazyTool: Database connection initialized]\n";
 
         return function (array $args): string
@@ -108,11 +104,38 @@ $databaseTool = new LazyTool(
     }
 );
 
+// Tool returning ToolResponse with an image (multimodal tool output)
+// The model will receive both the text AND see the image for visual analysis.
+$chartTool = new Tool(
+    'generate_chart',
+    'Generates a simple bar chart and returns it as an image',
+    [
+        'type' => 'object',
+        'properties' => [
+            'title' => ['type' => 'string', 'description' => 'Chart title'],
+        ],
+        'required' => ['title'],
+    ],
+    function (array $args): ToolResponse
+    {
+        $title = $args['title'] ?? 'Chart';
+
+        // In a real scenario this would generate an actual image.
+        // Here we create a tiny 1×1 white PNG as demonstration.
+        $pngData = base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg=='
+        );
+
+        return ToolResponse::withImages(
+            json_encode(['title' => $title, 'status' => 'Chart generated successfully']),
+            [ContentPart::imageBase64(base64_encode($pngData), 'image/png')]
+        );
+    }
+);
+
 $tools = [$weatherTool, $timeTool, $databaseTool];
 
 // ─── Option A: Auto-Execute Mode ────────────────────────────────────────────
-// The library handles the entire tool call loop automatically.
-
 echo '═══ Auto-Execute Mode ═══'.PHP_EOL.PHP_EOL;
 echo 'User: What is the weather in London and what time is it in Tokyo?'.PHP_EOL.PHP_EOL;
 
@@ -130,9 +153,7 @@ $response = $provider->chat(
 
 echo 'AI: '.$response->getMessage()->getContent().PHP_EOL;
 
-// ─── Option B: Manual Mode ──────────────────────────────────────────────────
-// You control each step of the tool calling loop.
-
+// ─── Option B: Manual Mode ───────────────────────────────────────────────────
 echo PHP_EOL.'═══ Manual Mode ═══'.PHP_EOL.PHP_EOL;
 echo 'User: What is the weather like in Paris?'.PHP_EOL.PHP_EOL;
 
@@ -145,13 +166,11 @@ $response = $provider->chat($messages, ['tools' => $tools]);
 
 if ($response->hasToolCalls()) {
     echo 'AI requested tool calls:'.PHP_EOL;
-
     $messages[] = $response->getMessage();
 
     foreach ($response->getMessage()->getToolCalls() as $toolCall) {
         echo '  → '.$toolCall->getName().'('.json_encode($toolCall->getArguments()).')'.PHP_EOL;
 
-        // Find and execute the matching tool
         $result = '';
 
         foreach ($tools as $tool) {
@@ -162,8 +181,8 @@ if ($response->hasToolCalls()) {
             }
         }
 
-        echo '    Result: '.$result.PHP_EOL;
-        $messages[] = new Message('tool', '', [], new ToolResult($toolCall->getId(), $result));
+        echo '    Result: '.(string) $result.PHP_EOL;
+        $messages[] = new Message('tool', '', [], new ToolResult($toolCall->getId(), (string) $result));
     }
 
     echo PHP_EOL;
@@ -174,5 +193,17 @@ if ($response->hasToolCalls()) {
     echo 'AI: '.$response->getMessage()->getContent().PHP_EOL;
 }
 
-// Note: The databaseTool (LazyTool) was never instantiated because it wasn't called!
-// This saves initialization overhead for tools that aren't used.
+// ─── Option C: ToolResponse with images ──────────────────────────────────────
+echo PHP_EOL.'═══ ToolResponse with Images ═══'.PHP_EOL.PHP_EOL;
+echo 'User: Generate a sales chart and describe it'.PHP_EOL.PHP_EOL;
+echo '(Tool returns both text metadata AND an image for the model to analyze)'.PHP_EOL.PHP_EOL;
+
+$response = $provider->chat(
+    [new Message('user', 'Generate a sales chart titled "Q3 Revenue" and describe what you see.')],
+    [
+        'tools' => [$chartTool],
+        'auto_execute_tools' => true,
+    ]
+);
+
+echo 'AI: '.$response->getMessage()->getContent().PHP_EOL;

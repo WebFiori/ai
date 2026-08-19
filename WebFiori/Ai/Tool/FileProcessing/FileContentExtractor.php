@@ -11,12 +11,14 @@
 namespace WebFiori\Ai\Tool\FileProcessing;
 
 use RuntimeException;
+use WebFiori\Ai\ContentPart;
 use WebFiori\Ai\Exception\UnsupportedFeatureException;
 use WebFiori\Ai\Tool\FileProcessing\Converter\DocumentConverter;
 use WebFiori\Ai\Tool\FileProcessing\Converter\PresentationConverter;
 use WebFiori\Ai\Tool\FileProcessing\Converter\SpreadsheetConverter;
 use WebFiori\Ai\Tool\FileProcessing\Converter\TextConverter;
 use WebFiori\Ai\Tool\ToolInterface;
+use WebFiori\Ai\Tool\ToolResponse;
 
 /**
  * Universal file content extraction tool for AI models.
@@ -98,7 +100,7 @@ class FileContentExtractor implements ToolInterface {
      *
      * @return string JSON-encoded result or error.
      */
-    public function execute(array $arguments): string {
+    public function execute(array $arguments): string|ToolResponse {
         $filePath = $arguments['file_path'] ?? '';
 
         if ($filePath === '') {
@@ -168,7 +170,21 @@ class FileContentExtractor implements ToolInterface {
                 $response['metadata'] = $result->getMetadata();
             }
 
-            return json_encode($response, JSON_UNESCAPED_UNICODE);
+            $textOutput = json_encode($response, JSON_UNESCAPED_UNICODE);
+
+            // Extract embedded images from Office files (ZIP-based formats)
+            // only for local files (not URLs) to avoid large downloads
+            $maxImages = (int) ($arguments['max_images'] ?? 10);
+
+            if (!$detected['isUrl'] && $maxImages > 0) {
+                $images = $this->extractEmbeddedImages($filePath, $detected['extension'], $maxImages);
+
+                if (!empty($images)) {
+                    return ToolResponse::withImages($textOutput, $images);
+                }
+            }
+
+            return $textOutput;
         } catch (UnsupportedFeatureException $e) {
             return json_encode([
                 'error' => $e->getMessage(),
@@ -296,6 +312,91 @@ class FileContentExtractor implements ToolInterface {
         $this->maxOutput = $chars;
 
         return $this;
+    }
+
+    /**
+     * Extracts embedded images from Office ZIP-based files.
+     *
+     * Reads the media directory inside the ZIP (word/media/, xl/media/,
+     * ppt/media/) and returns up to $maxImages as ContentPart objects.
+     *
+     * @param string $filePath Path to the Office file.
+     * @param string $extension File extension (docx, xlsx, pptx, etc.)
+     * @param int $maxImages Maximum number of images to return.
+     *
+     * @return ContentPart[] Extracted image content parts.
+     */
+    private function extractEmbeddedImages(string $filePath, string $extension, int $maxImages): array {
+        // Map extension to media directory inside the ZIP
+        $mediaDirs = [
+            'docx' => 'word/media/',
+            'doc' => 'word/media/',
+            'xlsx' => 'xl/media/',
+            'xls' => 'xl/media/',
+            'pptx' => 'ppt/media/',
+            'ppt' => 'ppt/media/',
+        ];
+
+        $mediaDir = $mediaDirs[strtolower($extension)] ?? null;
+
+        if ($mediaDir === null || !class_exists('\ZipArchive')) {
+            return [];
+        }
+
+        $zip = new \ZipArchive();
+
+        if ($zip->open($filePath) !== true) {
+            return [];
+        }
+
+        $images = [];
+        $imageMimes = [
+            'png' => 'image/png',
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'gif' => 'image/gif',
+            'bmp' => 'image/bmp',
+            'webp' => 'image/webp',
+            'tiff' => 'image/tiff',
+            'tif' => 'image/tiff',
+        ];
+
+        for ($i = 0; $i < $zip->numFiles && count($images) < $maxImages; $i++) {
+            $name = $zip->getNameIndex($i);
+
+            if (!str_starts_with($name, $mediaDir)) {
+                continue;
+            }
+
+            $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+            $mime = $imageMimes[$ext] ?? null;
+
+            if ($mime === null) {
+                continue;
+            }
+
+            $data = $zip->getFromIndex($i);
+
+            if ($data === false || strlen($data) === 0) {
+                continue;
+            }
+
+            // Skip images larger than 1MB to avoid context overflow
+            if (strlen($data) > 1_048_576) {
+                continue;
+            }
+
+            try {
+                $images[] = ContentPart::imageBase64(base64_encode($data), $mime);
+            } catch (\Throwable) {
+                // Skip unsupported mime types
+                continue;
+            }
+        }
+
+        $zip->close();
+
+        return $images;
     }
 
     /**

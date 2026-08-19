@@ -27,6 +27,9 @@ $suites = [
     'gemini3' => 'live/02-gemini3-interactions.php',
     'bedrock' => 'live/03-bedrock-chat.php',
     'fallback' => 'live/04-fallback.php',
+    'interactions' => 'live/05-interactions-api.php',
+    'toolresponse' => 'live/06-tool-response.php',
+    'officeimages' => 'live/07-office-images.php',
 ];
 
 $rootDir = __DIR__.'/..';
