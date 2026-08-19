@@ -16,6 +16,7 @@ require_once __DIR__.'/../../vendor/autoload.php';
 use WebFiori\Ai\Embedding\InMemoryVectorStore;
 use WebFiori\Ai\Provider\Google\GoogleClient;
 
+
 $provider = new GoogleClient([
     'api' => 'gemini',
     'credentials' => __DIR__.'/../../vertex-ai-key.json',

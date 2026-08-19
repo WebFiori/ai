@@ -13,6 +13,7 @@ use WebFiori\Ai\Conversation\InMemoryStorage;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
 
+
 session_start();
 
 // Initialize storage from session

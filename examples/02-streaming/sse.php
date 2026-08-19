@@ -11,6 +11,7 @@ require_once __DIR__.'/../../vendor/autoload.php';
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 
+
 header('Content-Type: text/event-stream');
 header('Cache-Control: no-cache');
 header('Connection: keep-alive');

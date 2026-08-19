@@ -12,6 +12,7 @@ use WebFiori\Ai\ContentPart;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
 
+
 // Create the provider with credentials
 $client = new GoogleClient([
     'credentials' => __DIR__.'/../../webfiori-9d1263770ba1.json',

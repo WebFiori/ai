@@ -16,10 +16,7 @@ use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 
 echo "=== Caching Verification Test ===\n\n";
 
-$provider = new OpenAIClient([
-    'api_key' => 'test-key',
-    'model' => 'gpt-4o-mini',
-]);
+$provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o-mini'));
 
 // Set up fake HTTP client - only queue ONE response
 $fakeHttp = new FakeHttpClient();

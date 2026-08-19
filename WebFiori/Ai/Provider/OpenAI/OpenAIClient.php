@@ -48,6 +48,15 @@ use WebFiori\Ai\Usage;
  */
 class OpenAIClient extends AbstractClient {
     /**
+     * Creates a new OpenAIClient instance.
+     *
+     * @param OpenAIClientConfig $config Provider configuration.
+     */
+    public function __construct(OpenAIClientConfig $config) {
+        parent::__construct($config);
+    }
+
+    /**
      * Returns the provider name.
      *
      * @return string The provider identifier.

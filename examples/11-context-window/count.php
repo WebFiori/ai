@@ -14,10 +14,7 @@ use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 use WebFiori\Ai\Tool\Tool;
 
-$provider = new OpenAIClient([
-    'api_key' => 'not-needed-for-counting',
-    'model' => 'gpt-4o',
-]);
+$provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'not-needed-for-counting', model: 'gpt-4o'));
 
 // Set up strategy to enable getRemainingTokens()
 $provider->setContextWindowStrategy(new SlidingWindowStrategy(

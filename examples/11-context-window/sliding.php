@@ -13,6 +13,7 @@ use WebFiori\Ai\Context\SlidingWindowStrategy;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
 
+
 $apiKey = getenv('GOOGLE_API_KEY');
 $credentials = __DIR__.'/../../vertex-ai-key.json';
 

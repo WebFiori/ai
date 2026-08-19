@@ -15,6 +15,7 @@ use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 use WebFiori\Ai\Redaction\RedactionConfig;
 use WebFiori\Ai\Redaction\RedactionRule;
 use WebFiori\Ai\Redaction\RedactionService;
@@ -445,7 +446,7 @@ class RedactionTest extends TestCase {
      * @test
      */
     public function testCustomRuleWithProviderIntegration() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         $client->setRedactionConfig(new RedactionConfig(
             customRules: [
                 new RedactionRule('employee_id', '/\bEMP-\d{5}\b/', '[EMP_ID]'),
@@ -616,7 +617,7 @@ class RedactionTest extends TestCase {
      * @test
      */
     public function testSetRedactionConfigAppliesToLogs() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         $client->setRedactionConfig(new RedactionConfig());
 
         $loggedMessages = [];
@@ -644,7 +645,7 @@ class RedactionTest extends TestCase {
      * @test
      */
     public function testSetRedactionConfigAppliesToMetrics() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         $client->setRedactionConfig(new RedactionConfig());
 
         $metricData = [];
@@ -671,7 +672,7 @@ class RedactionTest extends TestCase {
      * @test
      */
     public function testSetRedactionConfigNull() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         $client->setRedactionConfig(new RedactionConfig());
         // Should not throw
         $client->setRedactionConfig(null);
@@ -691,7 +692,7 @@ class RedactionTest extends TestCase {
      * @test
      */
     public function testErrorMessagesAreRedacted() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
         $client->setRedactionConfig(new RedactionConfig());
 
         $loggedErrors = [];

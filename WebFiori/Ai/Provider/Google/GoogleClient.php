@@ -76,6 +76,15 @@ class GoogleClient extends AbstractClient {
     private int $tokenExpiresAt = 0;
 
     /**
+     * Creates a new GoogleClient instance.
+     *
+     * @param GoogleClientConfig $config Provider configuration.
+     */
+    public function __construct(GoogleClientConfig $config) {
+        parent::__construct($config);
+    }
+
+    /**
      * Returns the provider name.
      *
      * @return string The provider identifier.
@@ -189,6 +198,217 @@ class GoogleClient extends AbstractClient {
         }
 
         return $config;
+    }
+
+    /**
+     * Handles SSE streaming for the generateContent API (candidates[] format).
+     */
+    private function doGenerateContentStreamChat(
+        HttpRequest $request,
+        callable $onToken,
+        ?callable $onComplete,
+        ?callable $onError
+    ): void {
+        $accumulatedContent = '';
+        $model = $this->getConfig('model', 'gemini-2.5-flash');
+        $finishReason = null;
+        $usage = null;
+
+        $parser = new SseParser(
+            function (string $data) use ($onToken, &$accumulatedContent, &$finishReason, &$usage)
+            {
+                $json = json_decode($data, true);
+
+                if ($json === null) {
+                    return;
+                }
+
+                $candidates = $json['candidates'] ?? [];
+
+                if (empty($candidates)) {
+                    return;
+                }
+
+                $candidate = $candidates[0];
+                $parts = $candidate['content']['parts'] ?? [];
+
+                foreach ($parts as $part) {
+                    if (isset($part['text']) && $part['text'] !== '') {
+                        $token = $part['text'];
+                        $accumulatedContent .= $token;
+                        $onToken($token);
+                    }
+                }
+
+                if (isset($candidate['finishReason'])) {
+                    $finishReason = $this->mapFinishReason($candidate['finishReason']);
+                }
+
+                if (isset($json['usageMetadata'])) {
+                    $usage = new Usage(
+                        $json['usageMetadata']['promptTokenCount'] ?? 0,
+                        $json['usageMetadata']['candidatesTokenCount'] ?? 0
+                    );
+                }
+            }
+        );
+
+        try {
+            $this->getHttpClient()->sendStreaming($request, function (string $chunk) use ($parser)
+            {
+                $parser->feed($chunk);
+            });
+
+            if ($onComplete !== null) {
+                $message = new Message('assistant', $accumulatedContent);
+                $response = new ChatResponse($message, $model, $usage, $finishReason);
+                $onComplete($response);
+            }
+        } catch (StreamingException $e) {
+            if ($onError !== null) {
+                $onError($e);
+            } else {
+                throw $e;
+            }
+        }
+    }
+
+    /**
+     * Handles SSE streaming for the Interactions API (steps[] format).
+     */
+    private function doInteractionsStreamChat(
+        HttpRequest $request,
+        callable $onToken,
+        ?callable $onComplete,
+        ?callable $onError
+    ): void {
+        $accumulatedContent = '';
+        $toolCalls = [];
+        $allSteps = [];
+        $model = json_decode($request->getBody(), true)['model'] ?? $this->getConfig('model', 'gemini-2.5-flash');
+        $interactionId = null;
+        $usage = null;
+        $finishReason = 'stop';
+        $currentStepType = null;
+        $buffer = '';
+
+        $processEvent = function (string $eventType, string $data) use (
+            $onToken,
+            &$accumulatedContent,
+            &$toolCalls,
+            &$allSteps,
+            &$model,
+            &$interactionId,
+            &$usage,
+            &$finishReason,
+            &$currentStepType
+        ) {
+            $json = json_decode($data, true);
+
+            if ($json === null) {
+                return;
+            }
+
+            switch ($eventType) {
+                case 'step.start':
+                    $currentStepType = $json['step']['type'] ?? null;
+
+                    // Start tracking this step for rawSteps
+                    if ($currentStepType !== null) {
+                        $allSteps[] = ['type' => $currentStepType];
+                    }
+
+                    break;
+
+                case 'step.delta':
+                    $delta = $json['delta'] ?? [];
+                    $deltaType = $delta['type'] ?? '';
+
+                    if ($deltaType === 'text' && isset($delta['text']) && $delta['text'] !== '') {
+                        // Only emit tokens from model_output steps, not thought steps
+                        if ($currentStepType !== 'thought') {
+                            $token = $delta['text'];
+                            $accumulatedContent .= $token;
+                            $onToken($token);
+                        }
+                    } elseif ($deltaType === 'function_call') {
+                        $toolCall = new ToolCall(
+                            $delta['id'] ?? uniqid('call_'),
+                            $delta['name'] ?? '',
+                            $delta['arguments'] ?? []
+                        );
+                        $toolCall->setRawPart($delta);
+                        $toolCalls[] = $toolCall;
+                        $finishReason = 'tool_calls';
+                    }
+
+                    break;
+
+                case 'interaction.completed':
+                    $interaction = $json['interaction'] ?? [];
+                    $interactionId = $interaction['id'] ?? null;
+                    $model = $interaction['model'] ?? $model;
+                    $usageData = $interaction['usage'] ?? null;
+
+                    if ($usageData !== null) {
+                        $usage = new Usage(
+                            $usageData['total_input_tokens'] ?? $usageData['input_tokens'] ?? 0,
+                            $usageData['total_output_tokens'] ?? $usageData['output_tokens'] ?? 0
+                        );
+                    }
+
+                    break;
+            }
+        };
+
+        // Custom chunk processor for named SSE events
+        $processChunk = function (string $chunk) use (&$buffer, $processEvent)
+        {
+            $buffer .= $chunk;
+            $events = explode("\n\n", $buffer);
+            // Keep last potentially incomplete event in buffer
+            $buffer = array_pop($events);
+
+            foreach ($events as $event) {
+                $lines = explode("\n", trim($event));
+                $eventType = '';
+                $data = '';
+
+                foreach ($lines as $line) {
+                    if (str_starts_with($line, 'event: ')) {
+                        $eventType = substr($line, 7);
+                    } elseif (str_starts_with($line, 'data: ')) {
+                        $data = substr($line, 6);
+                    }
+                }
+
+                if ($eventType !== '' && $data !== '') {
+                    $processEvent($eventType, $data);
+                }
+            }
+        };
+
+        try {
+            $this->getHttpClient()->sendStreaming($request, $processChunk);
+
+            $message = new Message('assistant', $accumulatedContent, $toolCalls);
+
+            if (!empty($allSteps)) {
+                $message->setRawSteps($allSteps);
+            }
+
+            $response = new ChatResponse($message, $model, $usage, $finishReason, $interactionId);
+
+            if ($onComplete !== null) {
+                $onComplete($response);
+            }
+        } catch (StreamingException $e) {
+            if ($onError !== null) {
+                $onError($e);
+            } else {
+                throw $e;
+            }
+        }
     }
 
     /**
@@ -849,15 +1069,72 @@ class GoogleClient extends AbstractClient {
     }
 
     /**
+     * Returns the Interactions API endpoint URL.
+     *
+     * @param bool $stream Whether to use the streaming endpoint.
+     *
+     * @return string The full endpoint URL.
+     */
+    private function getInteractionsEndpoint(bool $stream = false): string {
+        $builder = $this->getInteractionsRequestBuilder();
+
+        if ($this->isGeminiApi()) {
+            return $builder->buildGeminiEndpoint($this->getConfig('api_key'), $stream);
+        }
+
+        return $builder->buildVertexEndpoint(
+            $this->getConfig('project_id'),
+            $this->getConfig('location', 'global'),
+            $stream
+        );
+    }
+
+    /**
+     * Returns the Interactions API request builder instance.
+     *
+     * @return InteractionsRequestBuilder The request builder.
+     */
+    private function getInteractionsRequestBuilder(): InteractionsRequestBuilder {
+        static $builder = null;
+
+        if ($builder === null) {
+            $builder = new InteractionsRequestBuilder();
+        }
+
+        return $builder;
+    }
+
+    /**
+     * Returns the Interactions API response parser instance.
+     *
+     * @return InteractionsResponseParser The response parser.
+     */
+    private function getInteractionsResponseParser(): InteractionsResponseParser {
+        static $parser = null;
+
+        if ($parser === null) {
+            $parser = new InteractionsResponseParser();
+        }
+
+        return $parser;
+    }
+
+    /**
      * Returns whether the Gemini API endpoint should be used.
      *
      * When 'api' is set to 'gemini', uses generativelanguage.googleapis.com.
      * Otherwise uses the Google aiplatform.googleapis.com endpoint.
      *
-     * @return bool True if using the Gemini API, false for Google.
+     * @return bool True if using the Gemini API, false for Vertex AI.
      */
     private function isGeminiApi(): bool {
-        return $this->getConfig('api', 'gemini') === 'gemini';
+        $api = $this->getConfig('api', GoogleApi::GEMINI->value);
+
+        if ($api instanceof GoogleApi) {
+            return $api === GoogleApi::GEMINI;
+        }
+
+        return $api === 'gemini' || $api === GoogleApi::GEMINI->value;
     }
 
     /**
@@ -909,6 +1186,40 @@ class GoogleClient extends AbstractClient {
     }
 
     /**
+     * Resolves the API version to use for a given model.
+     *
+     * If the config specifies an explicit version (not AUTO), that version is
+     * returned. Otherwise, the version is auto-detected from the model name:
+     * - gemini-3.x and above → INTERACTIONS
+     * - all other models → GENERATE_CONTENT
+     *
+     * @param string $model The model name (e.g., 'gemini-2.5-flash', 'gemini-3.5-flash').
+     *
+     * @return GoogleApiVersion The resolved API version.
+     */
+    private function resolveApiVersion(string $model): GoogleApiVersion {
+        $configured = $this->getConfig('api_version', GoogleApiVersion::AUTO->value);
+
+        // Normalize to enum
+        if ($configured instanceof GoogleApiVersion) {
+            $version = $configured;
+        } else {
+            $version = GoogleApiVersion::from((string) $configured);
+        }
+
+        if ($version !== GoogleApiVersion::AUTO) {
+            return $version;
+        }
+
+        // Auto-detect: gemini-3.x and above use Interactions API
+        if (preg_match('/^gemini-(\d+)/', $model, $m) && (int) $m[1] >= 3) {
+            return GoogleApiVersion::INTERACTIONS;
+        }
+
+        return GoogleApiVersion::GENERATE_CONTENT;
+    }
+
+    /**
      * Maps a size string to an aspect ratio hint for the prompt.
      *
      * @param string $size e.g. '1024x1024', '1792x1024'
@@ -934,6 +1245,17 @@ class GoogleClient extends AbstractClient {
      */
     protected function buildChatRequest(array $messages, array $options): HttpRequest {
         $model = $options['model'] ?? $this->getConfig('model', 'gemini-2.5-flash');
+
+        if ($this->resolveApiVersion($model) === GoogleApiVersion::INTERACTIONS) {
+            return $this->getInteractionsRequestBuilder()->buildChatRequest(
+                $model,
+                $messages,
+                $options,
+                $this->getInteractionsEndpoint(stream: false),
+                $this->getHeaders()
+            );
+        }
+
         $body = [
             'contents' => $this->formatContents($messages),
         ];
@@ -1101,6 +1423,25 @@ class GoogleClient extends AbstractClient {
         array $options
     ): HttpRequest {
         $body = json_decode($previousRequest->getBody(), true) ?? [];
+
+        // Interactions API: merge into input[] using the message formatter
+        if (isset($body['input'])) {
+            $formatter = new InteractionsMessageFormatter();
+            $newInput = $formatter->format($newMessages);
+
+            if (!empty($newInput)) {
+                $body['input'] = array_merge($body['input'], $newInput);
+            }
+
+            return new HttpRequest(
+                $previousRequest->getMethod(),
+                $previousRequest->getUrl(),
+                $previousRequest->getHeaders(),
+                json_encode($body)
+            );
+        }
+
+        // generateContent API: merge into contents[]
         $formattedNew = $this->formatMessagesForIncremental($newMessages);
 
         if (!empty($formattedNew)) {
@@ -1125,6 +1466,17 @@ class GoogleClient extends AbstractClient {
      */
     protected function buildStreamChatRequest(array $messages, array $options): HttpRequest {
         $model = $options['model'] ?? $this->getConfig('model', 'gemini-2.5-flash');
+
+        if ($this->resolveApiVersion($model) === GoogleApiVersion::INTERACTIONS) {
+            return $this->getInteractionsRequestBuilder()->buildStreamChatRequest(
+                $model,
+                $messages,
+                $options,
+                $this->getInteractionsEndpoint(stream: true),
+                $this->getHeaders()
+            );
+        }
+
         $body = [
             'contents' => $this->formatContents($messages),
         ];
@@ -1170,68 +1522,16 @@ class GoogleClient extends AbstractClient {
         ?callable $onComplete,
         ?callable $onError
     ): void {
-        $accumulatedContent = '';
-        $model = $this->getConfig('model', 'gemini-2.5-flash');
-        $finishReason = null;
-        $usage = null;
+        // Detect which streaming format based on request body
+        $body = json_decode($request->getBody(), true) ?? [];
 
-        $parser = new SseParser(
-            function (string $data) use ($onToken, &$accumulatedContent, &$finishReason, &$usage)
-            {
-                $json = json_decode($data, true);
+        if (isset($body['input'])) {
+            $this->doInteractionsStreamChat($request, $onToken, $onComplete, $onError);
 
-                if ($json === null) {
-                    return;
-                }
-
-                $candidates = $json['candidates'] ?? [];
-
-                if (empty($candidates)) {
-                    return;
-                }
-
-                $candidate = $candidates[0];
-                $parts = $candidate['content']['parts'] ?? [];
-
-                foreach ($parts as $part) {
-                    if (isset($part['text']) && $part['text'] !== '') {
-                        $token = $part['text'];
-                        $accumulatedContent .= $token;
-                        $onToken($token);
-                    }
-                }
-
-                if (isset($candidate['finishReason'])) {
-                    $finishReason = $this->mapFinishReason($candidate['finishReason']);
-                }
-
-                if (isset($json['usageMetadata'])) {
-                    $usage = new Usage(
-                        $json['usageMetadata']['promptTokenCount'] ?? 0,
-                        $json['usageMetadata']['candidatesTokenCount'] ?? 0
-                    );
-                }
-            }
-        );
-
-        try {
-            $this->getHttpClient()->sendStreaming($request, function (string $chunk) use ($parser)
-            {
-                $parser->feed($chunk);
-            });
-
-            if ($onComplete !== null) {
-                $message = new Message('assistant', $accumulatedContent);
-                $response = new ChatResponse($message, $model, $usage, $finishReason);
-                $onComplete($response);
-            }
-        } catch (StreamingException $e) {
-            if ($onError !== null) {
-                $onError($e);
-            } else {
-                throw $e;
-            }
+            return;
         }
+
+        $this->doGenerateContentStreamChat($request, $onToken, $onComplete, $onError);
     }
 
     /**
@@ -1294,6 +1594,15 @@ class GoogleClient extends AbstractClient {
      */
     protected function parseChatResponse(HttpResponse $response): ChatResponse {
         $data = $response->getJson();
+
+        // Route to Interactions parser if the response contains steps[]
+        // (Interactions API format) instead of candidates[] (generateContent format)
+        if (isset($data['steps'])) {
+            return $this->getInteractionsResponseParser()->parse(
+                $data,
+                $this->getConfig('model', 'gemini-2.5-flash')
+            );
+        }
 
         $candidates = $data['candidates'] ?? [];
 

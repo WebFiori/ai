@@ -12,6 +12,7 @@ require_once __DIR__.'/../../vendor/autoload.php';
 use WebFiori\Ai\Embedding\SqliteVectorStore;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
+
 use WebFiori\Ai\Rag\RetrievalTool;
 use WebFiori\Ai\Rag\Retriever;
 use WebFiori\Ai\Rag\TextChunker;

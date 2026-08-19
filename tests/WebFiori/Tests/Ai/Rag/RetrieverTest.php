@@ -8,6 +8,7 @@ use WebFiori\Ai\EmbeddingResponse;
 use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 use WebFiori\Ai\Rag\Retriever;
 
 class RetrieverTest extends TestCase {
@@ -26,7 +27,7 @@ class RetrieverTest extends TestCase {
             'usage' => ['prompt_tokens' => 5, 'total_tokens' => 5],
         ])));
 
-        $provider = new OpenAIClient(['api_key' => 'test-key', 'model' => 'text-embedding-3-small']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'text-embedding-3-small'));
         $provider->setHttpClient($fakeHttp);
 
         // Test retrieval
@@ -52,7 +53,7 @@ class RetrieverTest extends TestCase {
             'usage' => ['prompt_tokens' => 5, 'total_tokens' => 5],
         ])));
 
-        $provider = new OpenAIClient(['api_key' => 'test-key']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key'));
         $provider->setHttpClient($fakeHttp);
 
         $retriever = new Retriever($provider, $store);
@@ -77,7 +78,7 @@ class RetrieverTest extends TestCase {
             'usage' => ['prompt_tokens' => 5, 'total_tokens' => 5],
         ])));
 
-        $provider = new OpenAIClient(['api_key' => 'test-key']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key'));
         $provider->setHttpClient($fakeHttp);
 
         $retriever = new Retriever($provider, $store);
@@ -99,7 +100,7 @@ class RetrieverTest extends TestCase {
             'usage' => ['prompt_tokens' => 5, 'total_tokens' => 5],
         ])));
 
-        $provider = new OpenAIClient(['api_key' => 'test-key']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key'));
         $provider->setHttpClient($fakeHttp);
 
         $retriever = new Retriever($provider, $store);
@@ -120,7 +121,7 @@ class RetrieverTest extends TestCase {
             'usage' => ['prompt_tokens' => 5, 'total_tokens' => 5],
         ])));
 
-        $provider = new OpenAIClient(['api_key' => 'test-key']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key'));
         $provider->setHttpClient($fakeHttp);
 
         $retriever = new Retriever($provider, $store);
@@ -152,7 +153,7 @@ class RetrieverTest extends TestCase {
             'usage' => ['prompt_tokens' => 5, 'total_tokens' => 5],
         ])));
 
-        $provider = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4'));
         $provider->setHttpClient($fakeHttp);
 
         $retriever = new Retriever($provider, $store);
@@ -179,7 +180,7 @@ class RetrieverTest extends TestCase {
             'usage' => ['prompt_tokens' => 5, 'total_tokens' => 5],
         ])));
 
-        $provider = new OpenAIClient(['api_key' => 'test-key']);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key'));
         $provider->setHttpClient($fakeHttp);
 
         $retriever = new Retriever($provider, $store, [

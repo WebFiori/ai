@@ -67,7 +67,7 @@ echo "   ✅ Method exists with timeout parameter (default: 5s)\n\n";
 
 // Test 5: OpenAI healthCheck never throws
 echo "5. healthCheck() never throws\n";
-$client = new OpenAIClient(['api_key' => 'invalid-key', 'model' => 'gpt-4o']);
+$client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'invalid-key', model: 'gpt-4o'));
 
 try {
     $result = $client->healthCheck(2);

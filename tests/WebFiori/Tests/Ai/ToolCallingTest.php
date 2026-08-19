@@ -15,7 +15,12 @@ use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 use WebFiori\Ai\Provider\Google\GoogleClient;
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
+use WebFiori\Ai\Provider\Google\GoogleApi;
+use WebFiori\Ai\Provider\Google\GoogleApiVersion;
+
 use WebFiori\Ai\Tool\Tool;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolResult;
@@ -690,17 +695,13 @@ class ToolCallingTest extends TestCase {
     // =========================================================================
 
     private function createOpenAIProvider(): OpenAIClient {
-        return new OpenAIClient([
-            'api_key' => 'sk-test-key',
-            'model' => 'gpt-4o',
-        ]);
+        return new OpenAIClient(new OpenAIClientConfig(apiKey: 'sk-test-key', model: 'gpt-4o'));
     }
 
     private function createGoogleProvider(): GoogleClient {
-        return new GoogleClient([
-            'api' => 'gemini',
-            'access_token' => 'test-access-token',
-            'model' => 'gemini-2.5-flash',
-        ]);
+        return new GoogleClient(new GoogleClientConfig(
+            model: 'gemini-2.5-flash',
+            accessToken: 'test-access-token',
+        ));
     }
 }

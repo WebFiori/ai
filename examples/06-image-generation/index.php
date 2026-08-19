@@ -10,6 +10,7 @@ require_once __DIR__.'/../../vendor/autoload.php';
 use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 
+
 $imageUrl = null;
 $revisedPrompt = null;
 $error = null;

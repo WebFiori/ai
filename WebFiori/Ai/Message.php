@@ -58,6 +58,16 @@ class Message {
     private bool $isMultiModal;
 
     /**
+     * Raw steps array from an Interactions API response.
+     *
+     * Used in stateless mode to replay the model's previous output in the
+     * next turn. Stores the `steps[]` array as returned by the Interactions API.
+     *
+     * @var array<int, array<string, mixed>>|null
+     */
+    private ?array $rawSteps = null;
+
+    /**
      * The role of the message sender.
      *
      * @var string
@@ -140,6 +150,18 @@ class Message {
     }
 
     /**
+     * Returns the raw steps from an Interactions API response.
+     *
+     * These are the steps as returned by the Interactions API and stored on
+     * assistant messages for use in stateless multi-turn conversations.
+     *
+     * @return array<int, array<string, mixed>>|null The raw steps, or null if not set.
+     */
+    public function getRawSteps(): ?array {
+        return $this->rawSteps;
+    }
+
+    /**
      * Returns the role of the message sender.
      *
      * @return string The message role ('system', 'user', 'assistant', or 'tool').
@@ -207,6 +229,19 @@ class Message {
      */
     public function isMultiModal(): bool {
         return $this->isMultiModal;
+    }
+
+    /**
+     * Sets the raw steps from an Interactions API response.
+     *
+     * Used when constructing assistant messages from an Interactions API response
+     * to preserve all steps (text, thoughts, function calls) for replay in the
+     * next turn of a stateless conversation.
+     *
+     * @param array<int, array<string, mixed>> $steps The raw steps array.
+     */
+    public function setRawSteps(array $steps): void {
+        $this->rawSteps = $steps;
     }
 
     /**

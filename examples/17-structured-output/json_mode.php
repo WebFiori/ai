@@ -14,6 +14,7 @@ require_once __DIR__.'/../../vendor/autoload.php';
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
 
+
 $client = new GoogleClient([
     'credentials' => __DIR__.'/../../vertex-ai-key.json',
     'model' => 'gemini-3.5-flash',

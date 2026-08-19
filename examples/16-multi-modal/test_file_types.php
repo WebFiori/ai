@@ -9,6 +9,7 @@ use WebFiori\Ai\ContentPart;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
 
+
 $client = new GoogleClient([
     'credentials' => __DIR__.'/../../webfiori-9d1263770ba1.json',
     'model' => 'gemini-2.5-flash',

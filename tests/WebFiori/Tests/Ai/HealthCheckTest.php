@@ -16,9 +16,14 @@ use WebFiori\Ai\HealthCheckResult;
 use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Provider\Anthropic\AnthropicClient;
+use WebFiori\Ai\Provider\Anthropic\AnthropicClientConfig;
 use WebFiori\Ai\Provider\Bedrock\BedrockClient;
+use WebFiori\Ai\Provider\Bedrock\BedrockClientConfig;
+
 use WebFiori\Ai\Provider\Google\GoogleClient;
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 use WebFiori\Ai\Provider\ProviderInterface;
 
 /**
@@ -95,7 +100,7 @@ class HealthCheckTest extends TestCase {
      * @test
      */
     public function testOpenAiHealthCheckSuccess() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
 
         $fakeHttp = new FakeHttpClient();
         $fakeHttp->addResponse(new HttpResponse(200, [], json_encode([
@@ -114,7 +119,7 @@ class HealthCheckTest extends TestCase {
      * @test
      */
     public function testOpenAiHealthCheckUsesModelsListMethod() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
 
         // A health check that fails (bad key) should still return a result
         $result = $client->healthCheck(2);
@@ -129,7 +134,7 @@ class HealthCheckTest extends TestCase {
      * @test
      */
     public function testOpenAiHealthCheckNeverThrows() {
-        $client = new OpenAIClient(['api_key' => 'invalid-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'invalid-key', model: 'gpt-4o'));
 
         // Should never throw even with invalid credentials
         $result = $client->healthCheck(2);
@@ -141,7 +146,7 @@ class HealthCheckTest extends TestCase {
      * @test
      */
     public function testOpenAiHealthCheckHasLatency() {
-        $client = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
 
         $result = $client->healthCheck(2);
 
@@ -156,7 +161,7 @@ class HealthCheckTest extends TestCase {
      * @test
      */
     public function testAnthropicHealthCheckUsesMinimalCompletion() {
-        $client = new AnthropicClient(['api_key' => 'test-key']);
+        $client = new AnthropicClient(new AnthropicClientConfig(apiKey: 'test-key'));
 
         $result = $client->healthCheck(2);
 
@@ -168,7 +173,7 @@ class HealthCheckTest extends TestCase {
      * @test
      */
     public function testAnthropicHealthCheckNeverThrows() {
-        $client = new AnthropicClient(['api_key' => 'invalid-key']);
+        $client = new AnthropicClient(new AnthropicClientConfig(apiKey: 'invalid-key'));
 
         $result = $client->healthCheck(2);
 
@@ -183,7 +188,7 @@ class HealthCheckTest extends TestCase {
      * @test
      */
     public function testGoogleHealthCheckUsesModelsList() {
-        $client = new GoogleClient(['api' => 'gemini', 'api_key' => 'test-key']);
+        $client = new GoogleClient(new GoogleClientConfig(apiKey: 'test-key'));
 
         $result = $client->healthCheck(2);
 
@@ -195,7 +200,7 @@ class HealthCheckTest extends TestCase {
      * @test
      */
     public function testGoogleHealthCheckNeverThrows() {
-        $client = new GoogleClient(['api' => 'gemini', 'api_key' => 'invalid-key']);
+        $client = new GoogleClient(new GoogleClientConfig(apiKey: 'invalid-key'));
 
         $result = $client->healthCheck(2);
 
@@ -210,10 +215,10 @@ class HealthCheckTest extends TestCase {
      * @test
      */
     public function testBedrockHealthCheckUsesModelsList() {
-        $client = new BedrockClient([
-            'api_key' => 'test-key',
-            'region' => 'us-east-1',
-        ]);
+        $client = new BedrockClient(new BedrockClientConfig(
+            region: 'us-east-1',
+            apiKey: 'test-key',
+        ));
 
         $result = $client->healthCheck(2);
 
@@ -225,10 +230,10 @@ class HealthCheckTest extends TestCase {
      * @test
      */
     public function testBedrockHealthCheckNeverThrows() {
-        $client = new BedrockClient([
-            'api_key' => 'invalid-key',
-            'region' => 'us-east-1',
-        ]);
+        $client = new BedrockClient(new BedrockClientConfig(
+            region: 'us-east-1',
+            apiKey: 'invalid-key',
+        ));
 
         $result = $client->healthCheck(2);
 

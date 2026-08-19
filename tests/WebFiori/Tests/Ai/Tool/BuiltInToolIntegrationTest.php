@@ -8,8 +8,14 @@ use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Anthropic\AnthropicClient;
+use WebFiori\Ai\Provider\Anthropic\AnthropicClientConfig;
 use WebFiori\Ai\Provider\Google\GoogleClient;
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
+use WebFiori\Ai\Provider\Google\GoogleApi;
+use WebFiori\Ai\Provider\Google\GoogleApiVersion;
+
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 use WebFiori\Ai\Tool\AnthropicBuiltInTool;
 use WebFiori\Ai\Tool\GoogleBuiltInTool;
 use WebFiori\Ai\Tool\OpenAIBuiltInTool;
@@ -152,12 +158,12 @@ class BuiltInToolIntegrationTest extends TestCase {
         $this->expectExceptionMessageMatches('/Vertex AI/');
 
         $fakeHttp = $this->fakeHttpWithOkResponse('google');
-        $provider = new GoogleClient([
-            'api'          => 'vertex_ai',
-            'project_id'   => 'test-project',
-            'access_token' => 'test-token',
-            'model'        => 'gemini-2.5-flash',
-        ]);
+        $provider = new GoogleClient(new GoogleClientConfig(
+            model: 'gemini-2.5-flash',
+            projectId: 'test-project',
+            accessToken: 'test-token',
+            api: GoogleApi::VERTEX_AI,
+        ));
         $provider->setHttpClient($fakeHttp);
 
         $provider->chat(
@@ -343,25 +349,18 @@ class BuiltInToolIntegrationTest extends TestCase {
     }
 
     private function googleGeminiClient(): GoogleClient {
-        return new GoogleClient([
-            'api'          => 'gemini',
-            'access_token' => 'test-token',
-            'model'        => 'gemini-2.5-flash',
-        ]);
+        return new GoogleClient(new GoogleClientConfig(
+            model: 'gemini-2.5-flash',
+            accessToken: 'test-token',
+        ));
     }
 
     private function openAIClient(): OpenAIClient {
-        return new OpenAIClient([
-            'api_key' => 'sk-test',
-            'model'   => 'gpt-4o',
-        ]);
+        return new OpenAIClient(new OpenAIClientConfig(apiKey: 'sk-test', model: 'gpt-4o'));
     }
 
     private function anthropicClient(): AnthropicClient {
-        return new AnthropicClient([
-            'api_key' => 'sk-ant-test',
-            'model'   => 'claude-3-5-sonnet-20241022',
-        ]);
+        return new AnthropicClient(new AnthropicClientConfig(apiKey: 'sk-ant-test', model: 'claude-3-5-sonnet-20241022'));
     }
 
     private function makeSimpleTool(): Tool {

@@ -21,7 +21,7 @@ use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 echo "=== Example 1: Invalid Configuration ===\n";
 
 try {
-    $provider = new OpenAIClient([]); // Missing api_key
+    $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: '')); // Missing api_key
 } catch (InvalidConfigException $e) {
     echo "Config error: ".$e->getMessage()."\n";
     echo "Option: ".$e->getOptionName()."\n";
@@ -32,9 +32,7 @@ echo "\n";
 // --- Example 2: Catching specific error types ---
 echo "=== Example 2: Specific Error Handling ===\n";
 
-$provider = new OpenAIClient([
-    'api_key' => 'sk-invalid-key-for-demo',
-]);
+$provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'sk-invalid-key-for-demo'));
 
 try {
     $provider->chat([new Message('user', 'Hello')]);

@@ -12,6 +12,7 @@ require_once __DIR__.'/../../vendor/autoload.php';
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Anthropic\AnthropicClient;
 
+
 $client = new AnthropicClient([
     'api_key' => getenv('ANTHROPIC_API_KEY'),
     'model' => 'claude-sonnet-4-20250514',

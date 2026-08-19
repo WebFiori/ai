@@ -16,6 +16,7 @@ use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 use WebFiori\Ai\Redaction\RedactionConfig;
 
 /**
@@ -23,7 +24,7 @@ use WebFiori\Ai\Redaction\RedactionConfig;
  */
 class AuditTest extends TestCase {
     private function makeClient(): OpenAIClient {
-        return new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+        return new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
     }
 
     private function chatResponse(string $content = 'Hello!'): HttpResponse {

@@ -9,6 +9,7 @@ require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 
+
 $similarity = null;
 $error = null;
 $text1 = '';

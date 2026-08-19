@@ -14,6 +14,7 @@ use WebFiori\Ai\Cache\InMemoryCache;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 
+
 $apiKey = getenv('OPENAI_API_KEY');
 
 if (!$apiKey) {

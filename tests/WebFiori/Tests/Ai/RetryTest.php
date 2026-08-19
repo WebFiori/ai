@@ -20,6 +20,7 @@ use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Http\RetryableHttpClient;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 use WebFiori\Ai\RetryConfig;
 
 /**
@@ -454,10 +455,7 @@ class RetryTest extends TestCase {
      * with optional retry config applied.
      */
     private function createProvider(FakeHttpClient $inner, int $maxRetries = 0): OpenAIClient {
-        $provider = new OpenAIClient([
-            'api_key' => 'test-api-key',
-            'model' => 'gpt-4o',
-        ]);
+        $provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-api-key', model: 'gpt-4o'));
         $provider->setHttpClient($inner);
 
         if ($maxRetries > 0) {

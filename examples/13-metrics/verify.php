@@ -18,7 +18,7 @@ use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 
 echo "=== Metrics Collection Verification ===\n\n";
 
-$provider = new OpenAIClient(['api_key' => 'test-key', 'model' => 'gpt-4o']);
+$provider = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
 
 $events = [];
 $provider->setMetricsCallback(function (string $event, array $data) use (&$events)

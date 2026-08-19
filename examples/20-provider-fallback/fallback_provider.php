@@ -14,12 +14,15 @@ use WebFiori\Ai\Exception\ProviderException;
 use WebFiori\Ai\Exception\RateLimitException;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Anthropic\AnthropicClient;
+
 use WebFiori\Ai\Provider\Fallback\CircuitBreakerConfig;
 use WebFiori\Ai\Provider\Fallback\FallbackConfig;
 use WebFiori\Ai\Provider\Fallback\FallbackProvider;
 use WebFiori\Ai\Provider\Fallback\FallbackStrategy;
 use WebFiori\Ai\Provider\Google\GoogleClient;
+
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+
 
 // =============================================================================
 // Example 1: Basic Sequential Fallback

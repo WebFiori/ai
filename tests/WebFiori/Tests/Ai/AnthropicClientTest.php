@@ -21,6 +21,7 @@ use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Anthropic\AnthropicClient;
+use WebFiori\Ai\Provider\Anthropic\AnthropicClientConfig;
 use WebFiori\Ai\Tool\Tool;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolResult;
@@ -239,7 +240,7 @@ class AnthropicClientTest extends TestCase {
      */
     public function testMissingApiKey() {
         $this->expectException(InvalidConfigException::class);
-        new AnthropicClient([]);
+        new AnthropicClient(new AnthropicClientConfig(apiKey: ''));
     }
 
     /**
@@ -276,9 +277,6 @@ class AnthropicClientTest extends TestCase {
      * @return AnthropicClient
      */
     private function createProvider(): AnthropicClient {
-        return new AnthropicClient([
-            'api_key' => 'test-api-key',
-            'model' => 'claude-sonnet-4-20250514',
-        ]);
+        return new AnthropicClient(new AnthropicClientConfig(apiKey: 'test-api-key', model: 'claude-sonnet-4-20250514'));
     }
 }
