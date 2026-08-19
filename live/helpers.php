@@ -12,7 +12,7 @@ define('KEY_PATH', __DIR__.'/../keys/vertex-ai-key.json');
 define('GCP_PROJECT', 'webfiori');
 define('GCP_LOCATION', 'us-central1');
 define('GEMINI_2_MODEL', 'gemini-2.5-flash');
-define('GEMINI_3_MODEL', 'gemini-2.5-flash-lite'); // Update when gemini-3.x is available
+define('GEMINI_3_MODEL', 'gemini-3.5-flash');
 define('BEDROCK_REGION', 'us-east-1');
 // Note: Update this to a model currently active on the account.
 // The test key may be restricted to specific model versions.
@@ -73,10 +73,8 @@ function gemini2Client(): GoogleClient {
 function gemini3Client(): GoogleClient {
     return new GoogleClient(new GoogleClientConfig(
         model: GEMINI_3_MODEL,
-        projectId: GCP_PROJECT,
-        location: GCP_LOCATION,
         credentials: KEY_PATH,
-        api: GoogleApi::VERTEX_AI,
+        api: GoogleApi::GEMINI, // gemini-3.5-flash is on Gemini API, not Vertex yet
         apiVersion: GoogleApiVersion::INTERACTIONS,
     ));
 }

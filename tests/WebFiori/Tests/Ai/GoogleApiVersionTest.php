@@ -101,7 +101,7 @@ class GoogleApiVersionTest extends TestCase {
         $client->streamChat([new Message('user', 'Hi')], fn(string $t) => null);
 
         $url = $fakeHttp->getLastRequest()->getUrl();
-        $this->assertStringContainsString('interactions:stream', $url);
+        $this->assertStringContainsString('interactions', $url);
     }
 
     public function testGemini4xAlsoUsesInteractions(): void {

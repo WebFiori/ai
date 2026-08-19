@@ -52,8 +52,10 @@ class InteractionsRequestBuilderTest extends TestCase {
     }
 
     public function testGeminiStreamingEndpoint(): void {
+        // Streaming uses the same endpoint — stream:true goes in the request body
         $url = $this->builder->buildGeminiEndpoint('key', stream: true);
-        $this->assertStringContainsString('interactions:stream', $url);
+        $this->assertStringContainsString('interactions', $url);
+        $this->assertStringNotContainsString('interactions:stream', $url);
         $this->assertStringContainsString('?key=key', $url);
     }
 
@@ -249,14 +251,16 @@ class InteractionsRequestBuilderTest extends TestCase {
             'gemini-3.5-flash',
             $messages,
             [],
-            'https://generativelanguage.googleapis.com/v1beta/interactions:stream',
+            'https://generativelanguage.googleapis.com/v1beta/interactions',
             ['Content-Type' => 'application/json']
         );
 
         $this->assertEquals('POST', $request->getMethod());
-        $this->assertStringContainsString('interactions:stream', $request->getUrl());
+        $this->assertStringContainsString('interactions', $request->getUrl());
         $body = json_decode($request->getBody(), true);
         $this->assertEquals('gemini-3.5-flash', $body['model']);
+        // Streaming is via stream:true in body, not a separate endpoint
+        $this->assertTrue($body['stream'] ?? false);
     }
 
     public function testStreamRequestBodyMatchesChatBody(): void {
@@ -273,6 +277,8 @@ class InteractionsRequestBuilderTest extends TestCase {
 
         $this->assertEquals('gemini-3.5-flash', $body['model']);
         $this->assertFalse($body['store']);
+        // Streaming adds stream:true in the body
+        $this->assertTrue($body['stream'] ?? false);
     }
 
     public function testPreviousInteractionIdInStatefulMode(): void {

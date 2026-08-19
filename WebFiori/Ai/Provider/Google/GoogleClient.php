@@ -289,61 +289,107 @@ class GoogleClient extends AbstractClient {
         $interactionId = null;
         $usage = null;
         $finishReason = 'stop';
+        $currentStepType = null;
+        $buffer = '';
 
-        $parser = new SseParser(
-            function (string $data) use ($onToken, &$accumulatedContent, &$toolCalls, &$allSteps, &$model, &$interactionId, &$usage, &$finishReason)
-            {
-                $json = json_decode($data, true);
+        $processEvent = function (string $eventType, string $data) use (
+            $onToken,
+            &$accumulatedContent,
+            &$toolCalls,
+            &$allSteps,
+            &$model,
+            &$interactionId,
+            &$usage,
+            &$finishReason,
+            &$currentStepType
+        ) {
+            $json = json_decode($data, true);
 
-                if ($json === null) {
-                    return;
-                }
+            if ($json === null) {
+                return;
+            }
 
-                if (isset($json['id'])) {
-                    $interactionId = $json['id'];
-                }
+            switch ($eventType) {
+                case 'step.start':
+                    $currentStepType = $json['step']['type'] ?? null;
 
-                if (isset($json['model'])) {
-                    $model = $json['model'];
-                }
+                    // Start tracking this step for rawSteps
+                    if ($currentStepType !== null) {
+                        $allSteps[] = ['type' => $currentStepType];
+                    }
 
-                $steps = $json['steps'] ?? [];
+                    break;
 
-                foreach ($steps as $step) {
-                    $allSteps[] = $step;
-                    $type = $step['type'] ?? '';
+                case 'step.delta':
+                    $delta = $json['delta'] ?? [];
+                    $deltaType = $delta['type'] ?? '';
 
-                    if ($type === 'text' && isset($step['text']) && $step['text'] !== '') {
-                        $token = $step['text'];
-                        $accumulatedContent .= $token;
-                        $onToken($token);
-                    } elseif ($type === 'function_call') {
+                    if ($deltaType === 'text' && isset($delta['text']) && $delta['text'] !== '') {
+                        // Only emit tokens from model_output steps, not thought steps
+                        if ($currentStepType !== 'thought') {
+                            $token = $delta['text'];
+                            $accumulatedContent .= $token;
+                            $onToken($token);
+                        }
+                    } elseif ($deltaType === 'function_call') {
                         $toolCall = new ToolCall(
-                            $step['id'] ?? uniqid('call_'),
-                            $step['name'] ?? '',
-                            $step['arguments'] ?? []
+                            $delta['id'] ?? uniqid('call_'),
+                            $delta['name'] ?? '',
+                            $delta['arguments'] ?? []
                         );
-                        $toolCall->setRawPart($step);
+                        $toolCall->setRawPart($delta);
                         $toolCalls[] = $toolCall;
                         $finishReason = 'tool_calls';
                     }
-                    // thought steps: skip from tokens, include in allSteps only
+
+                    break;
+
+                case 'interaction.completed':
+                    $interaction = $json['interaction'] ?? [];
+                    $interactionId = $interaction['id'] ?? null;
+                    $model = $interaction['model'] ?? $model;
+                    $usageData = $interaction['usage'] ?? null;
+
+                    if ($usageData !== null) {
+                        $usage = new Usage(
+                            $usageData['total_input_tokens'] ?? $usageData['input_tokens'] ?? 0,
+                            $usageData['total_output_tokens'] ?? $usageData['output_tokens'] ?? 0
+                        );
+                    }
+
+                    break;
+            }
+        };
+
+        // Custom chunk processor for named SSE events
+        $processChunk = function (string $chunk) use (&$buffer, $processEvent)
+        {
+            $buffer .= $chunk;
+            $events = explode("\n\n", $buffer);
+            // Keep last potentially incomplete event in buffer
+            $buffer = array_pop($events);
+
+            foreach ($events as $event) {
+                $lines = explode("\n", trim($event));
+                $eventType = '';
+                $data = '';
+
+                foreach ($lines as $line) {
+                    if (str_starts_with($line, 'event: ')) {
+                        $eventType = substr($line, 7);
+                    } elseif (str_starts_with($line, 'data: ')) {
+                        $data = substr($line, 6);
+                    }
                 }
 
-                if (isset($json['usage'])) {
-                    $usage = new Usage(
-                        $json['usage']['input_tokens'] ?? 0,
-                        $json['usage']['output_tokens'] ?? 0
-                    );
+                if ($eventType !== '' && $data !== '') {
+                    $processEvent($eventType, $data);
                 }
             }
-        );
+        };
 
         try {
-            $this->getHttpClient()->sendStreaming($request, function (string $chunk) use ($parser)
-            {
-                $parser->feed($chunk);
-            });
+            $this->getHttpClient()->sendStreaming($request, $processChunk);
 
             $message = new Message('assistant', $accumulatedContent, $toolCalls);
 

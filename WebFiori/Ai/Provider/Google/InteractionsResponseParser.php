@@ -53,7 +53,26 @@ class InteractionsResponseParser {
 
             switch ($type) {
                 case 'text':
+                    // Simple text step (original spec)
                     $content .= $step['text'] ?? '';
+
+                    break;
+
+                case 'model_output':
+                    // Real gemini-3.5-flash format: content[] array with typed parts
+                    foreach ($step['content'] ?? [] as $part) {
+                        if (($part['type'] ?? '') === 'text') {
+                            $content .= $part['text'] ?? '';
+                        } elseif (($part['type'] ?? '') === 'function_call') {
+                            $toolCall = new ToolCall(
+                                $part['id'] ?? uniqid('call_'),
+                                $part['name'] ?? '',
+                                $part['arguments'] ?? []
+                            );
+                            $toolCall->setRawPart($part);
+                            $toolCalls[] = $toolCall;
+                        }
+                    }
 
                     break;
 
@@ -63,12 +82,12 @@ class InteractionsResponseParser {
                     break;
 
                 case 'function_call':
+                    // Original spec function call step
                     $toolCall = new ToolCall(
                         $step['id'] ?? uniqid('call_'),
                         $step['name'] ?? '',
                         $step['arguments'] ?? []
                     );
-                    // Preserve raw step so it can be replayed in follow-up turns
                     $toolCall->setRawPart($step);
                     $toolCalls[] = $toolCall;
 
@@ -139,8 +158,9 @@ class InteractionsResponseParser {
         }
 
         return new Usage(
-            $usage['input_tokens'] ?? 0,
-            $usage['output_tokens'] ?? 0
+            // Support both spec format (input_tokens) and real format (total_input_tokens)
+            $usage['input_tokens'] ?? $usage['total_input_tokens'] ?? 0,
+            $usage['output_tokens'] ?? $usage['total_output_tokens'] ?? 0
         );
     }
 }

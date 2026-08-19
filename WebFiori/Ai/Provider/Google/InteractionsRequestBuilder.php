@@ -72,8 +72,9 @@ class InteractionsRequestBuilder {
      * @return string The full endpoint URL.
      */
     public function buildGeminiEndpoint(?string $apiKey, bool $stream = false): string {
-        $path = $stream ? 'interactions:stream' : 'interactions';
-        $url = 'https://generativelanguage.googleapis.com/v1beta/'.$path;
+        // Both streaming and non-streaming use the same /interactions endpoint.
+        // Streaming is controlled by `stream: true` in the request body.
+        $url = 'https://generativelanguage.googleapis.com/v1beta/interactions';
 
         if ($apiKey !== null && $apiKey !== '') {
             $url .= '?key='.$apiKey;
@@ -180,6 +181,11 @@ class InteractionsRequestBuilder {
             'input' => $this->formatter->format($messages),
             'store' => false, // Stateless mode — client manages history
         ];
+
+        // Streaming: add stream:true to body (same endpoint, different body flag)
+        if ($stream) {
+            $body['stream'] = true;
+        }
 
         // System instruction
         $systemInstruction = $this->formatter->extractSystemInstruction($messages);

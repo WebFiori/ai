@@ -16,23 +16,39 @@ use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClientConfig;
 use WebFiori\Ai\Provider\Google\GoogleClient;
-use WebFiori\Ai\Tool\Tool;
 
 /**
  * Tests for #104: Interactions API streaming support.
  */
 class InteractionsStreamingTest extends TestCase {
-    // =========================================================================
-    // Text streaming
-    // =========================================================================
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    /** Build a named SSE event string */
+    private function sseEvent(string $type, array $data): string {
+        return "event: {$type}\ndata: ".json_encode($data)."\n\n";
+    }
+
+    private function createGemini3Client(): GoogleClient {
+        return new GoogleClient(new GoogleClientConfig(
+            model: 'gemini-3.5-flash',
+            apiKey: 'test-key',
+        ));
+    }
+
+    // ─── Text streaming ───────────────────────────────────────────────────────
 
     public function testStreamTextTokens(): void {
         $fakeHttp = new FakeHttpClient();
         $fakeHttp->addStreamingChunks([
-            "data: {\"id\":\"int_001\",\"model\":\"gemini-3.5-flash\",\"steps\":[{\"type\":\"text\",\"text\":\"Hello\"}]}\n\n",
-            "data: {\"steps\":[{\"type\":\"text\",\"text\":\" World\"}]}\n\n",
-            "data: {\"steps\":[],\"usage\":{\"input_tokens\":5,\"output_tokens\":2,\"total_tokens\":7}}\n\n",
-            "data: [DONE]\n\n",
+            $this->sseEvent('interaction.created', ['interaction' => ['id' => 'int_001', 'status' => 'in_progress', 'model' => 'gemini-3.5-flash']]),
+            $this->sseEvent('step.start', ['index' => 0, 'step' => ['type' => 'model_output']]),
+            $this->sseEvent('step.delta', ['index' => 0, 'delta' => ['type' => 'text', 'text' => 'Hello']]),
+            $this->sseEvent('step.delta', ['index' => 0, 'delta' => ['type' => 'text', 'text' => ' World']]),
+            $this->sseEvent('step.stop', ['index' => 0]),
+            $this->sseEvent('interaction.completed', ['interaction' => [
+                'id' => 'int_001', 'model' => 'gemini-3.5-flash', 'status' => 'completed',
+                'usage' => ['total_input_tokens' => 5, 'total_output_tokens' => 2, 'total_tokens' => 7],
+            ]]),
         ]);
 
         $client = $this->createGemini3Client();
@@ -52,8 +68,13 @@ class InteractionsStreamingTest extends TestCase {
     public function testStreamCompletionCallback(): void {
         $fakeHttp = new FakeHttpClient();
         $fakeHttp->addStreamingChunks([
-            "data: {\"id\":\"int_abc\",\"model\":\"gemini-3.5-flash\",\"steps\":[{\"type\":\"text\",\"text\":\"Hi!\"}],\"usage\":{\"input_tokens\":3,\"output_tokens\":1,\"total_tokens\":4}}\n\n",
-            "data: [DONE]\n\n",
+            $this->sseEvent('step.start', ['index' => 0, 'step' => ['type' => 'model_output']]),
+            $this->sseEvent('step.delta', ['index' => 0, 'delta' => ['type' => 'text', 'text' => 'Hi!']]),
+            $this->sseEvent('step.stop', ['index' => 0]),
+            $this->sseEvent('interaction.completed', ['interaction' => [
+                'id' => 'int_abc', 'model' => 'gemini-3.5-flash', 'status' => 'completed',
+                'usage' => ['total_input_tokens' => 3, 'total_output_tokens' => 1, 'total_tokens' => 4],
+            ]]),
         ]);
 
         $client = $this->createGemini3Client();
@@ -79,9 +100,13 @@ class InteractionsStreamingTest extends TestCase {
     public function testStreamIgnoresThoughtSteps(): void {
         $fakeHttp = new FakeHttpClient();
         $fakeHttp->addStreamingChunks([
-            "data: {\"steps\":[{\"type\":\"thought\",\"text\":\"Let me think...\"}]}\n\n",
-            "data: {\"steps\":[{\"type\":\"text\",\"text\":\"Answer.\"}]}\n\n",
-            "data: [DONE]\n\n",
+            $this->sseEvent('step.start', ['index' => 0, 'step' => ['type' => 'thought']]),
+            $this->sseEvent('step.delta', ['index' => 0, 'delta' => ['type' => 'thought_signature', 'signature' => 'abc']]),
+            $this->sseEvent('step.stop', ['index' => 0]),
+            $this->sseEvent('step.start', ['index' => 1, 'step' => ['type' => 'model_output']]),
+            $this->sseEvent('step.delta', ['index' => 1, 'delta' => ['type' => 'text', 'text' => 'Answer.']]),
+            $this->sseEvent('step.stop', ['index' => 1]),
+            $this->sseEvent('interaction.completed', ['interaction' => ['id' => 'x', 'model' => 'gemini-3.5-flash', 'status' => 'completed']]),
         ]);
 
         $client = $this->createGemini3Client();
@@ -89,20 +114,23 @@ class InteractionsStreamingTest extends TestCase {
 
         $tokens = [];
         $client->streamChat(
-            [new Message('user', 'Hmm')],
+            [new Message('user', 'Q')],
             function (string $t) use (&$tokens) { $tokens[] = $t; }
         );
 
-        // Only text tokens should be emitted, not thoughts
+        // Only text from model_output, not thought signatures
         $this->assertEquals(['Answer.'], $tokens);
     }
 
     public function testStreamRawStepsPreservedInCompletion(): void {
         $fakeHttp = new FakeHttpClient();
         $fakeHttp->addStreamingChunks([
-            "data: {\"steps\":[{\"type\":\"thought\",\"text\":\"Reasoning...\"}]}\n\n",
-            "data: {\"steps\":[{\"type\":\"text\",\"text\":\"Answer.\"}]}\n\n",
-            "data: [DONE]\n\n",
+            $this->sseEvent('step.start', ['index' => 0, 'step' => ['type' => 'thought']]),
+            $this->sseEvent('step.stop', ['index' => 0]),
+            $this->sseEvent('step.start', ['index' => 1, 'step' => ['type' => 'model_output']]),
+            $this->sseEvent('step.delta', ['index' => 1, 'delta' => ['type' => 'text', 'text' => 'Answer.']]),
+            $this->sseEvent('step.stop', ['index' => 1]),
+            $this->sseEvent('interaction.completed', ['interaction' => ['id' => 'x', 'model' => 'gemini-3.5-flash', 'status' => 'completed']]),
         ]);
 
         $client = $this->createGemini3Client();
@@ -119,19 +147,21 @@ class InteractionsStreamingTest extends TestCase {
         $this->assertNotNull($rawSteps);
         $this->assertCount(2, $rawSteps);
         $this->assertEquals('thought', $rawSteps[0]['type']);
-        $this->assertEquals('text', $rawSteps[1]['type']);
+        $this->assertEquals('model_output', $rawSteps[1]['type']);
     }
-
-    // =========================================================================
-    // Function call streaming
-    // =========================================================================
 
     public function testStreamFunctionCallDetected(): void {
         $fakeHttp = new FakeHttpClient();
         $fakeHttp->addStreamingChunks([
-            "data: {\"id\":\"int_001\",\"steps\":[{\"type\":\"function_call\",\"id\":\"call_1\",\"name\":\"get_weather\",\"arguments\":{\"city\":\"NYC\"}}]}\n\n",
-            "data: {\"usage\":{\"input_tokens\":10,\"output_tokens\":5,\"total_tokens\":15}}\n\n",
-            "data: [DONE]\n\n",
+            $this->sseEvent('step.start', ['index' => 0, 'step' => ['type' => 'model_output']]),
+            $this->sseEvent('step.delta', ['index' => 0, 'delta' => [
+                'type' => 'function_call', 'id' => 'call_1', 'name' => 'get_weather', 'arguments' => ['city' => 'NYC'],
+            ]]),
+            $this->sseEvent('step.stop', ['index' => 0]),
+            $this->sseEvent('interaction.completed', ['interaction' => [
+                'id' => 'int_001', 'model' => 'gemini-3.5-flash', 'status' => 'completed',
+                'usage' => ['total_input_tokens' => 10, 'total_output_tokens' => 5, 'total_tokens' => 15],
+            ]]),
         ]);
 
         $client = $this->createGemini3Client();
@@ -153,9 +183,25 @@ class InteractionsStreamingTest extends TestCase {
         $this->assertEquals('tool_calls', $completionResponse->getFinishReason());
     }
 
-    // =========================================================================
-    // Backward compatibility — generateContent streaming unchanged
-    // =========================================================================
+    public function testStreamBodyContainsStreamTrue(): void {
+        $fakeHttp = new FakeHttpClient();
+        $fakeHttp->addStreamingChunks([
+            $this->sseEvent('step.start', ['index' => 0, 'step' => ['type' => 'model_output']]),
+            $this->sseEvent('step.delta', ['index' => 0, 'delta' => ['type' => 'text', 'text' => 'Hi']]),
+            $this->sseEvent('step.stop', ['index' => 0]),
+            $this->sseEvent('interaction.completed', ['interaction' => ['id' => 'x', 'model' => 'gemini-3.5-flash', 'status' => 'completed']]),
+        ]);
+
+        $client = $this->createGemini3Client();
+        $client->setHttpClient($fakeHttp);
+
+        $client->streamChat([new Message('user', 'Hi')], fn(string $t) => null);
+
+        $body = json_decode($fakeHttp->getLastRequest()->getBody(), true);
+        $this->assertTrue($body['stream'] ?? false, 'stream:true should be in request body');
+    }
+
+    // ─── Backward compatibility ────────────────────────────────────────────────
 
     public function testGemini2xStreamingUnchanged(): void {
         $fakeHttp = new FakeHttpClient();
@@ -184,15 +230,13 @@ class InteractionsStreamingTest extends TestCase {
         $this->assertEquals('Hello there', $completionResponse->getMessage()->getContent());
     }
 
-    // =========================================================================
-    // Uses interactions:stream endpoint
-    // =========================================================================
-
-    public function testUsesInteractionsStreamEndpoint(): void {
+    public function testUsesInteractionsEndpoint(): void {
         $fakeHttp = new FakeHttpClient();
         $fakeHttp->addStreamingChunks([
-            "data: {\"steps\":[{\"type\":\"text\",\"text\":\"Hi\"}]}\n\n",
-            "data: [DONE]\n\n",
+            $this->sseEvent('step.start', ['index' => 0, 'step' => ['type' => 'model_output']]),
+            $this->sseEvent('step.delta', ['index' => 0, 'delta' => ['type' => 'text', 'text' => 'Hi']]),
+            $this->sseEvent('step.stop', ['index' => 0]),
+            $this->sseEvent('interaction.completed', ['interaction' => ['id' => 'x', 'model' => 'gemini-3.5-flash', 'status' => 'completed']]),
         ]);
 
         $client = $this->createGemini3Client();
@@ -201,18 +245,7 @@ class InteractionsStreamingTest extends TestCase {
         $client->streamChat([new Message('user', 'Hi')], fn(string $t) => null);
 
         $url = $fakeHttp->getLastRequest()->getUrl();
-        $this->assertStringContainsString('interactions:stream', $url);
+        $this->assertStringContainsString('interactions', $url);
         $this->assertStringNotContainsString('streamGenerateContent', $url);
-    }
-
-    // =========================================================================
-    // Helpers
-    // =========================================================================
-
-    private function createGemini3Client(): GoogleClient {
-        return new GoogleClient(new GoogleClientConfig(
-            model: 'gemini-3.5-flash',
-            apiKey: 'test-key',
-        ));
     }
 }
