@@ -11,7 +11,6 @@
 namespace WebFiori\Tests\Ai;
 
 use PHPUnit\Framework\TestCase;
-use WebFiori\Ai\Exception\UnsupportedFeatureException;
 use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
@@ -70,29 +69,39 @@ class GoogleApiVersionTest extends TestCase {
         $this->assertStringContainsString('generateContent', $fakeHttp->getLastRequest()->getUrl());
     }
 
-    public function testGemini3xThrowsUnsupportedFeature(): void {
+    public function testGemini3xUsesInteractionsEndpoint(): void {
         $client = new GoogleClient(new GoogleClientConfig(
             model: 'gemini-3.5-flash',
             apiKey: 'test-key',
         ));
-        $client->setHttpClient(new FakeHttpClient());
 
-        $this->expectException(UnsupportedFeatureException::class);
+        $fakeHttp = $this->fakeInteractionsResponse();
+        $client->setHttpClient($fakeHttp);
+
         $client->chat([new Message('user', 'Hi')]);
+
+        $url = $fakeHttp->getLastRequest()->getUrl();
+        $this->assertStringContainsString('interactions', $url);
+        $this->assertStringNotContainsString('generateContent', $url);
     }
 
-    public function testGemini3xStreamingThrowsUnsupportedFeature(): void {
+    public function testGemini3xStreamingUsesInteractionsEndpoint(): void {
         $client = new GoogleClient(new GoogleClientConfig(
             model: 'gemini-3.0-pro',
             apiKey: 'test-key',
         ));
-        $client->setHttpClient(new FakeHttpClient());
 
-        $this->expectException(UnsupportedFeatureException::class);
-        $client->streamChat(
-            [new Message('user', 'Hi')],
-            function (string $token) {}
-        );
+        $fakeHttp = new FakeHttpClient();
+        $fakeHttp->addStreamingChunks([
+            "data: {\"steps\":[{\"type\":\"text\",\"text\":\"Hi\"}]}\n\n",
+            "data: [DONE]\n\n",
+        ]);
+        $client->setHttpClient($fakeHttp);
+
+        $client->streamChat([new Message('user', 'Hi')], fn(string $t) => null);
+
+        $url = $fakeHttp->getLastRequest()->getUrl();
+        $this->assertStringContainsString('interactions:stream', $url);
     }
 
     public function testGemini4xAlsoUsesInteractions(): void {
@@ -100,10 +109,13 @@ class GoogleApiVersionTest extends TestCase {
             model: 'gemini-4.0-ultra',
             apiKey: 'test-key',
         ));
-        $client->setHttpClient(new FakeHttpClient());
 
-        $this->expectException(UnsupportedFeatureException::class);
+        $fakeHttp = $this->fakeInteractionsResponse();
+        $client->setHttpClient($fakeHttp);
+
         $client->chat([new Message('user', 'Hi')]);
+
+        $this->assertStringContainsString('interactions', $fakeHttp->getLastRequest()->getUrl());
     }
 
     // =========================================================================
@@ -121,7 +133,6 @@ class GoogleApiVersionTest extends TestCase {
         $fakeHttp = $this->fakeGeminiResponse();
         $client->setHttpClient($fakeHttp);
 
-        // Should NOT throw — override forces legacy API
         $client->chat([new Message('user', 'Hi')]);
 
         $this->assertStringContainsString('generateContent', $fakeHttp->getLastRequest()->getUrl());
@@ -134,10 +145,13 @@ class GoogleApiVersionTest extends TestCase {
             apiKey: 'test-key',
             apiVersion: GoogleApiVersion::INTERACTIONS,
         ));
-        $client->setHttpClient(new FakeHttpClient());
 
-        $this->expectException(UnsupportedFeatureException::class);
+        $fakeHttp = $this->fakeInteractionsResponse();
+        $client->setHttpClient($fakeHttp);
+
         $client->chat([new Message('user', 'Hi')]);
+
+        $this->assertStringContainsString('interactions', $fakeHttp->getLastRequest()->getUrl());
     }
 
     public function testAutoVersionIsDefault(): void {
@@ -206,6 +220,20 @@ class GoogleApiVersionTest extends TestCase {
                 'finishReason' => 'STOP',
             ]],
             'usageMetadata' => ['promptTokenCount' => 5, 'candidatesTokenCount' => 3],
+        ])));
+
+        return $fakeHttp;
+    }
+
+    private function fakeInteractionsResponse(): FakeHttpClient {
+        $fakeHttp = new FakeHttpClient();
+        $fakeHttp->addResponse(new HttpResponse(200, [], json_encode([
+            'id' => 'interaction_abc123',
+            'model' => 'gemini-3.5-flash',
+            'steps' => [
+                ['type' => 'text', 'text' => 'Hello!'],
+            ],
+            'usage' => ['input_tokens' => 5, 'output_tokens' => 3, 'total_tokens' => 8],
         ])));
 
         return $fakeHttp;

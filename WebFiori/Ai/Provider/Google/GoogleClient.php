@@ -858,6 +858,42 @@ class GoogleClient extends AbstractClient {
     }
 
     /**
+     * Returns the Interactions API endpoint URL.
+     *
+     * @param bool $stream Whether to use the streaming endpoint.
+     *
+     * @return string The full endpoint URL.
+     */
+    private function getInteractionsEndpoint(bool $stream = false): string {
+        $builder = $this->getInteractionsRequestBuilder();
+
+        if ($this->isGeminiApi()) {
+            return $builder->buildGeminiEndpoint($this->getConfig('api_key'), $stream);
+        }
+
+        return $builder->buildVertexEndpoint(
+            $this->getConfig('project_id'),
+            $this->getConfig('location', 'global'),
+            $stream
+        );
+    }
+
+    /**
+     * Returns the Interactions API request builder instance.
+     *
+     * @return InteractionsRequestBuilder The request builder.
+     */
+    private function getInteractionsRequestBuilder(): InteractionsRequestBuilder {
+        static $builder = null;
+
+        if ($builder === null) {
+            $builder = new InteractionsRequestBuilder();
+        }
+
+        return $builder;
+    }
+
+    /**
      * Returns whether the Gemini API endpoint should be used.
      *
      * When 'api' is set to 'gemini', uses generativelanguage.googleapis.com.
@@ -985,9 +1021,12 @@ class GoogleClient extends AbstractClient {
         $model = $options['model'] ?? $this->getConfig('model', 'gemini-2.5-flash');
 
         if ($this->resolveApiVersion($model) === GoogleApiVersion::INTERACTIONS) {
-            throw new UnsupportedFeatureException(
-                'Interactions API (gemini-3.x+) is not yet implemented. Coming in v0.5.2.',
-                'google'
+            return $this->getInteractionsRequestBuilder()->buildChatRequest(
+                $model,
+                $messages,
+                $options,
+                $this->getInteractionsEndpoint(stream: false),
+                $this->getHeaders()
             );
         }
 
@@ -1184,9 +1223,12 @@ class GoogleClient extends AbstractClient {
         $model = $options['model'] ?? $this->getConfig('model', 'gemini-2.5-flash');
 
         if ($this->resolveApiVersion($model) === GoogleApiVersion::INTERACTIONS) {
-            throw new UnsupportedFeatureException(
-                'Interactions API streaming (gemini-3.x+) is not yet implemented. Coming in v0.5.2.',
-                'google'
+            return $this->getInteractionsRequestBuilder()->buildStreamChatRequest(
+                $model,
+                $messages,
+                $options,
+                $this->getInteractionsEndpoint(stream: true),
+                $this->getHeaders()
             );
         }
 
