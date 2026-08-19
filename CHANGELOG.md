@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.4](https://github.com/WebFiori/ai/compare/v0.5.2...v0.5.4) (2026-08-19)
+
+
+### Features
+
+* **tools:** ToolResponse class and multimodal tool outputs ([#95](https://github.com/WebFiori/ai/issues/95)-[#98](https://github.com/WebFiori/ai/issues/98)) ([1db45fb](https://github.com/WebFiori/ai/commit/1db45fb33c2c28d632f98c7a927abcf2ccae6b49))
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#109](https://github.com/WebFiori/ai/issues/109) from WebFiori/dev ([47379ce](https://github.com/WebFiori/ai/commit/47379ce4d16e047e65a4503989945727a4401dfd))
+
 ## [0.5.2](https://github.com/WebFiori/ai/compare/v0.5.1...v0.5.2) (2026-08-19)
 
 
