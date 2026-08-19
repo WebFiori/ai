@@ -11,9 +11,6 @@ require_once __DIR__.'/../../vendor/autoload.php';
 use WebFiori\Ai\ContentPart;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
-use WebFiori\Ai\Provider\Google\GoogleClientConfig;
-use WebFiori\Ai\Provider\Google\GoogleApi;
-use WebFiori\Ai\Provider\Google\GoogleApiVersion;
 
 
 // Create the provider with credentials

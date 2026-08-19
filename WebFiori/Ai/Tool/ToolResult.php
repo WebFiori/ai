@@ -27,6 +27,13 @@ class ToolResult {
     private string $content;
 
     /**
+     * The name of the tool that produced this result.
+     *
+     * @var string
+     */
+    private string $name;
+
+    /**
      * The ID of the tool call this result corresponds to.
      *
      * @var string
@@ -38,10 +45,13 @@ class ToolResult {
      *
      * @param string $toolCallId The ID of the tool call this result corresponds to.
      * @param string $content The content/output produced by the tool execution.
+     * @param string $name The name of the tool. Defaults to empty string for
+     *        backward compatibility.
      */
-    public function __construct(string $toolCallId, string $content) {
+    public function __construct(string $toolCallId, string $content, string $name = '') {
         $this->toolCallId = $toolCallId;
         $this->content = $content;
+        $this->name = $name;
     }
 
     /**
@@ -51,6 +61,15 @@ class ToolResult {
      */
     public function getContent(): string {
         return $this->content;
+    }
+
+    /**
+     * Returns the name of the tool.
+     *
+     * @return string The tool name.
+     */
+    public function getName(): string {
+        return $this->name;
     }
 
     /**

@@ -14,19 +14,14 @@ use WebFiori\Ai\Exception\ProviderException;
 use WebFiori\Ai\Exception\RateLimitException;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Anthropic\AnthropicClient;
-use WebFiori\Ai\Provider\Anthropic\AnthropicClientConfig;
 
 use WebFiori\Ai\Provider\Fallback\CircuitBreakerConfig;
 use WebFiori\Ai\Provider\Fallback\FallbackConfig;
 use WebFiori\Ai\Provider\Fallback\FallbackProvider;
 use WebFiori\Ai\Provider\Fallback\FallbackStrategy;
 use WebFiori\Ai\Provider\Google\GoogleClient;
-use WebFiori\Ai\Provider\Google\GoogleClientConfig;
-use WebFiori\Ai\Provider\Google\GoogleApi;
-use WebFiori\Ai\Provider\Google\GoogleApiVersion;
 
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
-use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 
 
 // =============================================================================
