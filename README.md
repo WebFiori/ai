@@ -31,7 +31,6 @@ A provider-agnostic AI library for PHP. Supports chat completions, embeddings, i
 - **Conversation Management** — Built-in conversation history with swappable storage
 - **Provider Fallback** — Automatic failover with circuit breaker pattern for resilience
 - **Enterprise Ready** — Retry logic, rate limiting, caching, health checks, metrics, audit logging
-
 ## Supported PHP Versions
 
 |                                                                                        Build Status                                                                                         |
@@ -103,15 +102,63 @@ $response = $client->chat([
 ```php
 use WebFiori\Ai\Provider\Fallback\FallbackProvider;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 use WebFiori\Ai\Provider\Anthropic\AnthropicClient;
+use WebFiori\Ai\Provider\Anthropic\AnthropicClientConfig;
 
 // Automatic failover: tries OpenAI first, then Anthropic if OpenAI fails
 $provider = new FallbackProvider([
-    new OpenAIClient(['api_key' => '...', 'model' => 'gpt-4o']),
-    new AnthropicClient(['api_key' => '...', 'model' => 'claude-sonnet-4-20250514']),
+    new OpenAIClient(new OpenAIClientConfig(apiKey: '...', model: 'gpt-4o')),
+    new AnthropicClient(new AnthropicClientConfig(apiKey: '...', model: 'claude-sonnet-4-20250514')),
 ]);
 
 $response = $provider->chat([new Message('user', 'Hello!')]);
+```
+
+### Interactions API (gemini-3.5-flash+)
+
+```php
+use WebFiori\Ai\Provider\Google\GoogleClient;
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
+
+// Interactions API is auto-detected for gemini-3.x models
+$client = new GoogleClient(new GoogleClientConfig(
+    model: 'gemini-3.5-flash',
+    apiKey: 'your-api-key',
+));
+
+$response = $client->chat([new Message('user', 'What is PHP?')]);
+echo $response->getMessage()->getContent();
+echo 'Interaction ID: '.$response->getRequestId();
+```
+
+### Tool with Image Output (ToolResponse)
+
+```php
+use WebFiori\Ai\ContentPart;
+use WebFiori\Ai\Tool\Tool;
+use WebFiori\Ai\Tool\ToolResponse;
+
+// Tools can return images alongside text for visual analysis
+$chartTool = new Tool(
+    'generate_chart',
+    'Generates a chart image',
+    ['type' => 'object', 'properties' => ['title' => ['type' => 'string']]],
+    function (array $args): ToolResponse {
+        $imageData = generateChartPng($args['title']); // your image generation
+
+        return ToolResponse::withImages(
+            json_encode(['title' => $args['title'], 'status' => 'generated']),
+            [ContentPart::imageBase64(base64_encode($imageData), 'image/png')]
+        );
+    }
+);
+
+// The model sees both the text metadata AND the image
+$response = $client->chat(
+    [new Message('user', 'Generate a Q3 revenue chart and describe it.')],
+    ['tools' => [$chartTool], 'auto_execute_tools' => true]
+);
 ```
 
 ## Documentation
