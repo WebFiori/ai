@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.1](https://github.com/WebFiori/ai/compare/v0.5.1...v0.5.1) (2026-08-19)
+
+
+### Features
+
+* **google:** implement Gemini native image generation ([03d8fbb](https://github.com/WebFiori/ai/commit/03d8fbb4231c5f00b8628d58018dfd2a4d9f66d7))
+* **google:** implement Gemini native image generation ([8a4aab6](https://github.com/WebFiori/ai/commit/8a4aab694605082b59ebd26cb5884ad7530446e6))
+* **resilience:** Implement provider fallback with automatic failover ([ad1f219](https://github.com/WebFiori/ai/commit/ad1f21930a639bacf2e9baee669aa86988cff513)), closes [#31](https://github.com/WebFiori/ai/issues/31)
+* **tools:** enrich FileProcessing converter metadata ([d222111](https://github.com/WebFiori/ai/commit/d2221118f0e4172770fce1c6c9af8675ac85b47a))
+* **tools:** enrich FileProcessing converter metadata ([b03a800](https://github.com/WebFiori/ai/commit/b03a8000c5b9b49bdd0aa487e59d49a8fa29b6e4))
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#105](https://github.com/WebFiori/ai/issues/105) from WebFiori/dev ([7850f73](https://github.com/WebFiori/ai/commit/7850f73fb56ec42532525c4cba96fd251a5d4db4))
+
 ## [Unreleased]
 
 ### Features
