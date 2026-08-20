@@ -81,9 +81,9 @@ function gemini3Client(): GoogleClient {
 
 function claudeOnVertexClient(): GoogleClient {
     return new GoogleClient(new GoogleClientConfig(
-        model: 'claude-haiku-4-5@20251001',
+        model: 'claude-sonnet-5',
         projectId: GCP_PROJECT,
-        location: 'us-east5',
+        location: 'global',
         credentials: KEY_PATH,
         api: GoogleApi::VERTEX_AI,
         publisher: 'anthropic',

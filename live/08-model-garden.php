@@ -5,8 +5,6 @@
  *
  * Usage:
  *   php live/08-model-garden.php
- *
- * Tests non-Google models running on Vertex AI infrastructure.
  */
 
 require_once __DIR__.'/helpers.php';
@@ -19,11 +17,9 @@ use WebFiori\Ai\Tool\Tool;
 
 section('Vertex AI Model Garden — Anthropic Claude');
 
-// Helper to create a Claude client on Vertex AI
-// us-east5 is the primary location for Anthropic models
 function claudeOnVertex(): GoogleClient {
     return new GoogleClient(new GoogleClientConfig(
-        model: 'claude-haiku-4-5@20251001',
+        model: 'claude-sonnet-5',
         projectId: GCP_PROJECT,
         location: 'us-east5',
         credentials: KEY_PATH,
@@ -36,11 +32,15 @@ function claudeOnVertex(): GoogleClient {
 $available = true;
 try {
     claudeOnVertex()->chat([new Message('user', 'hi')]);
+    sleep(15);
 } catch (\WebFiori\Ai\Exception\ProviderException $e) {
-    if (str_contains($e->getMessage(), 'not found') || str_contains($e->getMessage(), 'permission') || str_contains($e->getMessage(), '404')) {
+    if (str_contains($e->getMessage(), 'not found') || str_contains($e->getMessage(), '404')) {
         echo "  \033[33m⚠  SKIP\033[0m  Claude on Vertex not available: ".substr($e->getMessage(), 0, 80)."\n\n";
         $available = false;
     }
+} catch (\WebFiori\Ai\Exception\RateLimitException $e) {
+    echo "  \033[33m⚠  NOTE\033[0m  Rate limit on availability check — waiting 30s for quota reset...\n";
+    sleep(30);
 }
 
 if (!$available) {
@@ -48,7 +48,16 @@ if (!$available) {
     return;
 }
 
-// ─── 1. Basic chat ────────────────────────────────────────────────────────────
+// ─── 1. getName ───────────────────────────────────────────────────────────────
+run('Client getName() returns vertex:anthropic', function () {
+    $client = claudeOnVertex();
+    assert($client->getName() === 'vertex:anthropic', 'Wrong name: '.$client->getName());
+    echo "    → Name: {$client->getName()}\n";
+});
+
+sleep(20);
+
+// ─── 2. Basic chat ────────────────────────────────────────────────────────────
 run('Basic chat — Claude on Vertex AI', function () {
     $response = claudeOnVertex()->chat([
         new Message('system', 'You are a helpful assistant. Keep responses concise.'),
@@ -64,18 +73,14 @@ run('Basic chat — Claude on Vertex AI', function () {
     }
 });
 
-// ─── 2. Client name ───────────────────────────────────────────────────────────
-run('Client getName() returns vertex:anthropic', function () {
-    $client = claudeOnVertex();
-    assert($client->getName() === 'vertex:anthropic', 'Wrong name: '.$client->getName());
-    echo "    → Name: {$client->getName()}\n";
-});
+sleep(20);
 
 // ─── 3. Multi-turn ────────────────────────────────────────────────────────────
 run('Multi-turn conversation', function () {
     $client = claudeOnVertex();
     $messages = [new Message('user', 'My favourite language is PHP.')];
     $r1 = $client->chat($messages);
+    sleep(15);
     $messages[] = $r1->getMessage();
     $messages[] = new Message('user', 'What language did I mention?');
     $r2 = $client->chat($messages);
@@ -83,6 +88,8 @@ run('Multi-turn conversation', function () {
     assert(stripos($r2->getMessage()->getContent(), 'php') !== false, 'PHP not recalled');
     echo "    → Turn 2: ".$r2->getMessage()->getContent()."\n";
 });
+
+sleep(20);
 
 // ─── 4. Tool calling ──────────────────────────────────────────────────────────
 run('Tool calling with auto-execute', function () {
@@ -103,11 +110,13 @@ run('Tool calling with auto-execute', function () {
     echo "    → ".substr($response->getMessage()->getContent(), 0, 100)."\n";
 });
 
-// ─── 5. FallbackProvider with Claude on Vertex ───────────────────────────────
+sleep(20);
+
+// ─── 5. FallbackProvider ──────────────────────────────────────────────────────
 run('FallbackProvider: Claude on Vertex + Gemini fallback', function () {
     $fallback = new \WebFiori\Ai\Provider\Fallback\FallbackProvider([
-        claudeOnVertex(),   // Primary: Claude on Vertex
-        gemini2Client(),    // Fallback: Gemini
+        claudeOnVertex(),
+        gemini2Client(),
     ]);
 
     $response = $fallback->chat([new Message('user', 'Say hi in one word.')]);
