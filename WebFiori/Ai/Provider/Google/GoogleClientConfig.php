@@ -96,6 +96,18 @@ class GoogleClientConfig extends ClientConfig {
     public readonly ?string $projectId;
 
     /**
+     * The publisher of the model for Vertex AI Model Garden.
+     *
+     * Used when running non-Google models (e.g., Anthropic Claude, Meta Llama,
+     * Mistral) via Vertex AI. Defaults to 'google' for standard Gemini models.
+     *
+     * Examples: 'google', 'anthropic', 'meta', 'mistralai'
+     *
+     * @var string
+     */
+    public readonly string $publisher;
+
+    /**
      * Creates a new GoogleClientConfig instance.
      *
      * @param string $model The default model for chat completions.
@@ -108,6 +120,9 @@ class GoogleClientConfig extends ClientConfig {
      * @param GoogleApiVersion $apiVersion API version for chat. Default is AUTO.
      * @param string $embeddingModel Model for embeddings.
      * @param string $imageModel Model for image generation.
+     * @param string $publisher Model publisher for Vertex AI Model Garden.
+     *        Use 'google' for Gemini, 'anthropic' for Claude, 'meta' for Llama,
+     *        'mistralai' for Mistral. Default is 'google'.
      * @param int $timeout Request timeout in seconds.
      * @param int $connectTimeout Connection timeout in seconds.
      */
@@ -122,6 +137,7 @@ class GoogleClientConfig extends ClientConfig {
         GoogleApiVersion $apiVersion = GoogleApiVersion::AUTO,
         string $embeddingModel = 'text-embedding-004',
         string $imageModel = 'gemini-2.5-flash-preview-image-generation',
+        string $publisher = 'google',
         int $timeout = 30,
         int $connectTimeout = 10
     ) {
@@ -136,6 +152,7 @@ class GoogleClientConfig extends ClientConfig {
         $this->apiVersion = $apiVersion;
         $this->embeddingModel = $embeddingModel;
         $this->imageModel = $imageModel;
+        $this->publisher = $publisher;
     }
 
     /**
@@ -153,6 +170,7 @@ class GoogleClientConfig extends ClientConfig {
             'api_version' => $this->apiVersion->value,
             'embedding_model' => $this->embeddingModel,
             'image_model' => $this->imageModel,
+            'publisher' => $this->publisher,
             'timeout' => $this->timeout,
             'connect_timeout' => $this->connectTimeout,
         ];

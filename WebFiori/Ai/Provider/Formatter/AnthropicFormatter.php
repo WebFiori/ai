@@ -480,6 +480,8 @@ class AnthropicFormatter implements ProviderFormatterInterface {
      * @param string $url The file URL.
      *
      * @return array{mime_type: string, data: string}|null The file data or null on failure.
+     *
+     * @codeCoverageIgnore Requires live HTTP — tested via integration tests
      */
     private function fetchFileFromUrl(string $url): ?array {
         $context = stream_context_create([
