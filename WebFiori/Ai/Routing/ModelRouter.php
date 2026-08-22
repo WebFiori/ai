@@ -18,6 +18,7 @@ use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\ProviderInterface;
+use WebFiori\Ai\Tool\Tool;
 
 /**
  * Routes chat requests to different providers based on configurable rules.
@@ -62,6 +63,12 @@ use WebFiori\Ai\Provider\ProviderInterface;
  */
 class ModelRouter implements ProviderInterface {
     /**
+     * The provider used to classify tasks in TOOL and HYBRID modes.
+     *
+     * @var ProviderInterface|null
+     */
+    private ?ProviderInterface $classifier = null;
+    /**
      * The default tier name when no rule matches.
      *
      * @var string
@@ -74,6 +81,13 @@ class ModelRouter implements ProviderInterface {
      * @var string|null
      */
     private ?string $forcedTier = null;
+
+    /**
+     * The routing mode.
+     *
+     * @var RoutingMode
+     */
+    private RoutingMode $mode = RoutingMode::RULE;
 
     /**
      * Optional observability callback.
@@ -97,6 +111,13 @@ class ModelRouter implements ProviderInterface {
     private array $rules = [];
 
     /**
+     * Map of tier name → description (for tool-based routing).
+     *
+     * @var array<string, string>
+     */
+    private array $tierDescriptions = [];
+
+    /**
      * Creates a new ModelRouter instance.
      *
      * @param array<string, ProviderInterface> $providers Map of tier name → provider.
@@ -112,6 +133,31 @@ class ModelRouter implements ProviderInterface {
 
         $this->providers = $providers;
         $this->default = $default ?? array_key_first($providers);
+    }
+
+    /**
+     * Registers a tier with a human-readable description for tool-based routing.
+     *
+     * The description is sent to the classifier model so it understands
+     * what kind of requests belong to this tier.
+     *
+     * @param string $tier The tier name (must be a registered provider key).
+     * @param string $description Human-readable description for the classifier.
+     *
+     * @return self For method chaining.
+     *
+     * @throws \InvalidArgumentException If the tier is not registered.
+     */
+    public function addRoute(string $tier, string $description): self {
+        if (!isset($this->providers[$tier])) {
+            throw new \InvalidArgumentException(
+                "Tier '{$tier}' is not registered. Available tiers: ".implode(', ', array_keys($this->providers))
+            );
+        }
+
+        $this->tierDescriptions[$tier] = $description;
+
+        return $this;
     }
 
     /**
@@ -188,12 +234,30 @@ class ModelRouter implements ProviderInterface {
     }
 
     /**
+     * Returns the classifier provider.
+     *
+     * @return ProviderInterface|null The classifier, or null if not set.
+     */
+    public function getClassifier(): ?ProviderInterface {
+        return $this->classifier;
+    }
+
+    /**
      * Returns the default tier name.
      *
      * @return string The default tier name.
      */
     public function getDefault(): string {
         return $this->default;
+    }
+
+    /**
+     * Returns the current routing mode.
+     *
+     * @return RoutingMode The routing mode.
+     */
+    public function getMode(): RoutingMode {
+        return $this->mode;
     }
 
     /**
@@ -219,6 +283,15 @@ class ModelRouter implements ProviderInterface {
      */
     public function getRules(): array {
         return $this->rules;
+    }
+
+    /**
+     * Returns all tier descriptions registered via addRoute().
+     *
+     * @return array<string, string> Map of tier → description.
+     */
+    public function getTierDescriptions(): array {
+        return $this->tierDescriptions;
     }
 
     /**
@@ -267,6 +340,25 @@ class ModelRouter implements ProviderInterface {
     }
 
     /**
+     * Sets the classifier provider used in TOOL and HYBRID modes.
+     *
+     * The classifier receives the original messages and a routing tool.
+     * It selects the appropriate tier by calling the tool.
+     *
+     * In HYBRID mode, the classifier is only called when no rule matches.
+     * In RULE mode, the classifier is never called regardless of this setting.
+     *
+     * @param ProviderInterface|null $classifier The classifier provider.
+     *
+     * @return self For method chaining.
+     */
+    public function setClassifier(?ProviderInterface $classifier): self {
+        $this->classifier = $classifier;
+
+        return $this;
+    }
+
+    /**
      * Sets the default tier used when no rule matches.
      *
      * @param string $tier The default tier name.
@@ -306,6 +398,19 @@ class ModelRouter implements ProviderInterface {
     }
 
     /**
+     * Sets the routing mode.
+     *
+     * @param RoutingMode $mode The routing mode.
+     *
+     * @return self For method chaining.
+     */
+    public function setMode(RoutingMode $mode): self {
+        $this->mode = $mode;
+
+        return $this;
+    }
+
+    /**
      * {@inheritdoc}
      */
     public function streamChat(
@@ -321,6 +426,83 @@ class ModelRouter implements ProviderInterface {
         $options['model'] = $options['model'] ?? $result->getTier();
 
         $result->getProvider()->streamChat($messages, $onToken, $onComplete, $onError, $options);
+    }
+
+    /**
+     * Asks the classifier provider to select a tier via tool call.
+     *
+     * Sends the original messages plus a routing tool to the classifier.
+     * If the classifier calls the routing tool, returns the selected tier.
+     * If the classifier doesn't call the tool (or no descriptions registered),
+     * returns null.
+     *
+     * @param Message[] $messages The conversation messages.
+     * @param array<string, mixed> $options The chat options.
+     *
+     * @return string|null The selected tier name, or null if classification failed.
+     */
+    private function classifyWithTool(array $messages, array $options): ?string {
+        $tierDescriptions = $this->tierDescriptions;
+
+        // Build enum of valid tier names for the tool schema
+        $tierNames = array_keys($tierDescriptions);
+        $tierEnum = array_values($tierNames);
+
+        // Build description list for the tool
+        $descriptionList = implode("\n", array_map(
+            fn($tier, $desc) => "- {$tier}: {$desc}",
+            array_keys($tierDescriptions),
+            $tierDescriptions
+        ));
+
+        $routingTool = new Tool(
+            'route_to',
+            "Select the most appropriate tier for this request.\n\nAvailable tiers:\n{$descriptionList}",
+            [
+                'type' => 'object',
+                'properties' => [
+                    'tier' => [
+                        'type' => 'string',
+                        'enum' => $tierEnum,
+                        'description' => 'The tier best suited for this request.',
+                    ],
+                    'reason' => [
+                        'type' => 'string',
+                        'description' => 'Brief explanation of why this tier was chosen.',
+                    ],
+                ],
+                'required' => ['tier'],
+            ],
+            fn(array $args) => $args['tier'] // handler never called — we intercept the tool call
+        );
+
+        try {
+            $classifierOptions = [
+                'tools' => [$routingTool],
+                'temperature' => 0,       // deterministic classification
+                'max_tokens' => 50,       // minimal — just the tool call
+            ];
+
+            $response = $this->classifier->chat($messages, $classifierOptions);
+
+            if ($response->hasToolCalls()) {
+                $toolCalls = $response->getMessage()->getToolCalls();
+
+                foreach ($toolCalls as $call) {
+                    if ($call->getName() === 'route_to') {
+                        $tier = $call->getArguments()['tier'] ?? null;
+
+                        if ($tier !== null && isset($this->providers[$tier])) {
+                            return $tier;
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // Classification failed — fall through to default
+        }
+
+        return null;
     }
 
     /**
@@ -340,8 +522,9 @@ class ModelRouter implements ProviderInterface {
      * Evaluation order:
      * 1. forcedTier (if set)
      * 2. force_provider option (tier name)
-     * 3. Rules in priority order
-     * 4. Default tier
+     * 3. Rules (if mode is RULE or HYBRID)
+     * 4. Tool-based classification (if mode is TOOL or HYBRID and classifier set)
+     * 5. Default tier
      *
      * @param Message[] $messages The conversation messages.
      * @param array<string, mixed> $options The chat options.
@@ -369,22 +552,37 @@ class ModelRouter implements ProviderInterface {
             );
         }
 
-        // 3. Rule-based routing
-        foreach ($this->rules as $rule) {
-            if ($rule->matches($messages, $options)) {
-                $tier = $rule->getTier();
+        // 3. Rule-based routing (RULE or HYBRID mode)
+        if ($this->mode !== RoutingMode::TOOL) {
+            foreach ($this->rules as $rule) {
+                if ($rule->matches($messages, $options)) {
+                    $tier = $rule->getTier();
 
-                if (isset($this->providers[$tier])) {
-                    return new RouteResult(
-                        $tier,
-                        $this->providers[$tier],
-                        'rule:'.($rule->getDescription() ?: $tier)
-                    );
+                    if (isset($this->providers[$tier])) {
+                        return new RouteResult(
+                            $tier,
+                            $this->providers[$tier],
+                            'rule:'.($rule->getDescription() ?: $tier)
+                        );
+                    }
                 }
             }
         }
 
-        // 4. Default tier
+        // 4. Tool-based classification (TOOL or HYBRID mode)
+        if ($this->mode !== RoutingMode::RULE && $this->classifier !== null && !empty($this->tierDescriptions)) {
+            $tier = $this->classifyWithTool($messages, $options);
+
+            if ($tier !== null && isset($this->providers[$tier])) {
+                return new RouteResult(
+                    $tier,
+                    $this->providers[$tier],
+                    'tool:classifier'
+                );
+            }
+        }
+
+        // 5. Default tier
         return new RouteResult(
             $this->default,
             $this->providers[$this->default],
