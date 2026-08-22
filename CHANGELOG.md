@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.8](https://github.com/WebFiori/ai/compare/v0.5.7...v0.5.8) (2026-08-22)
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#115](https://github.com/WebFiori/ai/issues/115) from WebFiori/dev ([79713c7](https://github.com/WebFiori/ai/commit/79713c701fb998b4db861aecacb0fcc829996fce))
+
 ## [0.5.7](https://github.com/WebFiori/ai/compare/v0.5.4...v0.5.7) (2026-08-22)
 
 
