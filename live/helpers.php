@@ -79,6 +79,17 @@ function gemini3Client(): GoogleClient {
     ));
 }
 
+function claudeOnVertexClient(): GoogleClient {
+    return new GoogleClient(new GoogleClientConfig(
+        model: 'claude-sonnet-5',
+        projectId: GCP_PROJECT,
+        location: 'global',
+        credentials: KEY_PATH,
+        api: GoogleApi::VERTEX_AI,
+        publisher: 'anthropic',
+    ));
+}
+
 function bedrockClient(): BedrockClient {
     $accessKey = getenv('AWS_ACCESS_KEY_ID');
     $secretKey = getenv('AWS_SECRET_ACCESS_KEY');

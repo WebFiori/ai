@@ -70,6 +70,20 @@ class GoogleClient extends AbstractClient {
     private ?string $accessToken = null;
 
     /**
+     * The Google client configuration.
+     *
+     * @var GoogleClientConfig
+     */
+    private GoogleClientConfig $googleConfig;
+
+    /**
+     * Formatter for non-Google publishers (Anthropic, OpenAI-compatible).
+     *
+     * @var \WebFiori\Ai\Provider\Formatter\ProviderFormatterInterface|null
+     */
+    private ?\WebFiori\Ai\Provider\Formatter\ProviderFormatterInterface $publisherFormatter = null;
+
+    /**
      * Token expiration timestamp.
      *
      * @var int
@@ -83,6 +97,12 @@ class GoogleClient extends AbstractClient {
      */
     public function __construct(GoogleClientConfig $config) {
         parent::__construct($config);
+        $this->googleConfig = $config;
+
+        // Initialize formatter for non-Google publishers
+        if ($config->publisher !== 'google') {
+            $this->publisherFormatter = $this->createPublisherFormatter($config);
+        }
     }
 
     /**
@@ -91,6 +111,10 @@ class GoogleClient extends AbstractClient {
      * @return string The provider identifier.
      */
     public function getName(): string {
+        if ($this->googleConfig->publisher !== 'google') {
+            return 'vertex:'.$this->googleConfig->publisher;
+        }
+
         return 'google';
     }
 
@@ -199,6 +223,40 @@ class GoogleClient extends AbstractClient {
         }
 
         return $config;
+    }
+
+    /**
+     * Creates a formatter for non-Google publishers on Vertex AI Model Garden.
+     *
+     * @param GoogleClientConfig $config The Google client configuration.
+     *
+     * @return \WebFiori\Ai\Provider\Formatter\ProviderFormatterInterface|null The formatter, or null for Google.
+     */
+    private function createPublisherFormatter(GoogleClientConfig $config): ?\WebFiori\Ai\Provider\Formatter\ProviderFormatterInterface {
+        switch ($config->publisher) {
+            case 'anthropic':
+                // Wrap the Anthropic formatter with a dummy AnthropicClientConfig
+                // The real auth/endpoint comes from GoogleClient (Vertex IAM)
+                $anthropicConfig = new \WebFiori\Ai\Provider\Anthropic\AnthropicClientConfig(
+                    apiKey: '',          // Not used — Vertex auth replaces this
+                    model: $config->model,
+                );
+
+                return new \WebFiori\Ai\Provider\Formatter\AnthropicFormatter($anthropicConfig, $this->getLogCallback());
+
+            case 'meta':
+            case 'mistralai':
+                // OpenAI-compatible format for Meta Llama and Mistral
+                $openaiConfig = new \WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig(
+                    apiKey: '',          // Not used — Vertex auth replaces this
+                    model: $config->model,
+                );
+
+                return new \WebFiori\Ai\Provider\Formatter\OpenAIFormatter($openaiConfig, $this->getLogCallback());
+
+            default:
+                return null;
+        }
     }
 
     /**
@@ -1144,6 +1202,58 @@ class GoogleClient extends AbstractClient {
     }
 
     /**
+     * Returns the Vertex AI Model Garden endpoint for a non-Google publisher.
+     *
+     * @param string $model The model identifier.
+     *
+     * @return string The full endpoint URL using :rawPredict action.
+     */
+    private function getPublisherEndpoint(string $model): string {
+        $projectId = $this->getConfig('project_id');
+        $location = $this->getConfig('location', 'us-central1');
+        $publisher = $this->googleConfig->publisher;
+
+        if ($location === 'global' || $location === null) {
+            $location = 'us-central1'; // Model Garden requires a specific region
+        }
+
+        return sprintf(
+            'https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/%s/models/%s:rawPredict',
+            $location,
+            $projectId,
+            $location,
+            $publisher,
+            $model
+        );
+    }
+
+    /**
+     * Returns the Vertex AI Model Garden streaming endpoint for a non-Google publisher.
+     *
+     * @param string $model The model identifier.
+     *
+     * @return string The full streaming endpoint URL.
+     */
+    private function getPublisherStreamEndpoint(string $model): string {
+        $projectId = $this->getConfig('project_id');
+        $location = $this->getConfig('location', 'us-central1');
+        $publisher = $this->googleConfig->publisher;
+
+        if ($location === 'global' || $location === null) {
+            $location = 'us-central1';
+        }
+
+        return sprintf(
+            'https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/%s/models/%s:streamRawPredict',
+            $location,
+            $projectId,
+            $location,
+            $publisher,
+            $model
+        );
+    }
+
+    /**
      * Returns whether the Gemini API endpoint should be used.
      *
      * When 'api' is set to 'gemini', uses generativelanguage.googleapis.com.
@@ -1269,6 +1379,16 @@ class GoogleClient extends AbstractClient {
      */
     protected function buildChatRequest(array $messages, array $options): HttpRequest {
         $model = $options['model'] ?? $this->getConfig('model', 'gemini-2.5-flash');
+
+        // Route to publisher-specific formatter for Vertex AI Model Garden
+        if ($this->publisherFormatter !== null) {
+            return $this->publisherFormatter->buildChatRequest(
+                $messages,
+                $options,
+                $this->getPublisherEndpoint($model),
+                $this->getHeaders()
+            );
+        }
 
         if ($this->resolveApiVersion($model) === GoogleApiVersion::INTERACTIONS) {
             return $this->getInteractionsRequestBuilder()->buildChatRequest(
@@ -1491,6 +1611,16 @@ class GoogleClient extends AbstractClient {
     protected function buildStreamChatRequest(array $messages, array $options): HttpRequest {
         $model = $options['model'] ?? $this->getConfig('model', 'gemini-2.5-flash');
 
+        // Route to publisher-specific formatter for Vertex AI Model Garden
+        if ($this->publisherFormatter !== null) {
+            return $this->publisherFormatter->buildStreamChatRequest(
+                $messages,
+                $options,
+                $this->getPublisherStreamEndpoint($model),
+                $this->getHeaders()
+            );
+        }
+
         if ($this->resolveApiVersion($model) === GoogleApiVersion::INTERACTIONS) {
             return $this->getInteractionsRequestBuilder()->buildStreamChatRequest(
                 $model,
@@ -1582,6 +1712,13 @@ class GoogleClient extends AbstractClient {
      * @throws ProviderException If status indicates a server error.
      */
     protected function handleErrorResponse(HttpResponse $response): void {
+        // Route to publisher-specific formatter for Vertex AI Model Garden
+        if ($this->publisherFormatter !== null) {
+            $this->publisherFormatter->handleErrorResponse($response);
+
+            return;
+        }
+
         $status = $response->getStatusCode();
 
         if ($status >= 200 && $status < 300) {
@@ -1618,6 +1755,11 @@ class GoogleClient extends AbstractClient {
      */
     protected function parseChatResponse(HttpResponse $response): ChatResponse {
         $data = $response->getJson();
+
+        // Route to publisher-specific formatter for Vertex AI Model Garden
+        if ($this->publisherFormatter !== null) {
+            return $this->publisherFormatter->parseChatResponse($response);
+        }
 
         // Route to Interactions parser if the response contains steps[]
         // (Interactions API format) instead of candidates[] (generateContent format)
