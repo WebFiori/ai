@@ -104,6 +104,13 @@ abstract class AbstractClient implements ProviderInterface {
     private HttpClientInterface $httpClient;
 
     /**
+     * Model alias registry.
+     *
+     * @var \WebFiori\Ai\ModelAliases|null
+     */
+    private ?\WebFiori\Ai\ModelAliases $modelAliases = null;
+
+    /**
      * Status emitter for real-time progress tracking.
      *
      * @var StatusEmitterInterface
@@ -166,6 +173,13 @@ abstract class AbstractClient implements ProviderInterface {
      */
     public function chat(array $messages, array $options = []): ChatResponse {
         $model = $options['model'] ?? $this->getConfig('model');
+
+        // Resolve model alias if registry is set
+        if ($this->modelAliases !== null && $model !== null) {
+            $model = $this->modelAliases->resolve($model, $this->getName());
+            $options['model'] = $model;
+        }
+
         $startTime = microtime(true);
         $autoExecute = $options['auto_execute_tools'] ?? false;
         $temperature = $options['temperature'] ?? null;
@@ -762,6 +776,15 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Returns the model alias registry.
+     *
+     * @return \WebFiori\Ai\ModelAliases|null The alias registry, or null if not set.
+     */
+    public function getModelAliases(): ?\WebFiori\Ai\ModelAliases {
+        return $this->modelAliases;
+    }
+
+    /**
      * Returns the last known rate limit status from the most recent API response.
      *
      * Returns null if rate limit tracking is not enabled, no requests have been
@@ -886,6 +909,20 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Sets the model alias registry for this provider.
+     *
+     * When set, logical alias names (e.g., 'fast', 'smart') passed via
+     * the 'model' option are resolved to provider-specific model IDs
+     * before the request is sent.
+     *
+     * @param \WebFiori\Ai\ModelAliases|null $aliases The alias registry,
+     *        or null to disable alias resolution.
+     */
+    public function setModelAliases(?\WebFiori\Ai\ModelAliases $aliases): void {
+        $this->modelAliases = $aliases;
+    }
+
+    /**
      * Configures PII redaction for logs and metrics.
      *
      * When set, sensitive data is redacted before reaching log and metrics
@@ -992,6 +1029,13 @@ abstract class AbstractClient implements ProviderInterface {
         array $options = []
     ): void {
         $model = $options['model'] ?? $this->getConfig('model');
+
+        // Resolve model alias if registry is set
+        if ($this->modelAliases !== null && $model !== null) {
+            $model = $this->modelAliases->resolve($model, $this->getName());
+            $options['model'] = $model;
+        }
+
         $tools = $options['tools'] ?? [];
         $requestId = $options['request_id'] ?? uniqid('req_', true);
         $startTime = microtime(true);

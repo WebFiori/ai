@@ -33,23 +33,25 @@ $available = true;
 try {
     claudeOnVertex()->chat([new Message('user', 'hi')]);
     sleep(15);
-} catch (\WebFiori\Ai\Exception\ProviderException $e) {
+} catch (WebFiori\Ai\Exception\ProviderException $e) {
     if (str_contains($e->getMessage(), 'not found') || str_contains($e->getMessage(), '404')) {
         echo "  \033[33m⚠  SKIP\033[0m  Claude on Vertex not available: ".substr($e->getMessage(), 0, 80)."\n\n";
         $available = false;
     }
-} catch (\WebFiori\Ai\Exception\RateLimitException $e) {
+} catch (WebFiori\Ai\Exception\RateLimitException $e) {
     echo "  \033[33m⚠  NOTE\033[0m  Rate limit on availability check — waiting 30s for quota reset...\n";
     sleep(30);
 }
 
 if (!$available) {
     echo "\n";
+
     return;
 }
 
 // ─── 1. getName ───────────────────────────────────────────────────────────────
-run('Client getName() returns vertex:anthropic', function () {
+run('Client getName() returns vertex:anthropic', function ()
+{
     $client = claudeOnVertex();
     assert($client->getName() === 'vertex:anthropic', 'Wrong name: '.$client->getName());
     echo "    → Name: {$client->getName()}\n";
@@ -58,7 +60,8 @@ run('Client getName() returns vertex:anthropic', function () {
 sleep(20);
 
 // ─── 2. Basic chat ────────────────────────────────────────────────────────────
-run('Basic chat — Claude on Vertex AI', function () {
+run('Basic chat — Claude on Vertex AI', function ()
+{
     $response = claudeOnVertex()->chat([
         new Message('system', 'You are a helpful assistant. Keep responses concise.'),
         new Message('user', 'What is PHP in one sentence?'),
@@ -68,6 +71,7 @@ run('Basic chat — Claude on Vertex AI', function () {
     assert($response->getModel() !== '', 'No model in response');
     echo "    → ".substr($response->getMessage()->getContent(), 0, 80)."\n";
     echo "    → Model: {$response->getModel()}\n";
+
     if ($response->getUsage()) {
         echo "    → Tokens: {$response->getUsage()->getTotalTokens()}\n";
     }
@@ -76,7 +80,8 @@ run('Basic chat — Claude on Vertex AI', function () {
 sleep(20);
 
 // ─── 3. Multi-turn ────────────────────────────────────────────────────────────
-run('Multi-turn conversation', function () {
+run('Multi-turn conversation', function ()
+{
     $client = claudeOnVertex();
     $messages = [new Message('user', 'My favourite language is PHP.')];
     $r1 = $client->chat($messages);
@@ -92,7 +97,8 @@ run('Multi-turn conversation', function () {
 sleep(20);
 
 // ─── 4. Tool calling ──────────────────────────────────────────────────────────
-run('Tool calling with auto-execute', function () {
+run('Tool calling with auto-execute', function ()
+{
     $tool = new Tool(
         'get_weather',
         'Returns current weather for a city.',
@@ -113,8 +119,9 @@ run('Tool calling with auto-execute', function () {
 sleep(20);
 
 // ─── 5. FallbackProvider ──────────────────────────────────────────────────────
-run('FallbackProvider: Claude on Vertex + Gemini fallback', function () {
-    $fallback = new \WebFiori\Ai\Provider\Fallback\FallbackProvider([
+run('FallbackProvider: Claude on Vertex + Gemini fallback', function ()
+{
+    $fallback = new WebFiori\Ai\Provider\Fallback\FallbackProvider([
         claudeOnVertex(),
         gemini2Client(),
     ]);
