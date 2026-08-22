@@ -20,6 +20,7 @@ use WebFiori\Ai\Exception\RateLimitException;
 use WebFiori\Ai\Exception\StreamingException;
 use WebFiori\Ai\Exception\UnsupportedFeatureException;
 use WebFiori\Ai\GeneratedImage;
+use WebFiori\Ai\HealthCheckResult;
 use WebFiori\Ai\Http\HttpRequest;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Http\SseParser;
@@ -27,6 +28,11 @@ use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\AbstractClient;
+use WebFiori\Ai\Provider\Anthropic\AnthropicClientConfig;
+use WebFiori\Ai\Provider\Formatter\AnthropicFormatter;
+use WebFiori\Ai\Provider\Formatter\OpenAIFormatter;
+use WebFiori\Ai\Provider\Formatter\ProviderFormatterInterface;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 use WebFiori\Ai\Tool\BuiltInToolInterface;
 use WebFiori\Ai\Tool\GoogleBuiltInTool;
 use WebFiori\Ai\Tool\ToolCall;
@@ -79,9 +85,9 @@ class GoogleClient extends AbstractClient {
     /**
      * Formatter for non-Google publishers (Anthropic, OpenAI-compatible).
      *
-     * @var \WebFiori\Ai\Provider\Formatter\ProviderFormatterInterface|null
+     * @var ProviderFormatterInterface|null
      */
-    private ?\WebFiori\Ai\Provider\Formatter\ProviderFormatterInterface $publisherFormatter = null;
+    private ?ProviderFormatterInterface $publisherFormatter = null;
 
     /**
      * Token expiration timestamp.
@@ -123,9 +129,9 @@ class GoogleClient extends AbstractClient {
      *
      * @param int $timeout Timeout in seconds for the health check.
      *
-     * @return \WebFiori\Ai\HealthCheckResult The health check result.
+     * @return HealthCheckResult The health check result.
      */
-    public function healthCheck(int $timeout = 5): \WebFiori\Ai\HealthCheckResult {
+    public function healthCheck(int $timeout = 5): HealthCheckResult {
         $startTime = microtime(true);
         $checkMethod = 'models_list';
 
@@ -165,23 +171,23 @@ class GoogleClient extends AbstractClient {
             );
 
             // Use a fresh HTTP client with short timeout
-            $httpClient = new \WebFiori\Ai\Http\CurlHttpClient($timeout, $timeout);
+            $httpClient = new CurlHttpClient($timeout, $timeout);
             $response = $httpClient->send($request);
 
             $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
 
             if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
-                return \WebFiori\Ai\HealthCheckResult::success($latencyMs, $checkMethod);
+                return HealthCheckResult::success($latencyMs, $checkMethod);
             }
 
             $body = $response->getJson();
             $error = $body['error']['message'] ?? 'HTTP '.$response->getStatusCode();
 
-            return \WebFiori\Ai\HealthCheckResult::failure($error, $latencyMs, $checkMethod);
+            return HealthCheckResult::failure($error, $latencyMs, $checkMethod);
         } catch (\Throwable $e) {
             $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
 
-            return \WebFiori\Ai\HealthCheckResult::failure($e->getMessage(), $latencyMs, $checkMethod);
+            return HealthCheckResult::failure($e->getMessage(), $latencyMs, $checkMethod);
         }
     }
 
@@ -230,29 +236,29 @@ class GoogleClient extends AbstractClient {
      *
      * @param GoogleClientConfig $config The Google client configuration.
      *
-     * @return \WebFiori\Ai\Provider\Formatter\ProviderFormatterInterface|null The formatter, or null for Google.
+     * @return ProviderFormatterInterface|null The formatter, or null for Google.
      */
-    private function createPublisherFormatter(GoogleClientConfig $config): ?\WebFiori\Ai\Provider\Formatter\ProviderFormatterInterface {
+    private function createPublisherFormatter(GoogleClientConfig $config): ?ProviderFormatterInterface {
         switch ($config->publisher) {
             case 'anthropic':
                 // Wrap the Anthropic formatter with a dummy AnthropicClientConfig
                 // The real auth/endpoint comes from GoogleClient (Vertex IAM)
-                $anthropicConfig = new \WebFiori\Ai\Provider\Anthropic\AnthropicClientConfig(
+                $anthropicConfig = new AnthropicClientConfig(
                     apiKey: '',          // Not used — Vertex auth replaces this
                     model: $config->model,
                 );
 
-                return new \WebFiori\Ai\Provider\Formatter\AnthropicFormatter($anthropicConfig, $this->getLogCallback());
+                return new AnthropicFormatter($anthropicConfig, $this->getLogCallback());
 
             case 'meta':
             case 'mistralai':
                 // OpenAI-compatible format for Meta Llama and Mistral
-                $openaiConfig = new \WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig(
+                $openaiConfig = new OpenAIClientConfig(
                     apiKey: '',          // Not used — Vertex auth replaces this
                     model: $config->model,
                 );
 
-                return new \WebFiori\Ai\Provider\Formatter\OpenAIFormatter($openaiConfig, $this->getLogCallback());
+                return new OpenAIFormatter($openaiConfig, $this->getLogCallback());
 
             default:
                 return null;
