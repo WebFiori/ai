@@ -31,6 +31,8 @@ $suites = [
     'toolresponse' => 'live/06-tool-response.php',
     'officeimages' => 'live/07-office-images.php',
     'modelgarden' => 'live/08-model-garden.php',
+    'anthropic'   => 'live/09-anthropic-chat.php',
+    'modelrouter' => 'live/10-model-router.php',
 ];
 
 $rootDir = __DIR__.'/..';
