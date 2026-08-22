@@ -30,7 +30,7 @@ $suites = [
     'interactions' => 'live/05-interactions-api.php',
     'toolresponse' => 'live/06-tool-response.php',
     'officeimages' => 'live/07-office-images.php',
-    'modelgarden'  => 'live/08-model-garden.php',
+    'modelgarden' => 'live/08-model-garden.php',
 ];
 
 $rootDir = __DIR__.'/..';
