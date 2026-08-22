@@ -132,6 +132,22 @@ echo $response->getMessage()->getContent();
 echo 'Interaction ID: '.$response->getRequestId();
 ```
 
+### Model Aliases
+
+```php
+use WebFiori\Ai\ModelAliases;
+
+// Define once, use everywhere
+$aliases = new ModelAliases([
+    'fast'  => ['openai' => 'gpt-4o-mini', 'google' => 'gemini-2.5-flash'],
+    'smart' => ['openai' => 'gpt-4o',      'google' => 'gemini-2.5-pro'],
+]);
+
+$client->setModelAliases($aliases);
+$response = $client->chat($messages, ['model' => 'fast']);
+// → 'gpt-4o-mini' for OpenAI, 'gemini-2.5-flash' for Google
+```
+
 ### Tool with Image Output (ToolResponse)
 
 ```php
