@@ -257,7 +257,8 @@ class FileContentExtractorImageTest extends TestCase {
         $zip = new \ZipArchive();
         $zip->open($path, \ZipArchive::CREATE);
         $zip->addFromString('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>');
-        $zip->addFromString('word/document.xml', '<w:document>Hello</w:document>');
+        // Use proper namespace declaration to avoid XML warnings
+        $zip->addFromString('word/document.xml', '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Hello</w:t></w:r></w:p></w:body></w:document>');
         $zip->close();
 
         return $path;

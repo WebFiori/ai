@@ -19,6 +19,7 @@ use WebFiori\Ai\Exception\RateLimitException;
 use WebFiori\Ai\Exception\StreamingException;
 use WebFiori\Ai\Exception\UnsupportedFeatureException;
 use WebFiori\Ai\GeneratedImage;
+use WebFiori\Ai\Http\HttpClientInterface;
 use WebFiori\Ai\Http\HttpRequest;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Http\SseParser;
@@ -154,14 +155,14 @@ class OpenAIFormatter implements ProviderFormatterInterface {
      * Executes a streaming chat request using SSE parsing.
      *
      * @param HttpRequest $request The streaming HTTP request.
-     * @param \WebFiori\Ai\Http\HttpClientInterface $httpClient The HTTP client.
+     * @param HttpClientInterface $httpClient The HTTP client.
      * @param callable $onToken Token callback.
      * @param callable|null $onComplete Completion callback.
      * @param callable|null $onError Error callback.
      */
     public function executeStreamChat(
         HttpRequest $request,
-        \WebFiori\Ai\Http\HttpClientInterface $httpClient,
+        HttpClientInterface $httpClient,
         callable $onToken,
         ?callable $onComplete,
         ?callable $onError

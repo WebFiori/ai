@@ -11,6 +11,7 @@
 namespace WebFiori\Ai\Provider\Bedrock;
 
 use WebFiori\Ai\ChatResponse;
+use WebFiori\Ai\ContentPart;
 use WebFiori\Ai\Exception\StreamingException;
 use WebFiori\Ai\Http\HttpRequest;
 use WebFiori\Ai\Http\HttpResponse;
@@ -339,7 +340,7 @@ class ConverseStrategy implements InvocationStrategyInterface {
     /**
      * Formats ContentPart objects into Bedrock Converse API content format.
      *
-     * @param \WebFiori\Ai\ContentPart[] $parts The content parts.
+     * @param ContentPart[] $parts The content parts.
      *
      * @return array<int, array<string, mixed>> The formatted content array.
      */
@@ -348,12 +349,12 @@ class ConverseStrategy implements InvocationStrategyInterface {
 
         foreach ($parts as $part) {
             switch ($part->getType()) {
-                case \WebFiori\Ai\ContentPart::TYPE_TEXT:
+                case ContentPart::TYPE_TEXT:
                     $formatted[] = ['text' => $part->getData()['text']];
 
                     break;
 
-                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_URL:
+                case ContentPart::TYPE_IMAGE_URL:
                     // Bedrock requires base64 data, fetch the file
                     $url = $part->getData()['url'];
                     $fileData = $this->fetchFileFromUrl($url);
@@ -371,7 +372,7 @@ class ConverseStrategy implements InvocationStrategyInterface {
 
                     break;
 
-                case \WebFiori\Ai\ContentPart::TYPE_IMAGE_BASE64:
+                case ContentPart::TYPE_IMAGE_BASE64:
                     $data = $part->getData();
                     $formatted[] = [
                         'image' => [
@@ -384,7 +385,7 @@ class ConverseStrategy implements InvocationStrategyInterface {
 
                     break;
 
-                case \WebFiori\Ai\ContentPart::TYPE_DOCUMENT:
+                case ContentPart::TYPE_DOCUMENT:
                     $data = $part->getData();
                     $mimeType = $data['mime_type'];
 
@@ -416,7 +417,7 @@ class ConverseStrategy implements InvocationStrategyInterface {
 
                     break;
 
-                case \WebFiori\Ai\ContentPart::TYPE_FILE_GCS:
+                case ContentPart::TYPE_FILE_GCS:
                     // Bedrock doesn't support GCS URIs, need to fetch the file
                     $data = $part->getData();
                     // Convert gs://bucket/path to https://storage.googleapis.com/bucket/path
