@@ -13,6 +13,8 @@ namespace WebFiori\Ai\Provider\OpenAI;
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\EmbeddingResponse;
 use WebFiori\Ai\Exception\InvalidConfigException;
+use WebFiori\Ai\HealthCheckResult;
+use WebFiori\Ai\Http\CurlHttpClient;
 use WebFiori\Ai\Http\HttpRequest;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\ImageRequest;
@@ -60,9 +62,9 @@ class OpenAIClient extends AbstractClient {
      *
      * @param int $timeout Timeout in seconds for the health check.
      *
-     * @return \WebFiori\Ai\HealthCheckResult The health check result.
+     * @return HealthCheckResult The health check result.
      */
-    public function healthCheck(int $timeout = 5): \WebFiori\Ai\HealthCheckResult {
+    public function healthCheck(int $timeout = 5): HealthCheckResult {
         $startTime = microtime(true);
         $checkMethod = 'models_list';
 
@@ -74,23 +76,23 @@ class OpenAIClient extends AbstractClient {
                 ''
             );
 
-            $httpClient = new \WebFiori\Ai\Http\CurlHttpClient($timeout, $timeout);
+            $httpClient = new CurlHttpClient($timeout, $timeout);
             $response = $httpClient->send($request);
 
             $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
 
             if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
-                return \WebFiori\Ai\HealthCheckResult::success($latencyMs, $checkMethod);
+                return HealthCheckResult::success($latencyMs, $checkMethod);
             }
 
             $body = $response->getJson();
             $error = $body['error']['message'] ?? 'HTTP '.$response->getStatusCode();
 
-            return \WebFiori\Ai\HealthCheckResult::failure($error, $latencyMs, $checkMethod);
+            return HealthCheckResult::failure($error, $latencyMs, $checkMethod);
         } catch (\Throwable $e) {
             $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
 
-            return \WebFiori\Ai\HealthCheckResult::failure($e->getMessage(), $latencyMs, $checkMethod);
+            return HealthCheckResult::failure($e->getMessage(), $latencyMs, $checkMethod);
         }
     }
 

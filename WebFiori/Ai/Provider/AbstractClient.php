@@ -18,8 +18,17 @@ use WebFiori\Ai\Cache\CacheKeyGenerator;
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\Context\ContextWindowStrategyInterface;
 use WebFiori\Ai\Context\TokenEstimator;
+use WebFiori\Ai\CostEstimate;
+use WebFiori\Ai\CostResult;
 use WebFiori\Ai\EmbeddingResponse;
+use WebFiori\Ai\Exception\AuthenticationException;
+use WebFiori\Ai\Exception\ContextOverflowException;
+use WebFiori\Ai\Exception\HttpException;
 use WebFiori\Ai\Exception\InvalidConfigException;
+use WebFiori\Ai\Exception\ProviderException;
+use WebFiori\Ai\Exception\RateLimitException;
+use WebFiori\Ai\Exception\StreamingException;
+use WebFiori\Ai\Exception\UnsupportedFeatureException;
 use WebFiori\Ai\Http\CurlHttpClient;
 use WebFiori\Ai\Http\HttpClientInterface;
 use WebFiori\Ai\Http\HttpRequest;
@@ -31,7 +40,9 @@ use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\LoggerTrait;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\MetricsTrait;
+use WebFiori\Ai\ModelAliases;
 use WebFiori\Ai\NullStatusEmitter;
+use WebFiori\Ai\PricingConfig;
 use WebFiori\Ai\RateLimitStatus;
 use WebFiori\Ai\Redaction\RedactionConfig;
 use WebFiori\Ai\Redaction\RedactionService;
@@ -107,16 +118,16 @@ abstract class AbstractClient implements ProviderInterface {
     /**
      * Model alias registry.
      *
-     * @var \WebFiori\Ai\ModelAliases|null
+     * @var ModelAliases|null
      */
-    private ?\WebFiori\Ai\ModelAliases $modelAliases = null;
+    private ?ModelAliases $modelAliases = null;
 
     /**
      * Pricing configuration for cost calculation.
      *
-     * @var \WebFiori\Ai\PricingConfig|null
+     * @var PricingConfig|null
      */
-    private ?\WebFiori\Ai\PricingConfig $pricing = null;
+    private ?PricingConfig $pricing = null;
 
     /**
      * Status emitter for real-time progress tracking.
@@ -172,11 +183,11 @@ abstract class AbstractClient implements ProviderInterface {
      *
      * @return ChatResponse The AI-generated response.
      *
-     * @throws \WebFiori\Ai\Exception\AuthenticationException If credentials are invalid.
-     * @throws \WebFiori\Ai\Exception\RateLimitException If the rate limit is exceeded.
-     * @throws \WebFiori\Ai\Exception\ProviderException If the provider returns an error.
-     * @throws \WebFiori\Ai\Exception\HttpException If a transport error occurs.
-     * @throws \WebFiori\Ai\Exception\ContextOverflowException If using NoTruncationStrategy
+     * @throws AuthenticationException If credentials are invalid.
+     * @throws RateLimitException If the rate limit is exceeded.
+     * @throws ProviderException If the provider returns an error.
+     * @throws HttpException If a transport error occurs.
+     * @throws ContextOverflowException If using NoTruncationStrategy
      *         and context exceeds the limit.
      */
     public function chat(array $messages, array $options = []): ChatResponse {
@@ -470,8 +481,8 @@ abstract class AbstractClient implements ProviderInterface {
      *
      * @return EmbeddingResponse The embedding response containing vector(s).
      *
-     * @throws \WebFiori\Ai\Exception\UnsupportedFeatureException If not supported.
-     * @throws \WebFiori\Ai\Exception\ProviderException If the provider returns an error.
+     * @throws UnsupportedFeatureException If not supported.
+     * @throws ProviderException If the provider returns an error.
      */
     public function embed(string|array $input, array $options = []): EmbeddingResponse {
         $model = $options['model'] ?? $this->getConfig('embedding_model', $this->getConfig('model'));
@@ -675,10 +686,10 @@ abstract class AbstractClient implements ProviderInterface {
      * @param Message[] $messages The conversation messages.
      * @param array<string, mixed> $options Options (may contain 'model', 'max_tokens').
      *
-     * @return \WebFiori\Ai\CostEstimate|null The estimate, or null if pricing is not configured
+     * @return CostEstimate|null The estimate, or null if pricing is not configured
      *         or no pricing is defined for the resolved model.
      */
-    public function estimateCost(array $messages, array $options = []): ?\WebFiori\Ai\CostEstimate {
+    public function estimateCost(array $messages, array $options = []): ?CostEstimate {
         if ($this->pricing === null) {
             return null;
         }
@@ -709,7 +720,7 @@ abstract class AbstractClient implements ProviderInterface {
         $maxCost = ($promptTokens / 1_000_000) * $inputPrice
                  + ($maxTokens / 1_000_000) * $outputPrice;
 
-        return new \WebFiori\Ai\CostEstimate(
+        return new CostEstimate(
             $promptTokens,
             $maxTokens,
             $minCost,
@@ -726,8 +737,8 @@ abstract class AbstractClient implements ProviderInterface {
      *
      * @return ImageResponse The response containing generated image(s).
      *
-     * @throws \WebFiori\Ai\Exception\UnsupportedFeatureException If not supported.
-     * @throws \WebFiori\Ai\Exception\ProviderException If the provider returns an error.
+     * @throws UnsupportedFeatureException If not supported.
+     * @throws ProviderException If the provider returns an error.
      */
     public function generateImage(ImageRequest $request): ImageResponse {
         $requestId = uniqid('req_', true);
@@ -848,18 +859,18 @@ abstract class AbstractClient implements ProviderInterface {
     /**
      * Returns the model alias registry.
      *
-     * @return \WebFiori\Ai\ModelAliases|null The alias registry, or null if not set.
+     * @return ModelAliases|null The alias registry, or null if not set.
      */
-    public function getModelAliases(): ?\WebFiori\Ai\ModelAliases {
+    public function getModelAliases(): ?ModelAliases {
         return $this->modelAliases;
     }
 
     /**
      * Returns the pricing configuration.
      *
-     * @return \WebFiori\Ai\PricingConfig|null The pricing config, or null if not set.
+     * @return PricingConfig|null The pricing config, or null if not set.
      */
-    public function getPricing(): ?\WebFiori\Ai\PricingConfig {
+    public function getPricing(): ?PricingConfig {
         return $this->pricing;
     }
 
@@ -994,10 +1005,10 @@ abstract class AbstractClient implements ProviderInterface {
      * the 'model' option are resolved to provider-specific model IDs
      * before the request is sent.
      *
-     * @param \WebFiori\Ai\ModelAliases|null $aliases The alias registry,
+     * @param ModelAliases|null $aliases The alias registry,
      *        or null to disable alias resolution.
      */
-    public function setModelAliases(?\WebFiori\Ai\ModelAliases $aliases): void {
+    public function setModelAliases(?ModelAliases $aliases): void {
         $this->modelAliases = $aliases;
     }
 
@@ -1007,10 +1018,10 @@ abstract class AbstractClient implements ProviderInterface {
      * When set, each ChatResponse will include a CostResult calculated from
      * the actual token usage and the configured prices.
      *
-     * @param \WebFiori\Ai\PricingConfig|null $pricing The pricing config,
+     * @param PricingConfig|null $pricing The pricing config,
      *        or null to disable cost calculation.
      */
-    public function setPricing(?\WebFiori\Ai\PricingConfig $pricing): void {
+    public function setPricing(?PricingConfig $pricing): void {
         $this->pricing = $pricing;
     }
 
@@ -1104,13 +1115,13 @@ abstract class AbstractClient implements ProviderInterface {
      * @param callable|null $onComplete Optional callback when streaming completes.
      *        Signature: function(ChatResponse $response): void
      * @param callable|null $onError Optional callback on stream error.
-     *        Signature: function(\WebFiori\Ai\Exception\StreamingException $e): void
+     *        Signature: function(StreamingException $e): void
      * @param array<string, mixed> $options Additional provider-specific options.
      *
-     * @throws \WebFiori\Ai\Exception\AuthenticationException If credentials are invalid.
-     * @throws \WebFiori\Ai\Exception\RateLimitException If the rate limit is exceeded.
-     * @throws \WebFiori\Ai\Exception\ProviderException If the provider returns an error.
-     * @throws \WebFiori\Ai\Exception\ContextOverflowException If using NoTruncationStrategy
+     * @throws AuthenticationException If credentials are invalid.
+     * @throws RateLimitException If the rate limit is exceeded.
+     * @throws ProviderException If the provider returns an error.
+     * @throws ContextOverflowException If using NoTruncationStrategy
      *         and context exceeds the limit.
      */
     public function streamChat(
@@ -1265,9 +1276,9 @@ abstract class AbstractClient implements ProviderInterface {
      * @param string $model The model that generated the response.
      * @param Usage|null $usage The token usage data.
      *
-     * @return \WebFiori\Ai\CostResult|null The cost, or null if pricing is not configured.
+     * @return CostResult|null The cost, or null if pricing is not configured.
      */
-    private function calculateCost(string $model, ?Usage $usage): ?\WebFiori\Ai\CostResult {
+    private function calculateCost(string $model, ?Usage $usage): ?CostResult {
         if ($this->pricing === null || $usage === null) {
             return null;
         }
@@ -1282,7 +1293,7 @@ abstract class AbstractClient implements ProviderInterface {
         $inputCost = ($usage->getPromptTokens() / 1_000_000) * $inputPrice;
         $outputCost = ($usage->getCompletionTokens() / 1_000_000) * $outputPrice;
 
-        return new \WebFiori\Ai\CostResult(
+        return new CostResult(
             $inputCost,
             $outputCost,
             $model,
@@ -1469,9 +1480,9 @@ abstract class AbstractClient implements ProviderInterface {
      *
      * @param HttpResponse $response The HTTP response to check.
      *
-     * @throws \WebFiori\Ai\Exception\AuthenticationException If status is 401 or 403.
-     * @throws \WebFiori\Ai\Exception\RateLimitException If status is 429.
-     * @throws \WebFiori\Ai\Exception\ProviderException If status indicates a server error.
+     * @throws AuthenticationException If status is 401 or 403.
+     * @throws RateLimitException If status is 429.
+     * @throws ProviderException If status indicates a server error.
      */
     abstract protected function handleErrorResponse(HttpResponse $response): void;
     use LoggerTrait;
@@ -1511,7 +1522,7 @@ abstract class AbstractClient implements ProviderInterface {
      *
      * @return HttpResponse The response from the server.
      *
-     * @throws \WebFiori\Ai\Exception\HttpException If a transport error occurs.
+     * @throws HttpException If a transport error occurs.
      */
     protected function sendRequest(HttpRequest $request): HttpResponse {
         $this->logDebug('HTTP request', [

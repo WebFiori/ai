@@ -13,6 +13,7 @@ namespace WebFiori\Ai\Provider;
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\EmbeddingResponse;
 use WebFiori\Ai\HealthCheckResult;
+use WebFiori\Ai\Http\HttpClientInterface;
 use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
@@ -98,9 +99,9 @@ interface ProviderInterface {
      *
      * This allows injection of custom or mock HTTP clients for testing.
      *
-     * @param \WebFiori\Ai\Http\HttpClientInterface $client The HTTP client to use.
+     * @param HttpClientInterface $client The HTTP client to use.
      */
-    public function setHttpClient(\WebFiori\Ai\Http\HttpClientInterface $client): void;
+    public function setHttpClient(HttpClientInterface $client): void;
 
     /**
      * Sets a callback function for logging.
