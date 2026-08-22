@@ -111,6 +111,13 @@ class ModelRouter implements ProviderInterface {
     private array $rules = [];
 
     /**
+     * Optional pluggable routing strategy.
+     *
+     * @var RoutingStrategyInterface|null
+     */
+    private ?RoutingStrategyInterface $strategy = null;
+
+    /**
      * Map of tier name → description (for tool-based routing).
      *
      * @var array<string, string>
@@ -286,6 +293,15 @@ class ModelRouter implements ProviderInterface {
     }
 
     /**
+     * Returns the pluggable routing strategy.
+     *
+     * @return RoutingStrategyInterface|null The strategy, or null if not set.
+     */
+    public function getStrategy(): ?RoutingStrategyInterface {
+        return $this->strategy;
+    }
+
+    /**
      * Returns all tier descriptions registered via addRoute().
      *
      * @return array<string, string> Map of tier → description.
@@ -406,6 +422,24 @@ class ModelRouter implements ProviderInterface {
      */
     public function setMode(RoutingMode $mode): self {
         $this->mode = $mode;
+
+        return $this;
+    }
+
+    /**
+     * Sets a pluggable routing strategy.
+     *
+     * When set, the strategy is evaluated after forced overrides but before
+     * manual rules. It acts as a high-level routing layer — strategies like
+     * TaskComplexityStrategy or KeywordStrategy replace the need to write
+     * individual rules for common patterns.
+     *
+     * @param RoutingStrategyInterface|null $strategy The strategy, or null to disable.
+     *
+     * @return self For method chaining.
+     */
+    public function setStrategy(?RoutingStrategyInterface $strategy): self {
+        $this->strategy = $strategy;
 
         return $this;
     }
@@ -552,7 +586,20 @@ class ModelRouter implements ProviderInterface {
             );
         }
 
-        // 3. Rule-based routing (RULE or HYBRID mode)
+        // 3. Pluggable strategy (evaluated before manual rules)
+        if ($this->strategy !== null) {
+            $tier = $this->strategy->route($messages, $options);
+
+            if ($tier !== null && isset($this->providers[$tier])) {
+                return new RouteResult(
+                    $tier,
+                    $this->providers[$tier],
+                    'strategy:'.get_class($this->strategy)
+                );
+            }
+        }
+
+        // 4. Rule-based routing (RULE or HYBRID mode)
         if ($this->mode !== RoutingMode::TOOL) {
             foreach ($this->rules as $rule) {
                 if ($rule->matches($messages, $options)) {
