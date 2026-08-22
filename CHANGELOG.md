@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.5.7](https://github.com/WebFiori/ai/compare/v0.5.4...v0.5.7) (2026-08-22)
+
+
+### Features
+
+* **core:** Implement model aliases ([#32](https://github.com/WebFiori/ai/issues/32)) ([f25f2df](https://github.com/WebFiori/ai/commit/f25f2dfbe0064affadd5a22e15e7ee63af79cbc7))
+* **providers:** ProviderFormatterInterface + Vertex AI Model Garden ([#111](https://github.com/WebFiori/ai/issues/111), [#93](https://github.com/WebFiori/ai/issues/93)) ([3efb978](https://github.com/WebFiori/ai/commit/3efb9785e689c482d6c6088eed2555232dc09d63))
+* **providers:** ProviderFormatterInterface + Vertex AI Model Garden (v0.5.5) ([68c30b9](https://github.com/WebFiori/ai/commit/68c30b95f2711ec5e471778d1ae6da7b33e258d8))
+
+
+### Bug Fixes
+
+* **live:** Update Model Garden test with correct model ID and quota handling ([c1b0395](https://github.com/WebFiori/ai/commit/c1b0395d33e2ba0b9621b0732cb312a83331ccf7))
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#114](https://github.com/WebFiori/ai/issues/114) from WebFiori/dev ([35248e8](https://github.com/WebFiori/ai/commit/35248e83d90f136f6612531d5218478bfb811222))
+
 ## [0.5.4](https://github.com/WebFiori/ai/compare/v0.5.2...v0.5.4) (2026-08-19)
 
 
