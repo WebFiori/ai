@@ -42,6 +42,7 @@ use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Tool\ToolResponse;
 use WebFiori\Ai\Tool\ToolResult;
+use WebFiori\Ai\Usage;
 
 /**
  * Base class for AI provider implementations.
@@ -109,6 +110,13 @@ abstract class AbstractClient implements ProviderInterface {
      * @var \WebFiori\Ai\ModelAliases|null
      */
     private ?\WebFiori\Ai\ModelAliases $modelAliases = null;
+
+    /**
+     * Pricing configuration for cost calculation.
+     *
+     * @var \WebFiori\Ai\PricingConfig|null
+     */
+    private ?\WebFiori\Ai\PricingConfig $pricing = null;
 
     /**
      * Status emitter for real-time progress tracking.
@@ -339,6 +347,13 @@ abstract class AbstractClient implements ProviderInterface {
                 $response->getRequestId() ?? $requestId
             );
 
+            // Calculate and attach cost if pricing is configured
+            $cost = $this->calculateCost($response->getModel(), $response->getUsage());
+
+            if ($cost !== null) {
+                $response->setCost($cost);
+            }
+
             // Store in cache
             if ($shouldCache && $cacheKey !== null) {
                 $this->cache->set(
@@ -388,6 +403,8 @@ abstract class AbstractClient implements ProviderInterface {
                 'model' => $response->getModel(),
                 'duration_ms' => $durationMs,
                 'total_tokens' => $response->getUsage()?->getTotalTokens(),
+                'cost' => $response->getCost()?->getTotal(),
+                'currency' => $response->getCost()?->getCurrency(),
             ]);
 
             return $response;
@@ -650,6 +667,59 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Estimates the cost of a chat request before sending it.
+     *
+     * Returns a cost range (min to max) based on the prompt token count
+     * and the configured max_tokens. Requires a PricingConfig to be set.
+     *
+     * @param Message[] $messages The conversation messages.
+     * @param array<string, mixed> $options Options (may contain 'model', 'max_tokens').
+     *
+     * @return \WebFiori\Ai\CostEstimate|null The estimate, or null if pricing is not configured
+     *         or no pricing is defined for the resolved model.
+     */
+    public function estimateCost(array $messages, array $options = []): ?\WebFiori\Ai\CostEstimate {
+        if ($this->pricing === null) {
+            return null;
+        }
+
+        $model = $options['model'] ?? $this->getConfig('model', '');
+
+        // Resolve alias
+        if ($this->modelAliases !== null && $model !== '') {
+            $model = $this->modelAliases->resolve($model, $this->getName());
+        }
+
+        if (!$this->pricing->hasModel($model)) {
+            return null;
+        }
+
+        $inputPrice = $this->pricing->getInputPrice($model);
+        $outputPrice = $this->pricing->getOutputPrice($model);
+        $maxTokens = $options['max_tokens'] ?? 1024;
+
+        // Estimate prompt tokens using the token estimator
+        $promptTokens = $this->tokenEstimator->countMessages($messages);
+
+        // Min cost: prompt only (assume 1 token response)
+        $minCost = ($promptTokens / 1_000_000) * $inputPrice
+                 + (1 / 1_000_000) * $outputPrice;
+
+        // Max cost: prompt + max_tokens response
+        $maxCost = ($promptTokens / 1_000_000) * $inputPrice
+                 + ($maxTokens / 1_000_000) * $outputPrice;
+
+        return new \WebFiori\Ai\CostEstimate(
+            $promptTokens,
+            $maxTokens,
+            $minCost,
+            $maxCost,
+            $model,
+            $this->pricing->getCurrency()
+        );
+    }
+
+    /**
      * Generates an image from a text prompt.
      *
      * @param ImageRequest $request The image generation request.
@@ -782,6 +852,15 @@ abstract class AbstractClient implements ProviderInterface {
      */
     public function getModelAliases(): ?\WebFiori\Ai\ModelAliases {
         return $this->modelAliases;
+    }
+
+    /**
+     * Returns the pricing configuration.
+     *
+     * @return \WebFiori\Ai\PricingConfig|null The pricing config, or null if not set.
+     */
+    public function getPricing(): ?\WebFiori\Ai\PricingConfig {
+        return $this->pricing;
     }
 
     /**
@@ -920,6 +999,19 @@ abstract class AbstractClient implements ProviderInterface {
      */
     public function setModelAliases(?\WebFiori\Ai\ModelAliases $aliases): void {
         $this->modelAliases = $aliases;
+    }
+
+    /**
+     * Sets the pricing configuration for cost calculation.
+     *
+     * When set, each ChatResponse will include a CostResult calculated from
+     * the actual token usage and the configured prices.
+     *
+     * @param \WebFiori\Ai\PricingConfig|null $pricing The pricing config,
+     *        or null to disable cost calculation.
+     */
+    public function setPricing(?\WebFiori\Ai\PricingConfig $pricing): void {
+        $this->pricing = $pricing;
     }
 
     /**
@@ -1165,6 +1257,37 @@ abstract class AbstractClient implements ProviderInterface {
         }
 
         return $truncated;
+    }
+
+    /**
+     * Calculates the actual cost of a request from real token usage.
+     *
+     * @param string $model The model that generated the response.
+     * @param Usage|null $usage The token usage data.
+     *
+     * @return \WebFiori\Ai\CostResult|null The cost, or null if pricing is not configured.
+     */
+    private function calculateCost(string $model, ?Usage $usage): ?\WebFiori\Ai\CostResult {
+        if ($this->pricing === null || $usage === null) {
+            return null;
+        }
+
+        if (!$this->pricing->hasModel($model)) {
+            return null;
+        }
+
+        $inputPrice = $this->pricing->getInputPrice($model);
+        $outputPrice = $this->pricing->getOutputPrice($model);
+
+        $inputCost = ($usage->getPromptTokens() / 1_000_000) * $inputPrice;
+        $outputCost = ($usage->getCompletionTokens() / 1_000_000) * $outputPrice;
+
+        return new \WebFiori\Ai\CostResult(
+            $inputCost,
+            $outputCost,
+            $model,
+            $this->pricing->getCurrency()
+        );
     }
 
     /**

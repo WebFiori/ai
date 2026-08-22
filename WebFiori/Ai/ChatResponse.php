@@ -20,6 +20,12 @@ namespace WebFiori\Ai;
  */
 class ChatResponse {
     /**
+     * The cost of this request, if pricing is configured.
+     *
+     * @var CostResult|null
+     */
+    private ?CostResult $cost = null;
+    /**
      * The reason the AI stopped generating.
      *
      * @var string|null
@@ -78,6 +84,17 @@ class ChatResponse {
     }
 
     /**
+     * Returns the cost of this request.
+     *
+     * Only available when a PricingConfig is configured on the provider.
+     *
+     * @return CostResult|null The cost result, or null if pricing is not configured.
+     */
+    public function getCost(): ?CostResult {
+        return $this->cost;
+    }
+
+    /**
      * Returns the reason the AI stopped generating.
      *
      * @return string|null The finish reason, or null if not available.
@@ -132,5 +149,16 @@ class ChatResponse {
      */
     public function hasToolCalls(): bool {
         return $this->message->hasToolCalls();
+    }
+
+    /**
+     * Sets the cost result for this response.
+     *
+     * Called internally by AbstractClient after cost calculation.
+     *
+     * @param CostResult|null $cost The cost result.
+     */
+    public function setCost(?CostResult $cost): void {
+        $this->cost = $cost;
     }
 }
