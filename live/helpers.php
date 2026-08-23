@@ -86,7 +86,7 @@ function anthropicClient(): AnthropicClient {
     $model = getenv('ANTHROPIC_MODEL') ?: 'claude-haiku-4-5-20251001';
 
     if (!$apiKey) {
-        throw new \RuntimeException('ANTHROPIC_API_KEY not set. Run: source keys/env.sh');
+        throw new RuntimeException('ANTHROPIC_API_KEY not set. Run: source keys/env.sh');
     }
 
     return new AnthropicClient(new AnthropicClientConfig(

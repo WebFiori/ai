@@ -48,3 +48,4 @@ export GCP_ACCESS_TOKEN="ya29...."
 | 21 | [Interactions API](21-interactions-api/) | gemini-3.5-flash+ with step-based responses, built-in thinking, and stateless multi-turn |
 | 22 | [Model Aliases](22-model-aliases/) | Logical names ('fast', 'smart') that map to provider-specific model IDs |
 | 23 | [Model Router](23-model-router/) | Intelligent routing across providers — rule-based, strategy-based, and tool-based |
+| 24 | [Recording & Replay](24-recording-replay/) | Record real API responses once, replay in CI without API keys |

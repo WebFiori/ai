@@ -15,7 +15,8 @@ use WebFiori\Ai\Tool\Tool;
 section('Anthropic Claude — Direct API');
 
 // ─── 1. Basic chat ────────────────────────────────────────────────────────────
-run('Basic chat completion', function () {
+run('Basic chat completion', function ()
+{
     $response = anthropicClient()->chat([
         new Message('system', 'You are a helpful assistant. Keep responses concise.'),
         new Message('user', 'What is PHP in one sentence?'),
@@ -23,20 +24,28 @@ run('Basic chat completion', function () {
 
     assert($response->getMessage()->getContent() !== '', 'Empty response');
     echo "    → ".substr($response->getMessage()->getContent(), 0, 100)."\n";
+
     if ($response->getUsage()) {
         echo "    → Tokens: {$response->getUsage()->getTotalTokens()}\n";
     }
 });
 
 // ─── 2. Streaming ─────────────────────────────────────────────────────────────
-run('Streaming chat', function () {
+run('Streaming chat', function ()
+{
     $tokens = [];
     $completed = false;
 
     anthropicClient()->streamChat(
         [new Message('user', 'Count from 1 to 5.')],
-        function (string $token) use (&$tokens) { $tokens[] = $token; },
-        function ($response) use (&$completed) { $completed = true; }
+        function (string $token) use (&$tokens)
+        {
+            $tokens[] = $token;
+        },
+        function ($response) use (&$completed)
+        {
+            $completed = true;
+        }
     );
 
     assert(!empty($tokens), 'No tokens received');
@@ -46,7 +55,8 @@ run('Streaming chat', function () {
 });
 
 // ─── 3. Multi-turn conversation ───────────────────────────────────────────────
-run('Multi-turn conversation', function () {
+run('Multi-turn conversation', function ()
+{
     $client = anthropicClient();
     $messages = [new Message('user', 'My favourite number is 7.')];
     $r1 = $client->chat($messages);
@@ -59,7 +69,8 @@ run('Multi-turn conversation', function () {
 });
 
 // ─── 4. Tool calling ──────────────────────────────────────────────────────────
-run('Tool calling (auto-execute)', function () {
+run('Tool calling (auto-execute)', function ()
+{
     $tool = new Tool(
         'get_weather',
         'Returns current weather for a city.',
@@ -78,10 +89,12 @@ run('Tool calling (auto-execute)', function () {
 });
 
 // ─── 5. Health check ──────────────────────────────────────────────────────────
-run('Health check', function () {
+run('Health check', function ()
+{
     $result = anthropicClient()->healthCheck(5);
     echo "    → Available: ".($result->isAvailable() ? 'yes' : 'no')."\n";
     echo "    → Latency: {$result->getLatencyMs()}ms\n";
+
     if (!$result->isAvailable()) {
         echo "    → Error: {$result->getError()}\n";
     }
