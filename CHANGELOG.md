@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.9](https://github.com/WebFiori/ai/compare/v0.5.8...v0.5.9) (2026-08-23)
+
+
+### Features
+
+* **routing:** Add ModelRouter with rule-based routing ([#84](https://github.com/WebFiori/ai/issues/84)) ([2d8b8ae](https://github.com/WebFiori/ai/commit/2d8b8aef718095399c7370b0c5ba08dacc2054e1))
+* **routing:** Add tool-based routing to ModelRouter ([#85](https://github.com/WebFiori/ai/issues/85)) ([1c82fdf](https://github.com/WebFiori/ai/commit/1c82fdf16e98d867f73a3c0a0b0c81c1b5c1ff74))
+* **routing:** RoutingStrategyInterface + built-in strategies ([#94](https://github.com/WebFiori/ai/issues/94)) ([dda1b60](https://github.com/WebFiori/ai/commit/dda1b60fc6efeba843692a7d8c79fae8668f1ec6))
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#117](https://github.com/WebFiori/ai/issues/117) from WebFiori/dev ([b117a62](https://github.com/WebFiori/ai/commit/b117a6208ccc2cdc0e9e0856ed82d6572699c0c0))
+
 ## [0.5.8](https://github.com/WebFiori/ai/compare/v0.5.7...v0.5.8) (2026-08-22)
 
 
