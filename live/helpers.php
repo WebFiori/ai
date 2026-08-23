@@ -53,6 +53,8 @@ function run(string $label, callable $test): void {
 
 // ─── Shared config builders ───────────────────────────────────────────────────
 
+use WebFiori\Ai\Provider\Anthropic\AnthropicClient;
+use WebFiori\Ai\Provider\Anthropic\AnthropicClientConfig;
 use WebFiori\Ai\Provider\Bedrock\BedrockClient;
 use WebFiori\Ai\Provider\Bedrock\BedrockClientConfig;
 use WebFiori\Ai\Provider\Google\GoogleApi;
@@ -76,6 +78,20 @@ function gemini3Client(): GoogleClient {
         credentials: KEY_PATH,
         api: GoogleApi::GEMINI, // gemini-3.5-flash is on Gemini API, not Vertex yet
         apiVersion: GoogleApiVersion::INTERACTIONS,
+    ));
+}
+
+function anthropicClient(): AnthropicClient {
+    $apiKey = getenv('ANTHROPIC_API_KEY');
+    $model = getenv('ANTHROPIC_MODEL') ?: 'claude-haiku-4-5-20251001';
+
+    if (!$apiKey) {
+        throw new \RuntimeException('ANTHROPIC_API_KEY not set. Run: source keys/env.sh');
+    }
+
+    return new AnthropicClient(new AnthropicClientConfig(
+        apiKey: $apiKey,
+        model: $model,
     ));
 }
 

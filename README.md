@@ -148,6 +148,20 @@ $response = $client->chat($messages, ['model' => 'fast']);
 // → 'gpt-4o-mini' for OpenAI, 'gemini-2.5-flash' for Google
 ```
 
+### Model Router
+
+```php
+use WebFiori\Ai\Routing\ModelRouter;
+use WebFiori\Ai\Routing\Strategy\TaskComplexityStrategy;
+
+// Route automatically based on request complexity
+$router = new ModelRouter(['fast' => $geminiFlash, 'smart' => $geminiPro]);
+$router->setStrategy(new TaskComplexityStrategy('fast', 'smart'));
+
+$response = $router->chat($messages);
+// Simple → gemini-2.5-flash, complex → gemini-2.5-pro
+```
+
 ### Tool with Image Output (ToolResponse)
 
 ```php
