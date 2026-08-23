@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.6.0](https://github.com/WebFiori/ai/compare/v0.5.9...v0.6.0) (2026-08-23)
+
+
+### Features
+
+* **testing:** Response recording and replay — VCR-style HTTP fixtures ([#34](https://github.com/WebFiori/ai/issues/34)) ([7a8ce63](https://github.com/WebFiori/ai/commit/7a8ce63782accd290dd77a8395f76ef12602c214))
+
+
+### Bug Fixes
+
+* **recording:** Convert file_put_contents warning to RuntimeException ([6fd0ac1](https://github.com/WebFiori/ai/commit/6fd0ac105639ec193dd5b1d50ca831762a2f1144))
+* **recording:** Suppress PHP warning from file_put_contents on write failure ([645757d](https://github.com/WebFiori/ai/commit/645757d6356c6e98c3ae53f134017f4b58229b4a))
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#119](https://github.com/WebFiori/ai/issues/119) from WebFiori/dev ([3beb9c3](https://github.com/WebFiori/ai/commit/3beb9c3dabe4b41d2248dde9284787f3d683ef68))
+
 ## [0.5.9](https://github.com/WebFiori/ai/compare/v0.5.8...v0.5.9) (2026-08-23)
 
 
