@@ -143,7 +143,7 @@ class FixtureCatalog {
 
         $json = json_encode($fixture->toArray(), \JSON_PRETTY_PRINT | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
 
-        if ($json === false || file_put_contents($filePath, $json) === false) {
+        if ($json === false || @file_put_contents($filePath, $json) === false) {
             throw new \RuntimeException("Failed to write fixture: {$filePath}");
         }
 
