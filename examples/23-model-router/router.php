@@ -20,7 +20,6 @@ use WebFiori\Ai\Provider\Google\GoogleApi;
 use WebFiori\Ai\Provider\Google\GoogleClient;
 use WebFiori\Ai\Provider\Google\GoogleClientConfig;
 use WebFiori\Ai\Routing\ModelRouter;
-use WebFiori\Ai\Routing\RoutingMode;
 use WebFiori\Ai\Routing\RoutingRule;
 use WebFiori\Ai\Routing\Strategy\KeywordStrategy;
 use WebFiori\Ai\Routing\Strategy\TaskComplexityStrategy;
@@ -32,7 +31,7 @@ $credentials = __DIR__.'/../../keys/vertex-ai-key.json';
 
 // ModelAliases — each tier resolves to its own model ID
 $aliases = new ModelAliases([
-    'fast'  => ['google' => 'gemini-2.5-flash'],
+    'fast' => ['google' => 'gemini-2.5-flash'],
     'smart' => ['google' => 'gemini-2.5-pro'],
 ]);
 
@@ -68,7 +67,8 @@ $router->addRule(new RoutingRule(
     description: 'Long messages → smart tier'
 ));
 
-$router->onRoute(function ($result) {
+$router->onRoute(function ($result)
+{
     echo "  Routed to '{$result->getTier()}' (reason: {$result->getReason()})\n";
 });
 

@@ -25,7 +25,7 @@ section('ModelRouter — Intelligent Routing');
 // Two providers: Gemini (fast) and Claude (smart)
 // Set ModelAliases so tier names resolve to actual model IDs
 $aliases = new ModelAliases([
-    'fast'  => ['google' => 'gemini-2.5-flash', 'anthropic' => 'claude-haiku-4-5-20251001'],
+    'fast' => ['google' => 'gemini-2.5-flash', 'anthropic' => 'claude-haiku-4-5-20251001'],
     'smart' => ['google' => 'gemini-2.5-flash',  'anthropic' => 'claude-haiku-4-5-20251001'],
 ]);
 
@@ -38,14 +38,17 @@ $smart->setModelAliases($aliases);
 // ─── Helper ───────────────────────────────────────────────────────────────────
 function makeRouter($fast, $smart): ModelRouter {
     $router = new ModelRouter(['fast' => $fast, 'smart' => $smart], 'fast');
-    $router->onRoute(function ($result) {
+    $router->onRoute(function ($result)
+    {
         echo "    → Tier: {$result->getTier()} | Reason: {$result->getReason()}\n";
     });
+
     return $router;
 }
 
 // ─── 1. Rule-based routing ────────────────────────────────────────────────────
-run('Rule-based: long message → smart', function () use ($fast, $smart) {
+run('Rule-based: long message → smart', function () use ($fast, $smart)
+{
     $router = makeRouter($fast, $smart);
     $router->addRule(new RoutingRule(
         fn($msgs, $opts) => strlen($msgs[0]->getContent()) > 100,
@@ -64,7 +67,8 @@ run('Rule-based: long message → smart', function () use ($fast, $smart) {
 });
 
 // ─── 2. TaskComplexityStrategy ────────────────────────────────────────────────
-run('TaskComplexityStrategy routing', function () use ($fast, $smart) {
+run('TaskComplexityStrategy routing', function () use ($fast, $smart)
+{
     $router = makeRouter($fast, $smart);
     $router->setStrategy(new TaskComplexityStrategy('fast', 'smart', scoreThreshold: 1));
 
@@ -77,7 +81,8 @@ run('TaskComplexityStrategy routing', function () use ($fast, $smart) {
 });
 
 // ─── 3. KeywordStrategy ───────────────────────────────────────────────────────
-run('KeywordStrategy routing', function () use ($fast, $smart) {
+run('KeywordStrategy routing', function () use ($fast, $smart)
+{
     $router = makeRouter($fast, $smart);
     $router->setStrategy(new KeywordStrategy([
         'smart' => ['analyze', 'compare', 'summarize', 'explain in detail'],
@@ -92,7 +97,8 @@ run('KeywordStrategy routing', function () use ($fast, $smart) {
 });
 
 // ─── 4. TokenLengthStrategy ───────────────────────────────────────────────────
-run('TokenLengthStrategy routing', function () use ($fast, $smart) {
+run('TokenLengthStrategy routing', function () use ($fast, $smart)
+{
     $router = makeRouter($fast, $smart);
     $router->setStrategy(new TokenLengthStrategy('fast', 'smart', threshold: 50));
 
@@ -103,7 +109,8 @@ run('TokenLengthStrategy routing', function () use ($fast, $smart) {
 });
 
 // ─── 5. Force provider override ───────────────────────────────────────────────
-run('Force provider override', function () use ($fast, $smart) {
+run('Force provider override', function () use ($fast, $smart)
+{
     $router = makeRouter($fast, $smart);
     $router->setStrategy(new TaskComplexityStrategy('fast', 'smart', scoreThreshold: 1));
 
@@ -117,7 +124,8 @@ run('Force provider override', function () use ($fast, $smart) {
 });
 
 // ─── 6. Hybrid mode with classifier ───────────────────────────────────────────
-run('Hybrid mode: rule first, classifier fallback', function () use ($fast, $smart) {
+run('Hybrid mode: rule first, classifier fallback', function () use ($fast, $smart)
+{
     $router = makeRouter($fast, $smart);
     $router->setMode(RoutingMode::HYBRID);
 
@@ -145,11 +153,12 @@ run('Hybrid mode: rule first, classifier fallback', function () use ($fast, $sma
 });
 
 // ─── 7. ModelRouter + FallbackProvider ────────────────────────────────────────
-run('ModelRouter inside FallbackProvider', function () use ($fast, $smart) {
+run('ModelRouter inside FallbackProvider', function () use ($fast, $smart)
+{
     $router = makeRouter($fast, $smart);
     $router->setStrategy(new TaskComplexityStrategy('fast', 'smart'));
 
-    $fallback = new \WebFiori\Ai\Provider\Fallback\FallbackProvider([$router]);
+    $fallback = new WebFiori\Ai\Provider\Fallback\FallbackProvider([$router]);
     $response = $fallback->chat([new Message('user', 'What is PHP?')]);
     assert($response->getMessage()->getContent() !== '', 'Empty response');
     echo "    → Provider: {$fallback->getLastUsedProvider()}\n";
@@ -157,11 +166,13 @@ run('ModelRouter inside FallbackProvider', function () use ($fast, $smart) {
 });
 
 // ─── 8. onRoute observability ─────────────────────────────────────────────────
-run('onRoute callback captures all routing decisions', function () use ($fast, $smart) {
+run('onRoute callback captures all routing decisions', function () use ($fast, $smart)
+{
     $routingLog = [];
     $router = new ModelRouter(['fast' => $fast, 'smart' => $smart], 'fast');
     $router->setStrategy(new KeywordStrategy(['smart' => ['analyze']], 'fast'));
-    $router->onRoute(function ($result) use (&$routingLog) {
+    $router->onRoute(function ($result) use (&$routingLog)
+    {
         $routingLog[] = ['tier' => $result->getTier(), 'reason' => $result->getReason()];
     });
 
