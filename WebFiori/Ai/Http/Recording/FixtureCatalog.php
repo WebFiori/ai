@@ -143,8 +143,18 @@ class FixtureCatalog {
 
         $json = json_encode($fixture->toArray(), \JSON_PRETTY_PRINT | \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
 
-        if ($json === false || @file_put_contents($filePath, $json) === false) {
-            throw new \RuntimeException("Failed to write fixture: {$filePath}");
+        if ($json === false) {
+            throw new \RuntimeException("Failed to serialize fixture: {$filePath}");
+        }
+
+        set_error_handler(function (int $errno, string $errstr) use ($filePath): never {
+            throw new \RuntimeException("Failed to write fixture: {$filePath}. {$errstr}");
+        });
+
+        try {
+            file_put_contents($filePath, $json);
+        } finally {
+            restore_error_handler();
         }
 
         // Update in-memory index
