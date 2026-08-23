@@ -1,0 +1,63 @@
+{
+    "name": "anthropic_messages",
+    "fingerprint": "1352a00f70ff81ff6a601c7050ca4ce31f5f62207012bb7ef90aa64c4e17fcb4",
+    "recorded_at": "2026-08-23T11:56:31+00:00",
+    "streaming": false,
+    "response": {
+        "status": 200,
+        "headers": {
+            "date": "Sun, 23 Aug 2026 11:56:31 GMT",
+            "content-type": "application/json",
+            "anthropic-ratelimit-input-tokens-limit": "10000000",
+            "anthropic-ratelimit-input-tokens-remaining": "10000000",
+            "anthropic-ratelimit-input-tokens-reset": "2026-08-23T11:56:31Z",
+            "anthropic-ratelimit-output-tokens-limit": "2000000",
+            "anthropic-ratelimit-output-tokens-remaining": "2000000",
+            "anthropic-ratelimit-output-tokens-reset": "2026-08-23T11:56:31Z",
+            "anthropic-ratelimit-requests-limit": "10000",
+            "anthropic-ratelimit-requests-remaining": "9999",
+            "anthropic-ratelimit-requests-reset": "2026-08-23T11:56:31Z",
+            "anthropic-ratelimit-tokens-limit": "12000000",
+            "anthropic-ratelimit-tokens-remaining": "12000000",
+            "anthropic-ratelimit-tokens-reset": "2026-08-23T11:56:31Z",
+            "request-id": "req_011CeKdyTerHkZCuHJALBKy3",
+            "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+            "anthropic-organization-id": "437bf1c6-aff4-4883-9b8a-072098133496",
+            "anthropic-workspace-id": "wrkspc_01KGBjt6Q8EitpYHE2xRb6DN",
+            "traceresponse": "00-80802b9fcdf5ff9d58519b544da717df-cf171527eea212e9-01",
+            "server": "cloudflare",
+            "vary": "Accept-Encoding",
+            "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+            "cf-cache-status": "DYNAMIC",
+            "x-robots-tag": "none",
+            "cf-ray": "a2f9ef335fd8ee80-MXP"
+        },
+        "body": {
+            "model": "claude-haiku-4-5-20251001",
+            "id": "msg_011CeKdyUPW2f8WSg1iN9N1S",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "PHP is a server-side scripting language designed for web development that executes on the server to generate dynamic web pages and content."
+                }
+            ],
+            "stop_reason": "end_turn",
+            "stop_sequence": null,
+            "stop_details": null,
+            "usage": {
+                "input_tokens": 25,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "cache_creation": {
+                    "ephemeral_5m_input_tokens": 0,
+                    "ephemeral_1h_input_tokens": 0
+                },
+                "output_tokens": 30,
+                "service_tier": "standard",
+                "inference_geo": "not_available"
+            }
+        }
+    }
+}
