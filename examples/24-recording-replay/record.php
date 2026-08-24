@@ -7,8 +7,8 @@
  */
 require_once __DIR__.'/../../vendor/autoload.php';
 
-use WebFiori\Ai\Http\Recording\RecordingHttpClient;
 use WebFiori\Ai\Http\CurlHttpClient;
+use WebFiori\Ai\Http\Recording\RecordingHttpClient;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Anthropic\AnthropicClient;
 use WebFiori\Ai\Provider\Anthropic\AnthropicClientConfig;
@@ -69,7 +69,10 @@ echo "Recording: streaming...\n";
 $tokens = [];
 $client->streamChat(
     [new Message('user', 'Count from 1 to 3.')],
-    function (string $token) use (&$tokens) { $tokens[] = $token; }
+    function (string $token) use (&$tokens)
+    {
+        $tokens[] = $token;
+    }
 );
 echo "  Received ".count($tokens)." chunk(s): ".implode('', $tokens)."\n";
 echo "  Fixtures saved: ".count(glob($fixturesPath.'/*.json'))."\n\n";

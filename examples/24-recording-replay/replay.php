@@ -11,7 +11,6 @@
 require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Http\Recording\FixtureNotFoundException;
-use WebFiori\Ai\Http\Recording\FullBodyFingerprintStrategy;
 use WebFiori\Ai\Http\Recording\ReplayHttpClient;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Anthropic\AnthropicClient;
@@ -61,7 +60,10 @@ echo "Replaying: streaming...\n";
 $tokens = [];
 $client->streamChat(
     [new Message('user', 'Count from 1 to 3.')],
-    function (string $token) use (&$tokens) { $tokens[] = $token; }
+    function (string $token) use (&$tokens)
+    {
+        $tokens[] = $token;
+    }
 );
 echo "  ✅ Received ".count($tokens)." chunk(s): ".implode('', $tokens)."\n\n";
 
