@@ -8,15 +8,15 @@ require_once __DIR__.'/../vendor/autoload.php';
 
 // ─── Credentials ──────────────────────────────────────────────────────────────
 
-define('KEY_PATH', __DIR__.'/../keys/vertex-ai-key.json');
-define('GCP_PROJECT', 'webfiori');
-define('GCP_LOCATION', 'us-central1');
-define('GEMINI_2_MODEL', 'gemini-2.5-flash');
-define('GEMINI_3_MODEL', 'gemini-3.5-flash');
-define('BEDROCK_REGION', 'us-east-1');
+define('KEY_PATH', getenv('GCP_KEY_PATH') ?: __DIR__.'/../keys/vertex-ai-key.json');
+define('GCP_PROJECT', getenv('GCP_PROJECT_ID') ?: 'webfiori');
+define('GCP_LOCATION', getenv('GCP_LOCATION') ?: 'us-central1');
+define('GEMINI_2_MODEL', getenv('GEMINI_2_MODEL') ?: 'gemini-2.5-flash');
+define('GEMINI_3_MODEL', getenv('GEMINI_3_MODEL') ?: 'gemini-3.5-flash');
+define('BEDROCK_REGION', getenv('AWS_REGION') ?: 'us-east-1');
 // Note: Update this to a model currently active on the account.
 // The test key may be restricted to specific model versions.
-define('BEDROCK_MODEL', 'us.amazon.nova-lite-v1:0');
+define('BEDROCK_MODEL', getenv('BEDROCK_MODEL') ?: 'us.amazon.nova-lite-v1:0');
 
 // ─── Output helpers ───────────────────────────────────────────────────────────
 
