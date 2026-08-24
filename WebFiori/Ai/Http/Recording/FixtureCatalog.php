@@ -147,7 +147,8 @@ class FixtureCatalog {
             throw new \RuntimeException("Failed to serialize fixture: {$filePath}");
         }
 
-        set_error_handler(function (int $errno, string $errstr) use ($filePath): never {
+        set_error_handler(function (int $errno, string $errstr) use ($filePath): never
+        {
             throw new \RuntimeException("Failed to write fixture: {$filePath}. {$errstr}");
         });
 
