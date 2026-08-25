@@ -3,9 +3,9 @@
 namespace WebFiori\Tests\Ai\Rag;
 
 use PHPUnit\Framework\TestCase;
+use WebFiori\Ai\Rag\RagProviderInterface;
 use WebFiori\Ai\Rag\RetrievalResult;
 use WebFiori\Ai\Rag\RetrievalTool;
-use WebFiori\Ai\Rag\RetrieverInterface;
 
 class RetrievalToolTest extends TestCase {
     public function testGetName(): void {
@@ -98,13 +98,20 @@ class RetrievalToolTest extends TestCase {
     }
 
     public function testExecuteUsesTopKParameter(): void {
-        $mockRetriever = new class implements RetrieverInterface {
+        $mockRetriever = new class implements RagProviderInterface {
             public int $capturedTopK = 0;
 
-            public function retrieve(string $query, int $topK = 5, array $filter = []): array {
+            public function retrieve(string $query, int $topK = 5, array $options = []): array {
                 $this->capturedTopK = $topK;
 
                 return [];
+            }
+
+            public function ingest(string $content, array $metadata = []): string {
+                return 'doc_mock';
+            }
+
+            public function delete(string $id): void {
             }
         };
 
@@ -137,13 +144,20 @@ class RetrievalToolTest extends TestCase {
      *
      * @param RetrievalResult[] $results
      */
-    private function createMockRetriever(array $results): RetrieverInterface {
-        return new class($results) implements RetrieverInterface {
+    private function createMockRetriever(array $results): RagProviderInterface {
+        return new class($results) implements RagProviderInterface {
             public function __construct(private array $results) {
             }
 
-            public function retrieve(string $query, int $topK = 5, array $filter = []): array {
+            public function retrieve(string $query, int $topK = 5, array $options = []): array {
                 return $this->results;
+            }
+
+            public function ingest(string $content, array $metadata = []): string {
+                return 'doc_mock';
+            }
+
+            public function delete(string $id): void {
             }
         };
     }

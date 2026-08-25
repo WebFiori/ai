@@ -10,16 +10,15 @@
  */
 namespace WebFiori\Ai\Tool;
 
-use WebFiori\Ai\ChatOption;
-use WebFiori\Ai\Embedding\VectorStorageInterface;
-use WebFiori\Ai\Provider\ProviderInterface;
+use WebFiori\Ai\Exception\UnsupportedFeatureException;
+use WebFiori\Ai\Rag\RagProviderInterface;
 use WebFiori\Ai\Rag\RetrievalResult;
 
 /**
  * Core memory class for AI agents.
  *
- * AgentMemory provides long-term memory capabilities by storing facts as
- * vector embeddings and retrieving them via semantic similarity search.
+ * AgentMemory provides long-term memory capabilities by storing facts
+ * via a RAG provider and retrieving them via semantic similarity search.
  * Facts can be stored manually or automatically via a RememberStrategyInterface.
  *
  * Supports superseding (replacing) old memories when facts are updated,
@@ -27,7 +26,8 @@ use WebFiori\Ai\Rag\RetrievalResult;
  *
  * Example:
  * ```php
- * $memory = new AgentMemory($vectorStore, $embeddingProvider);
+ * $ragProvider = new LocalRagProvider($vectorStore, $embeddingProvider);
+ * $memory = new AgentMemory($ragProvider);
  * $memory->setMinScore(0.75);
  *
  * $id = $memory->remember('The user prefers dark mode.');
@@ -39,20 +39,6 @@ use WebFiori\Ai\Rag\RetrievalResult;
  */
 class AgentMemory {
     /**
-     * The AI provider used for generating embeddings.
-     *
-     * @var ProviderInterface
-     */
-    private ProviderInterface $embedder;
-
-    /**
-     * Optional embedding model override.
-     *
-     * @var string|null
-     */
-    private ?string $embeddingModel;
-
-    /**
      * Minimum similarity score threshold for recall results.
      *
      * @var float
@@ -60,11 +46,11 @@ class AgentMemory {
     private float $minScore;
 
     /**
-     * The vector storage backend.
+     * The RAG provider for storage and retrieval.
      *
-     * @var VectorStorageInterface
+     * @var RagProviderInterface
      */
-    private VectorStorageInterface $store;
+    private RagProviderInterface $ragProvider;
 
     /**
      * Maximum number of results to return from recall.
@@ -76,28 +62,20 @@ class AgentMemory {
     /**
      * Creates a new AgentMemory instance.
      *
-     * @param VectorStorageInterface $store The vector storage backend for
-     *        persisting and querying memory embeddings.
-     * @param ProviderInterface $embedder The AI provider for generating
-     *        vector embeddings from text.
+     * @param RagProviderInterface $ragProvider The RAG provider for storing
+     *        and retrieving memory embeddings.
      * @param float $minScore Minimum similarity score threshold (0.0 to 1.0).
      *        Results below this threshold are filtered out during recall.
      * @param int $topK Maximum number of results to return from recall.
-     * @param string|null $embeddingModel Optional model name for embeddings.
-     *        If null, the provider's default model is used.
      */
     public function __construct(
-        VectorStorageInterface $store,
-        ProviderInterface $embedder,
+        RagProviderInterface $ragProvider,
         float $minScore = 0.7,
         int $topK = 5,
-        ?string $embeddingModel = null,
     ) {
-        $this->store = $store;
-        $this->embedder = $embedder;
+        $this->ragProvider = $ragProvider;
         $this->minScore = $minScore;
         $this->topK = $topK;
-        $this->embeddingModel = $embeddingModel;
     }
 
     /**
@@ -105,19 +83,19 @@ class AgentMemory {
      *
      * @param string $id The unique identifier of the memory to delete.
      *
-     * @return bool True if the memory was deleted, false if it did not exist.
+     * @return bool True if the memory was deleted, false if deletion is not
+     *         supported or an error occurred.
      */
     public function forget(string $id): bool {
-        return $this->store->delete($id);
-    }
+        try {
+            $this->ragProvider->delete($id);
 
-    /**
-     * Returns the embedding model used for generating vectors.
-     *
-     * @return string|null The model name, or null if using provider default.
-     */
-    public function getEmbeddingModel(): ?string {
-        return $this->embeddingModel;
+            return true;
+        } catch (UnsupportedFeatureException) {
+            return false;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -130,12 +108,12 @@ class AgentMemory {
     }
 
     /**
-     * Returns the vector storage backend.
+     * Returns the RAG provider.
      *
-     * @return VectorStorageInterface The store.
+     * @return RagProviderInterface The RAG provider.
      */
-    public function getStore(): VectorStorageInterface {
-        return $this->store;
+    public function getRagProvider(): RagProviderInterface {
+        return $this->ragProvider;
     }
 
     /**
@@ -150,8 +128,8 @@ class AgentMemory {
     /**
      * Retrieves memories relevant to a query using semantic similarity.
      *
-     * Embeds the query, searches the vector store, and filters results
-     * by the minimum score threshold.
+     * Searches the RAG provider and filters results by the minimum score
+     * threshold.
      *
      * @param string $query The search query text.
      * @param int|null $topK Maximum number of results. If null, uses the
@@ -162,77 +140,41 @@ class AgentMemory {
     public function recall(string $query, ?int $topK = null): array {
         $topK = $topK ?? $this->topK;
 
-        $options = [];
+        $results = $this->ragProvider->retrieve($query, $topK);
 
-        if ($this->embeddingModel !== null) {
-            $options[ChatOption::MODEL] = $this->embeddingModel;
-        }
+        $filtered = [];
 
-        $response = $this->embedder->embed($query, $options);
-        $vector = $response->getVector();
-
-        $records = $this->store->query($vector, $topK);
-
-        $results = [];
-
-        foreach ($records as $record) {
-            if ($record->getScore() < $this->minScore) {
-                continue;
+        foreach ($results as $result) {
+            if ($result->getScore() >= $this->minScore) {
+                $filtered[] = $result;
             }
-
-            $metadata = $record->getMetadata();
-            $text = $metadata['text'] ?? '';
-
-            unset($metadata['text']);
-
-            $results[] = new RetrievalResult(
-                id: $record->getId(),
-                text: $text,
-                score: $record->getScore(),
-                metadata: $metadata,
-            );
         }
 
-        return $results;
+        return $filtered;
     }
 
     /**
      * Stores a fact in long-term memory.
      *
-     * Generates a unique ID, embeds the fact text, and stores the vector
-     * with metadata in the vector store. Optionally supersedes (deletes)
-     * an existing memory that this fact replaces.
+     * Ingests the fact via the RAG provider with metadata. Optionally
+     * supersedes (deletes) an existing memory that this fact replaces.
      *
      * @param string $fact The fact text to remember.
      * @param array<string, mixed> $metadata Additional metadata to store
-     *        alongside the fact. 'timestamp' and 'text' are added automatically.
+     *        alongside the fact. 'timestamp' is added automatically.
      * @param string|null $supersedes If provided, the ID of an existing memory
      *        that this fact replaces. The old memory is deleted before storing.
      *
      * @return string The unique identifier of the stored memory.
      */
     public function remember(string $fact, array $metadata = [], ?string $supersedes = null): string {
-        $id = 'mem_'.substr(md5($fact.microtime(true)), 0, 12);
+        if ($supersedes !== null) {
+            $this->ragProvider->delete($supersedes);
+        }
 
         $metadata['timestamp'] = time();
-        $metadata['text'] = $fact;
 
-        if ($supersedes !== null) {
-            $this->store->delete($supersedes);
-        }
-
-        $options = [];
-
-        if ($this->embeddingModel !== null) {
-            $options[ChatOption::MODEL] = $this->embeddingModel;
-        }
-
-        $response = $this->embedder->embed($fact, $options);
-        $vector = $response->getVector();
-
-        $this->store->store($id, $vector, $metadata);
-
-        return $id;
+        return $this->ragProvider->ingest($fact, $metadata);
     }
 
     /**

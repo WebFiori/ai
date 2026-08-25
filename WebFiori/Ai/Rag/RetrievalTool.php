@@ -15,14 +15,14 @@ use WebFiori\Ai\Tool\ToolInterface;
 /**
  * Tool wrapper for RAG retrieval.
  *
- * Makes a retriever available as a tool that chat models can invoke.
+ * Makes a RAG provider available as a tool that chat models can invoke.
  * The model decides when to search the knowledge base based on the
  * user's question.
  *
  * Example:
  * ```php
- * $retriever = new Retriever($embedProvider, $vectorStore);
- * $tool = new RetrievalTool($retriever, name: 'search_docs');
+ * $ragProvider = new LocalRagProvider($embedProvider, $vectorStore);
+ * $tool = new RetrievalTool($ragProvider, name: 'search_docs');
  *
  * $chatProvider->addTool($tool, fn($args) => $tool->execute($args));
  *
@@ -55,27 +55,27 @@ class RetrievalTool implements ToolInterface {
     private string $name;
 
     /**
-     * The underlying retriever.
+     * The underlying RAG provider.
      *
-     * @var RetrieverInterface
+     * @var RagProviderInterface
      */
-    private RetrieverInterface $retriever;
+    private RagProviderInterface $provider;
 
     /**
      * Creates a new RetrievalTool instance.
      *
-     * @param RetrieverInterface $retriever The retriever to wrap.
+     * @param RagProviderInterface $provider The RAG provider to wrap.
      * @param string $name Tool name (default: 'search_knowledge').
      * @param string $description Tool description for the model.
      * @param int $defaultTopK Default number of results (default: 5).
      */
     public function __construct(
-        RetrieverInterface $retriever,
+        RagProviderInterface $provider,
         string $name = 'search_knowledge',
         string $description = 'Search the knowledge base for relevant information. Use this when you need to find specific facts, documentation, or context to answer a question.',
         int $defaultTopK = 5,
     ) {
-        $this->retriever = $retriever;
+        $this->provider = $provider;
         $this->name = $name;
         $this->description = $description;
         $this->defaultTopK = $defaultTopK;
@@ -102,7 +102,7 @@ class RetrievalTool implements ToolInterface {
 
         $topK = isset($arguments['top_k']) ? (int) $arguments['top_k'] : $this->defaultTopK;
 
-        $results = $this->retriever->retrieve($query, $topK);
+        $results = $this->provider->retrieve($query, $topK);
 
         if (count($results) === 0) {
             return json_encode([

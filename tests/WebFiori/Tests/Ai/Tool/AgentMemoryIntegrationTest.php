@@ -26,6 +26,7 @@ use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\AbstractClient;
 use WebFiori\Ai\Provider\ClientConfig;
 use WebFiori\Ai\Provider\ProviderInterface;
+use WebFiori\Ai\Rag\LocalRagProvider;
 use WebFiori\Ai\Role;
 use WebFiori\Ai\Tool\AgentMemory;
 use WebFiori\Ai\Tool\AgentTool;
@@ -102,7 +103,8 @@ class AgentMemoryIntegrationTest extends TestCase {
     public function testAgentToolRecallsMemoriesBeforeExecution(): void {
         $store = new InMemoryVectorStore();
         $embedder = $this->createSmartEmbedder();
-        $memory = new AgentMemory($store, $embedder, minScore: 0.5);
+        $ragProvider = new LocalRagProvider($store, $embedder);
+        $memory = new AgentMemory($ragProvider, minScore: 0.5);
 
         // Pre-store a memory about dark mode
         $memory->remember('User prefers dark mode for all interfaces.');
@@ -130,7 +132,8 @@ class AgentMemoryIntegrationTest extends TestCase {
     public function testAgentToolRemembersAfterExecution(): void {
         $store = new InMemoryVectorStore();
         $embedder = $this->createSmartEmbedder();
-        $memory = new AgentMemory($store, $embedder, minScore: 0.5);
+        $ragProvider = new LocalRagProvider($store, $embedder);
+        $memory = new AgentMemory($ragProvider, minScore: 0.5);
 
         $subProvider = new CapturingMockProvider('sub-agent', 'Noted your preference.');
         $strategy = new KeywordRememberStrategy();
@@ -162,7 +165,8 @@ class AgentMemoryIntegrationTest extends TestCase {
     public function testAbstractClientRecallsMemories(): void {
         $store = new InMemoryVectorStore();
         $embedder = $this->createSmartEmbedder();
-        $memory = new AgentMemory($store, $embedder, minScore: 0.5);
+        $ragProvider = new LocalRagProvider($store, $embedder);
+        $memory = new AgentMemory($ragProvider, minScore: 0.5);
 
         // Store a memory about PostgreSQL
         $memory->remember('The project uses PostgreSQL as its primary database.');
@@ -196,7 +200,8 @@ class AgentMemoryIntegrationTest extends TestCase {
     public function testAbstractClientRemembersAfterResponse(): void {
         $store = new InMemoryVectorStore();
         $embedder = $this->createSmartEmbedder();
-        $memory = new AgentMemory($store, $embedder, minScore: 0.5);
+        $ragProvider = new LocalRagProvider($store, $embedder);
+        $memory = new AgentMemory($ragProvider, minScore: 0.5);
 
         $client = $this->createOrchestratorProvider();
         $client->setMemory($memory);
@@ -223,7 +228,8 @@ class AgentMemoryIntegrationTest extends TestCase {
     public function testSharedMemoryBetweenAgents(): void {
         $store = new InMemoryVectorStore();
         $embedder = $this->createSmartEmbedder();
-        $memory = new AgentMemory($store, $embedder, minScore: 0.5);
+        $ragProvider = new LocalRagProvider($store, $embedder);
+        $memory = new AgentMemory($ragProvider, minScore: 0.5);
 
         // Agent A stores a fact
         $providerA = new CapturingMockProvider('agent-a', 'Done.');

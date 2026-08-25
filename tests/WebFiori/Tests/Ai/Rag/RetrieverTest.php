@@ -83,7 +83,7 @@ class RetrieverTest extends TestCase {
 
         $retriever = new Retriever($provider, $store);
 
-        $results = $retriever->retrieve('query', filter: ['category' => 'water']);
+        $results = $retriever->retrieve('query', options: ['category' => 'water']);
 
         $this->assertCount(1, $results);
         $this->assertEquals('chunk-1', $results[0]->getId());

@@ -20,6 +20,7 @@ use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\ProviderInterface;
+use WebFiori\Ai\Rag\LocalRagProvider;
 use WebFiori\Ai\Tool\AgentMemory;
 
 /**
@@ -78,14 +79,24 @@ class AgentMemoryTest extends TestCase {
         };
     }
 
+    /**
+     * Creates an AgentMemory with a LocalRagProvider wrapping an InMemoryVectorStore and a mock embedder.
+     */
+    private function createMemory(array $fixedVector = [1.0, 0.0, 0.0], float $minScore = 0.7, int $topK = 5): array {
+        $store = new InMemoryVectorStore();
+        $embedder = $this->createEmbedder($fixedVector);
+        $ragProvider = new LocalRagProvider($store, $embedder);
+        $memory = new AgentMemory($ragProvider, $minScore, $topK);
+
+        return [$memory, $store, $embedder, $ragProvider];
+    }
+
     // =========================================================================
     // remember() tests
     // =========================================================================
 
     public function testRemember_StoresFactAndReturnsId(): void {
-        $store = new InMemoryVectorStore();
-        $embedder = $this->createEmbedder([1.0, 0.0, 0.0]);
-        $memory = new AgentMemory($store, $embedder);
+        [$memory, $store] = $this->createMemory();
 
         $id = $memory->remember('The user prefers dark mode.');
 
@@ -93,20 +104,16 @@ class AgentMemoryTest extends TestCase {
         $this->assertSame(1, $store->count());
     }
 
-    public function testRemember_IdStartsWithMemPrefix(): void {
-        $store = new InMemoryVectorStore();
-        $embedder = $this->createEmbedder([1.0, 0.0, 0.0]);
-        $memory = new AgentMemory($store, $embedder);
+    public function testRemember_IdStartsWithDocPrefix(): void {
+        [$memory] = $this->createMemory();
 
         $id = $memory->remember('Some fact');
 
-        $this->assertStringStartsWith('mem_', $id);
+        $this->assertStringStartsWith('doc_', $id);
     }
 
     public function testRemember_AddsTimestampToMetadata(): void {
-        $store = new InMemoryVectorStore();
-        $embedder = $this->createEmbedder([1.0, 0.0, 0.0]);
-        $memory = new AgentMemory($store, $embedder);
+        [$memory, $store] = $this->createMemory();
 
         $beforeTime = time();
         $id = $memory->remember('A fact');
@@ -121,9 +128,7 @@ class AgentMemoryTest extends TestCase {
     }
 
     public function testRemember_AddsTextToMetadata(): void {
-        $store = new InMemoryVectorStore();
-        $embedder = $this->createEmbedder([1.0, 0.0, 0.0]);
-        $memory = new AgentMemory($store, $embedder);
+        [$memory, $store] = $this->createMemory();
 
         $id = $memory->remember('User likes PHP.');
 
@@ -134,9 +139,7 @@ class AgentMemoryTest extends TestCase {
     }
 
     public function testRemember_WithCustomMetadata(): void {
-        $store = new InMemoryVectorStore();
-        $embedder = $this->createEmbedder([1.0, 0.0, 0.0]);
-        $memory = new AgentMemory($store, $embedder);
+        [$memory, $store] = $this->createMemory();
 
         $id = $memory->remember('Fact', ['source' => 'agent:helper', 'category' => 'preference']);
 
@@ -150,9 +153,7 @@ class AgentMemoryTest extends TestCase {
     }
 
     public function testRemember_WithSupersedes_DeletesOldMemory(): void {
-        $store = new InMemoryVectorStore();
-        $embedder = $this->createEmbedder([1.0, 0.0, 0.0]);
-        $memory = new AgentMemory($store, $embedder);
+        [$memory, $store] = $this->createMemory();
 
         $oldId = $memory->remember('Old fact');
         $this->assertSame(1, $store->count());
@@ -171,11 +172,7 @@ class AgentMemoryTest extends TestCase {
     // =========================================================================
 
     public function testRecall_ReturnsRelevantMemories(): void {
-        $store = new InMemoryVectorStore();
-        // Store a memory with vector [1,0,0]
-        $embedder = $this->createEmbedder([1.0, 0.0, 0.0]);
-        $memory = new AgentMemory($store, $embedder);
-        $memory->setMinScore(0.5);
+        [$memory, $store] = $this->createMemory([1.0, 0.0, 0.0], 0.5);
 
         $memory->remember('The user prefers dark mode.');
 
@@ -195,7 +192,8 @@ class AgentMemoryTest extends TestCase {
 
         // Embedder returns [1,0,0] so mem_1 gets score=1.0 and mem_2 gets score=0.0
         $embedder = $this->createEmbedder([1.0, 0.0, 0.0]);
-        $memory = new AgentMemory($store, $embedder, minScore: 0.5);
+        $ragProvider = new LocalRagProvider($store, $embedder);
+        $memory = new AgentMemory($ragProvider, minScore: 0.5);
 
         $results = $memory->recall('query');
 
@@ -211,7 +209,8 @@ class AgentMemoryTest extends TestCase {
         }
 
         $embedder = $this->createEmbedder([1.0, 0.0, 0.0]);
-        $memory = new AgentMemory($store, $embedder, minScore: 0.5, topK: 3);
+        $ragProvider = new LocalRagProvider($store, $embedder);
+        $memory = new AgentMemory($ragProvider, minScore: 0.5, topK: 3);
 
         $results = $memory->recall('query');
 
@@ -219,9 +218,7 @@ class AgentMemoryTest extends TestCase {
     }
 
     public function testRecall_EmptyStoreReturnsEmpty(): void {
-        $store = new InMemoryVectorStore();
-        $embedder = $this->createEmbedder([1.0, 0.0, 0.0]);
-        $memory = new AgentMemory($store, $embedder);
+        [$memory] = $this->createMemory();
 
         $results = $memory->recall('anything');
 
@@ -235,7 +232,8 @@ class AgentMemoryTest extends TestCase {
         }
 
         $embedder = $this->createEmbedder([1.0, 0.0, 0.0]);
-        $memory = new AgentMemory($store, $embedder, minScore: 0.5, topK: 5);
+        $ragProvider = new LocalRagProvider($store, $embedder);
+        $memory = new AgentMemory($ragProvider, minScore: 0.5, topK: 5);
 
         // Override topK at call time
         $results = $memory->recall('query', 2);
@@ -248,9 +246,7 @@ class AgentMemoryTest extends TestCase {
     // =========================================================================
 
     public function testForget_DeletesMemory(): void {
-        $store = new InMemoryVectorStore();
-        $embedder = $this->createEmbedder([1.0, 0.0, 0.0]);
-        $memory = new AgentMemory($store, $embedder);
+        [$memory, $store] = $this->createMemory();
 
         $id = $memory->remember('To be forgotten');
         $this->assertSame(1, $store->count());
@@ -262,12 +258,35 @@ class AgentMemoryTest extends TestCase {
         $this->assertNull($store->get($id));
     }
 
-    public function testForget_ReturnsFalseForNonexistent(): void {
-        $store = new InMemoryVectorStore();
-        $embedder = $this->createEmbedder([1.0, 0.0, 0.0]);
-        $memory = new AgentMemory($store, $embedder);
+    public function testForget_ReturnsTrueForNonexistentWithLocalProvider(): void {
+        // LocalRagProvider::delete() doesn't throw for non-existent IDs,
+        // so forget() returns true. A provider that throws would return false.
+        [$memory] = $this->createMemory();
 
         $result = $memory->forget('mem_nonexistent');
+
+        // With LocalRagProvider backed by InMemoryVectorStore, delete doesn't throw
+        $this->assertTrue($result);
+    }
+
+    public function testForget_ReturnsFalseWhenProviderThrows(): void {
+        // Create a RagProvider that throws on delete for non-existent IDs
+        $ragProvider = new class implements \WebFiori\Ai\Rag\RagProviderInterface {
+            public function retrieve(string $query, int $topK = 5, array $options = []): array {
+                return [];
+            }
+
+            public function ingest(string $content, array $metadata = []): string {
+                return 'doc_test';
+            }
+
+            public function delete(string $id): void {
+                throw new \RuntimeException('Not found: ' . $id);
+            }
+        };
+
+        $memory = new AgentMemory($ragProvider);
+        $result = $memory->forget('non_existent_id');
 
         $this->assertFalse($result);
     }
@@ -279,18 +298,16 @@ class AgentMemoryTest extends TestCase {
     public function testGetters(): void {
         $store = new InMemoryVectorStore();
         $embedder = $this->createEmbedder([1.0, 0.0, 0.0]);
-        $memory = new AgentMemory($store, $embedder, 0.8, 10, 'text-embedding-3-small');
+        $ragProvider = new LocalRagProvider($store, $embedder);
+        $memory = new AgentMemory($ragProvider, 0.8, 10);
 
-        $this->assertSame($store, $memory->getStore());
+        $this->assertSame($ragProvider, $memory->getRagProvider());
         $this->assertEqualsWithDelta(0.8, $memory->getMinScore(), 0.001);
         $this->assertSame(10, $memory->getTopK());
-        $this->assertSame('text-embedding-3-small', $memory->getEmbeddingModel());
     }
 
     public function testSetters(): void {
-        $store = new InMemoryVectorStore();
-        $embedder = $this->createEmbedder([1.0, 0.0, 0.0]);
-        $memory = new AgentMemory($store, $embedder);
+        [$memory] = $this->createMemory();
 
         $memory->setMinScore(0.9);
         $this->assertEqualsWithDelta(0.9, $memory->getMinScore(), 0.001);
@@ -299,12 +316,14 @@ class AgentMemoryTest extends TestCase {
         $this->assertSame(20, $memory->getTopK());
     }
 
-    public function testConstructor_WithEmbeddingModel(): void {
+    public function testConstructor_WithRagProvider(): void {
         $store = new InMemoryVectorStore();
         $embedder = $this->createEmbedder([0.5, 0.5, 0.0]);
-        $memory = new AgentMemory($store, $embedder, embeddingModel: 'custom-model');
+        $ragProvider = new LocalRagProvider($store, $embedder, embeddingModel: 'custom-model');
+        $memory = new AgentMemory($ragProvider);
 
-        $this->assertSame('custom-model', $memory->getEmbeddingModel());
+        $this->assertSame($ragProvider, $memory->getRagProvider());
+        $this->assertSame('custom-model', $ragProvider->getEmbeddingModel());
 
         // When remember is called, the model should be passed in options
         $memory->remember('Test fact');
