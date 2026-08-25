@@ -41,8 +41,7 @@ jobs:
 
   release-prod:
     name: Prepare Production Release Branch / Publish Release
-    if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    needs: [code-coverage, code-quality]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
       pull-requests: write
