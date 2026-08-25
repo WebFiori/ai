@@ -12,6 +12,7 @@ concurrency:
 jobs:
   test:
     name: Run Tests
+    if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'chore(main): release')) }}
     uses: WebFiori/workflows/.github/workflows/test-php.yaml@v1.2.5
     with:
       php-version: '8.4'
