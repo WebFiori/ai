@@ -157,14 +157,25 @@ class GoogleRagProvider implements RagProviderInterface {
      */
     public function retrieve(string $query, int $topK = 5, array $options = []): array {
         $url = sprintf(
-            'https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/ragCorpora/%s:retrieveContexts',
+            'https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s:retrieveContexts',
             $this->config->location,
+            $this->config->projectId,
+            $this->config->location,
+        );
+
+        $corpusResourceName = sprintf(
+            'projects/%s/locations/%s/ragCorpora/%s',
             $this->config->projectId,
             $this->config->location,
             $this->config->corpusId,
         );
 
         $body = [
+            'vertexRagStore' => [
+                'ragResources' => [
+                    ['ragCorpus' => $corpusResourceName],
+                ],
+            ],
             'query' => [
                 'text' => $query,
                 'ragRetrievalConfig' => [
