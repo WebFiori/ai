@@ -53,6 +53,8 @@ use WebFiori\Ai\Status;
 use WebFiori\Ai\StatusEmitterInterface;
 use WebFiori\Ai\Temperature\ChatContext;
 use WebFiori\Ai\Temperature\TemperatureStrategyInterface;
+use WebFiori\Ai\Tool\AgentMessageStrategy;
+use WebFiori\Ai\Tool\AgentTool;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Tool\ToolResponse;
@@ -310,7 +312,7 @@ abstract class AbstractClient implements ProviderInterface {
                     $messages[] = $response->getMessage();
 
                     $toolCalls = $response->getMessage()->getToolCalls();
-                    $toolResults = $this->executeTools($tools, $toolCalls, $parallelTools);
+                    $toolResults = $this->executeTools($tools, $toolCalls, $parallelTools, $messages);
 
                     foreach ($toolResults as $toolCallId => $result) {
                         $this->logDebug('Tool executed', [
@@ -1347,13 +1349,17 @@ abstract class AbstractClient implements ProviderInterface {
      * Currently executes tools sequentially. The `parallel` option is reserved
      * for future implementation with async I/O support.
      *
+     * For AgentTool instances with FULL_HISTORY strategy, the current
+     * conversation context is injected before execution.
+     *
      * @param ToolInterface[] $tools The available tools.
      * @param ToolCall[] $toolCalls The tool calls to execute.
      * @param bool $parallel Reserved for future parallel execution support.
+     * @param Message[] $messages The current conversation messages for context injection.
      *
      * @return array<string, array{name: string, output: string, duration_ms: int}> Results keyed by tool call ID.
      */
-    private function executeTools(array $tools, array $toolCalls, bool $parallel): array {
+    private function executeTools(array $tools, array $toolCalls, bool $parallel, array $messages = []): array {
         $results = [];
         $overallStart = microtime(true);
 
@@ -1368,6 +1374,11 @@ abstract class AbstractClient implements ProviderInterface {
             $this->statusEmitter->emit(Status::TOOL_EXECUTING, [
                 'tool' => $toolCall->getName(),
             ]);
+
+            // Inject conversation context for AgentTool with FULL_HISTORY strategy
+            if ($tool instanceof AgentTool && $tool->getMessageStrategy() === AgentMessageStrategy::FULL_HISTORY) {
+                $tool->setConversationContext($messages);
+            }
 
             $start = microtime(true);
             $output = $tool !== null ? $tool->execute($toolCall->getArguments()) : '';
