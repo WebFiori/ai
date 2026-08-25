@@ -53,8 +53,10 @@ use WebFiori\Ai\Status;
 use WebFiori\Ai\StatusEmitterInterface;
 use WebFiori\Ai\Temperature\ChatContext;
 use WebFiori\Ai\Temperature\TemperatureStrategyInterface;
+use WebFiori\Ai\Tool\AgentMemory;
 use WebFiori\Ai\Tool\AgentMessageStrategy;
 use WebFiori\Ai\Tool\AgentTool;
+use WebFiori\Ai\Tool\RememberStrategyInterface;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Tool\ToolResponse;
@@ -122,6 +124,13 @@ abstract class AbstractClient implements ProviderInterface {
     private HttpClientInterface $httpClient;
 
     /**
+     * Agent memory for persistent knowledge storage.
+     *
+     * @var AgentMemory|null
+     */
+    private ?AgentMemory $memory = null;
+
+    /**
      * Model alias registry.
      *
      * @var ModelAliases|null
@@ -134,6 +143,13 @@ abstract class AbstractClient implements ProviderInterface {
      * @var PricingConfig|null
      */
     private ?PricingConfig $pricing = null;
+
+    /**
+     * Strategy for extracting facts from conversations.
+     *
+     * @var RememberStrategyInterface|null
+     */
+    private ?RememberStrategyInterface $rememberStrategy = null;
 
     /**
      * Status emitter for real-time progress tracking.
@@ -221,6 +237,11 @@ abstract class AbstractClient implements ProviderInterface {
             $chatContext = new ChatContext($messages, $options);
             $temperature = $this->temperatureStrategy->temperature($chatContext);
             $options[ChatOption::TEMPERATURE] = $temperature;
+        }
+
+        // Recall relevant memories and inject into messages
+        if ($this->memory !== null) {
+            $messages = $this->recallAndInjectMemories($messages);
         }
 
         $tools = $options[ChatOption::TOOLS] ?? [];
@@ -438,6 +459,15 @@ abstract class AbstractClient implements ProviderInterface {
                 'cost' => $response->getCost()?->getTotal(),
                 'currency' => $response->getCost()?->getCurrency(),
             ]);
+
+            // Extract and store facts from the response
+            if ($this->memory !== null && $this->rememberStrategy !== null) {
+                $facts = $this->rememberStrategy->extract($messages, $response->getMessage()->getContent());
+
+                foreach ($facts as $fact) {
+                    $this->memory->remember($fact, ['source' => 'client:'.$this->getName()]);
+                }
+            }
 
             return $response;
         } catch (\Throwable $e) {
@@ -878,6 +908,13 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Returns the agent memory used for persistent knowledge.
+     */
+    public function getMemory(): ?AgentMemory {
+        return $this->memory;
+    }
+
+    /**
      * Returns the model alias registry.
      *
      * @return ModelAliases|null The alias registry, or null if not set.
@@ -937,6 +974,13 @@ abstract class AbstractClient implements ProviderInterface {
         }
 
         return null;
+    }
+
+    /**
+     * Returns the remember strategy used for extracting facts from conversations.
+     */
+    public function getRememberStrategy(): ?RememberStrategyInterface {
+        return $this->rememberStrategy;
     }
 
     /**
@@ -1029,6 +1073,15 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Sets the agent memory for persistent knowledge.
+     * When set, relevant memories are recalled and injected into chat requests,
+     * and new facts are extracted after responses using the remember strategy.
+     */
+    public function setMemory(?AgentMemory $memory): void {
+        $this->memory = $memory;
+    }
+
+    /**
      * Sets the model alias registry for this provider.
      *
      * When set, logical alias names (e.g., 'fast', 'smart') passed via
@@ -1080,6 +1133,14 @@ abstract class AbstractClient implements ProviderInterface {
         $this->setLogRedactionService($service);
         $this->setMetricsRedactionService($service);
         $this->setAuditRedactionService($service);
+    }
+
+    /**
+     * Sets the remember strategy for automatic fact extraction.
+     * Works in conjunction with agent memory to store facts after each chat response.
+     */
+    public function setRememberStrategy(?RememberStrategyInterface $strategy): void {
+        $this->rememberStrategy = $strategy;
     }
 
     /**
@@ -1432,6 +1493,54 @@ abstract class AbstractClient implements ProviderInterface {
         }
 
         return null;
+    }
+
+    /**
+     * Recalls relevant memories and injects them into the system message.
+     *
+     * @param Message[] $messages The conversation messages.
+     * @return Message[] The messages with memories injected.
+     */
+    private function recallAndInjectMemories(array $messages): array {
+        // Find last user message content
+        $lastUserContent = null;
+
+        for ($i = count($messages) - 1; $i >= 0; $i--) {
+            if ($messages[$i]->getRole() === Role::USER->value) {
+                $lastUserContent = $messages[$i]->getContent();
+                break;
+            }
+        }
+
+        if ($lastUserContent === null) {
+            return $messages;
+        }
+
+        $memories = $this->memory->recall($lastUserContent);
+
+        if (empty($memories)) {
+            return $messages;
+        }
+
+        $memoryText = "\n\n## Relevant Knowledge (from memory)\n";
+
+        foreach ($memories as $m) {
+            $memoryText .= '- '.$m->getText()."\n";
+        }
+
+        // Find system message and append memories
+        foreach ($messages as $i => $msg) {
+            if ($msg->getRole() === Role::SYSTEM->value) {
+                $messages[$i] = new Message(Role::SYSTEM, $msg->getContent().$memoryText);
+
+                return $messages;
+            }
+        }
+
+        // No system message — prepend one with memories
+        array_unshift($messages, new Message(Role::SYSTEM, trim($memoryText)));
+
+        return $messages;
     }
     use AuditTrait;
 
