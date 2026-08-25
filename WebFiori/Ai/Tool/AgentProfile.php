@@ -170,19 +170,19 @@ class AgentProfile {
      */
     public static function fromFile(string $path): self {
         if (!file_exists($path)) {
-            throw new RuntimeException('Profile file not found: ' . $path);
+            throw new RuntimeException('Profile file not found: '.$path);
         }
 
         $contents = file_get_contents($path);
 
         if ($contents === false) {
-            throw new RuntimeException('Failed to read profile file: ' . $path);
+            throw new RuntimeException('Failed to read profile file: '.$path);
         }
 
         $data = json_decode($contents, true);
 
         if (!is_array($data)) {
-            throw new RuntimeException('Invalid JSON in profile file: ' . $path);
+            throw new RuntimeException('Invalid JSON in profile file: '.$path);
         }
 
         return self::fromArray($data);
@@ -213,7 +213,7 @@ class AgentProfile {
         $httpHeaders = "Accept: application/json\r\n";
 
         foreach ($headers as $name => $value) {
-            $httpHeaders .= $name . ': ' . $value . "\r\n";
+            $httpHeaders .= $name.': '.$value."\r\n";
         }
 
         $context = stream_context_create([
@@ -227,13 +227,13 @@ class AgentProfile {
         $contents = @file_get_contents($url, false, $context);
 
         if ($contents === false) {
-            throw new RuntimeException('Failed to fetch profile from URL: ' . $url);
+            throw new RuntimeException('Failed to fetch profile from URL: '.$url);
         }
 
         $data = json_decode($contents, true);
 
         if (!is_array($data)) {
-            throw new RuntimeException('Invalid JSON from URL: ' . $url);
+            throw new RuntimeException('Invalid JSON from URL: '.$url);
         }
 
         return self::fromArray($data);
@@ -344,34 +344,34 @@ class AgentProfile {
         $parts[] = $this->identity;
 
         if (!empty($this->skills)) {
-            $parts[] = "## Skills\n" . implode("\n", array_map(fn (string $s): string => '- ' . $s, $this->skills));
+            $parts[] = "## Skills\n".implode("\n", array_map(fn (string $s): string => '- '.$s, $this->skills));
         }
 
         if (!empty($this->instructions)) {
-            $parts[] = "## Instructions\n" . implode("\n", array_map(fn (string $s): string => '- ' . $s, $this->instructions));
+            $parts[] = "## Instructions\n".implode("\n", array_map(fn (string $s): string => '- '.$s, $this->instructions));
         }
 
         if (!empty($this->constraints)) {
-            $parts[] = "## Constraints\n" . implode("\n", array_map(fn (string $s): string => '- ' . $s, $this->constraints));
+            $parts[] = "## Constraints\n".implode("\n", array_map(fn (string $s): string => '- '.$s, $this->constraints));
         }
 
         if ($this->outputFormat !== null && $this->outputFormat !== '') {
-            $parts[] = "## Output Format\n" . $this->outputFormat;
+            $parts[] = "## Output Format\n".$this->outputFormat;
         }
 
         if ($this->context !== null && $this->context !== '') {
-            $parts[] = "## Context\n" . $this->context;
+            $parts[] = "## Context\n".$this->context;
         }
 
         if (!empty($this->examples)) {
             $exampleLines = [];
 
             foreach ($this->examples as $example) {
-                $exampleLines[] = 'User: ' . $example['input'];
-                $exampleLines[] = 'Assistant: ' . $example['output'];
+                $exampleLines[] = 'User: '.$example['input'];
+                $exampleLines[] = 'Assistant: '.$example['output'];
             }
 
-            $parts[] = "## Examples\n" . implode("\n", $exampleLines);
+            $parts[] = "## Examples\n".implode("\n", $exampleLines);
         }
 
         return implode("\n\n", $parts);
@@ -389,7 +389,7 @@ class AgentProfile {
 
         foreach ($this->toolRefs as $index => $ref) {
             if (!isset($registry[$ref])) {
-                throw new RuntimeException('Tool not found in registry: ' . $ref);
+                throw new RuntimeException('Tool not found in registry: '.$ref);
             }
 
             $resolved[] = $registry[$ref];

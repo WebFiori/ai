@@ -12,7 +12,7 @@ declare(strict_types=1);
  * 2. Orchestrator delegates to the right agent based on user intent
  * 3. Different profiles for different expertise areas
  */
-require_once __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\Message;
@@ -38,7 +38,7 @@ $agentProvider = new OpenAIClient(new OpenAIClientConfig(
 $webfioriExpert = new AgentTool(
     name: 'webfiori_expert',
     description: 'A WebFiori framework expert. Use for questions about routing, '
-        . 'middleware, database layer, CLI commands, and application structure.',
+        .'middleware, database layer, CLI commands, and application structure.',
     provider: $agentProvider,
     profile: new AgentProfile(
         identity: 'You are a senior developer specializing in the WebFiori PHP framework.',
@@ -66,7 +66,7 @@ $webfioriExpert = new AgentTool(
 $codeReviewer = new AgentTool(
     name: 'code_reviewer',
     description: 'A code review specialist. Use when the user wants code reviewed '
-        . 'for quality, bugs, security issues, or performance problems.',
+        .'for quality, bugs, security issues, or performance problems.',
     provider: $agentProvider,
     profile: new AgentProfile(
         identity: 'You are an expert code reviewer with deep knowledge of PHP best practices.',
@@ -87,9 +87,9 @@ $codeReviewer = new AgentTool(
             'Do not rewrite entire files — point to specific lines/sections',
         ],
         outputFormat: "Use this format:\n"
-            . "## [Severity] Category: Brief Title\n"
-            . "**Issue:** description\n"
-            . "**Fix:** corrected code",
+            ."## [Severity] Category: Brief Title\n"
+            ."**Issue:** description\n"
+            ."**Fix:** corrected code",
     ),
 );
 
@@ -121,7 +121,7 @@ $response = $orchestrator->chat(
     ],
 );
 
-echo $response->getMessage()->getContent() . "\n\n";
+echo $response->getMessage()->getContent()."\n\n";
 
 // ─── Example 2: Code review → code_reviewer ──────────────────────────────────
 
@@ -146,4 +146,4 @@ $response = $orchestrator->chat(
     ],
 );
 
-echo $response->getMessage()->getContent() . "\n";
+echo $response->getMessage()->getContent()."\n";

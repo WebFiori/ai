@@ -21,15 +21,6 @@ namespace WebFiori\Ai\Tool;
  */
 enum AgentMessageStrategy: string {
     /**
-     * Only pass the task as a user message to the agent.
-     *
-     * The agent receives a system prompt (from its profile) and a single
-     * user message containing the delegated task. No prior conversation
-     * history is included.
-     */
-    case TASK_ONLY = 'task_only';
-
-    /**
      * Pass the full conversation history plus the task to the agent.
      *
      * The agent receives a system prompt (from its profile), the full
@@ -37,4 +28,12 @@ enum AgentMessageStrategy: string {
      * containing the delegated task.
      */
     case FULL_HISTORY = 'full_history';
+    /**
+     * Only pass the task as a user message to the agent.
+     *
+     * The agent receives a system prompt (from its profile) and a single
+     * user message containing the delegated task. No prior conversation
+     * history is included.
+     */
+    case TASK_ONLY = 'task_only';
 }

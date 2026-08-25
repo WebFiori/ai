@@ -10,8 +10,8 @@
  */
 namespace WebFiori\Ai\Provider\Formatter;
 
-use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\ChatOption;
+use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\ContentPart;
 use WebFiori\Ai\EmbeddingResponse;
 use WebFiori\Ai\Exception\AuthenticationException;

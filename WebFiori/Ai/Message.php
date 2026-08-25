@@ -144,39 +144,6 @@ class Message {
     }
 
     /**
-     * Creates a new system message.
-     *
-     * @param string|ContentPart[] $content The system instruction content.
-     *
-     * @return self The system message.
-     */
-    public static function system(string|array $content): self {
-        return new self(Role::SYSTEM, $content);
-    }
-
-    /**
-     * Creates a new tool result message.
-     *
-     * @param ToolResult $toolResult The tool execution result.
-     *
-     * @return self The tool message.
-     */
-    public static function tool(ToolResult $toolResult): self {
-        return new self(Role::TOOL, '', [], $toolResult);
-    }
-
-    /**
-     * Creates a new user message.
-     *
-     * @param string|ContentPart[] $content The user message content.
-     *
-     * @return self The user message.
-     */
-    public static function user(string|array $content): self {
-        return new self(Role::USER, $content);
-    }
-
-    /**
      * Returns the message text content.
      *
      * For text-only messages, returns the full content. For multi-modal
@@ -296,6 +263,39 @@ class Message {
      */
     public function setRawSteps(array $steps): void {
         $this->rawSteps = $steps;
+    }
+
+    /**
+     * Creates a new system message.
+     *
+     * @param string|ContentPart[] $content The system instruction content.
+     *
+     * @return self The system message.
+     */
+    public static function system(string|array $content): self {
+        return new self(Role::SYSTEM, $content);
+    }
+
+    /**
+     * Creates a new tool result message.
+     *
+     * @param ToolResult $toolResult The tool execution result.
+     *
+     * @return self The tool message.
+     */
+    public static function tool(ToolResult $toolResult): self {
+        return new self(Role::TOOL, '', [], $toolResult);
+    }
+
+    /**
+     * Creates a new user message.
+     *
+     * @param string|ContentPart[] $content The user message content.
+     *
+     * @return self The user message.
+     */
+    public static function user(string|array $content): self {
+        return new self(Role::USER, $content);
     }
 
     /**

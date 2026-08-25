@@ -44,8 +44,8 @@ run('AgentTool — basic delegation (TASK_ONLY)', function ()
     );
 
     $content = $response->getMessage()->getContent();
-    assert(stripos($content, 'Amman') !== false, 'Response should mention Amman, got: ' . substr($content, 0, 200));
-    echo "    → " . substr($content, 0, 100) . "\n";
+    assert(stripos($content, 'Amman') !== false, 'Response should mention Amman, got: '.substr($content, 0, 200));
+    echo "    → ".substr($content, 0, 100)."\n";
 });
 
 // ─── 2. Profile with instructions ────────────────────────────────────────────
@@ -74,7 +74,7 @@ run('AgentTool — profile with instructions', function ()
 
     $content = $response->getMessage()->getContent();
     assert($content !== '', 'Response should not be empty');
-    echo "    → " . substr($content, 0, 100) . "\n";
+    echo "    → ".substr($content, 0, 100)."\n";
 });
 
 // ─── 3. Profile with constraints ─────────────────────────────────────────────
@@ -103,7 +103,7 @@ run('AgentTool — profile with constraints', function ()
 
     $content = $response->getMessage()->getContent();
     assert($content !== '', 'Response should not be empty');
-    echo "    → " . substr($content, 0, 100) . "\n";
+    echo "    → ".substr($content, 0, 100)."\n";
 });
 
 // ─── 4. Custom options (low temperature) ─────────────────────────────────────
@@ -132,7 +132,7 @@ run('AgentTool — custom options (low temperature)', function ()
 
     $content = $response->getMessage()->getContent();
     assert($content !== '', 'Response should not be empty');
-    echo "    → " . substr($content, 0, 100) . "\n";
+    echo "    → ".substr($content, 0, 100)."\n";
 });
 
 // ─── 5. Agent with sub-tools ─────────────────────────────────────────────────
@@ -154,7 +154,8 @@ run('AgentTool — agent with sub-tools', function ()
             ],
             'required' => ['operation', 'a', 'b'],
         ],
-        function (array $args): string {
+        function (array $args): string
+        {
             $a = $args['a'];
             $b = $args['b'];
 
@@ -191,8 +192,8 @@ run('AgentTool — agent with sub-tools', function ()
     );
 
     $content = $response->getMessage()->getContent();
-    assert(strpos($content, '1081') !== false, 'Response should contain 1081, got: ' . substr($content, 0, 200));
-    echo "    → " . substr($content, 0, 100) . "\n";
+    assert(strpos($content, '1081') !== false, 'Response should contain 1081, got: '.substr($content, 0, 200));
+    echo "    → ".substr($content, 0, 100)."\n";
 });
 
 // ─── 6. AgentProfile — fromFile loading ──────────────────────────────────────
@@ -207,7 +208,7 @@ run('AgentProfile — fromFile loading', function ()
         'context' => 'You review PHP code for the WebFiori framework.',
     ];
 
-    $tempFile = tempnam(sys_get_temp_dir(), 'agent_profile_') . '.json';
+    $tempFile = tempnam(sys_get_temp_dir(), 'agent_profile_').'.json';
     file_put_contents($tempFile, json_encode($profileData, JSON_PRETTY_PRINT));
 
     try {
@@ -247,7 +248,7 @@ run('AgentProfile — fromFile loading', function ()
         $content = $response->getMessage()->getContent();
         assert($content !== '', 'Response should not be empty');
         echo "    → Profile loaded and rendered correctly\n";
-        echo "    → " . substr($content, 0, 100) . "\n";
+        echo "    → ".substr($content, 0, 100)."\n";
     } finally {
         @unlink($tempFile);
     }
@@ -290,8 +291,8 @@ run('Multiple agents — orchestrator delegates to specialists', function ()
     );
 
     $content = $response->getMessage()->getContent();
-    assert(strpos($content, '12') !== false, 'Response should contain 12, got: ' . substr($content, 0, 200));
-    echo "    → " . substr($content, 0, 100) . "\n";
+    assert(strpos($content, '12') !== false, 'Response should contain 12, got: '.substr($content, 0, 200));
+    echo "    → ".substr($content, 0, 100)."\n";
 });
 
 echo "\n";

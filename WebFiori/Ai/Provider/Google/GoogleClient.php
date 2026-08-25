@@ -10,8 +10,8 @@
  */
 namespace WebFiori\Ai\Provider\Google;
 
-use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\ChatOption;
+use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\ContentPart;
 use WebFiori\Ai\EmbeddingResponse;
 use WebFiori\Ai\Exception\AuthenticationException;
@@ -29,12 +29,12 @@ use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\AbstractClient;
-use WebFiori\Ai\Role;
 use WebFiori\Ai\Provider\Anthropic\AnthropicClientConfig;
 use WebFiori\Ai\Provider\Formatter\AnthropicFormatter;
 use WebFiori\Ai\Provider\Formatter\OpenAIFormatter;
 use WebFiori\Ai\Provider\Formatter\ProviderFormatterInterface;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
+use WebFiori\Ai\Role;
 use WebFiori\Ai\Tool\BuiltInToolInterface;
 use WebFiori\Ai\Tool\GoogleBuiltInTool;
 use WebFiori\Ai\Tool\ToolCall;

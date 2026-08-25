@@ -10,8 +10,8 @@
  */
 namespace WebFiori\Ai\Routing;
 
-use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\ChatOption;
+use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\EmbeddingResponse;
 use WebFiori\Ai\HealthCheckResult;
 use WebFiori\Ai\Http\HttpClientInterface;

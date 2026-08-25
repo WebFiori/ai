@@ -38,7 +38,7 @@ class FixedTemperatureStrategy implements TemperatureStrategyInterface {
     public function __construct(float $temperature) {
         if ($temperature < 0.0 || $temperature > 2.0) {
             throw new InvalidArgumentException(
-                'Temperature must be between 0.0 and 2.0, got ' . $temperature
+                'Temperature must be between 0.0 and 2.0, got '.$temperature
             );
         }
         $this->temperature = $temperature;

@@ -58,7 +58,7 @@ class TaskBasedTemperatureStrategy implements TemperatureStrategyInterface {
     public function __construct(array $buckets = [], float $default = 0.7) {
         if ($default < 0.0 || $default > 2.0) {
             throw new InvalidArgumentException(
-                'Default temperature must be between 0.0 and 2.0, got ' . $default
+                'Default temperature must be between 0.0 and 2.0, got '.$default
             );
         }
 
@@ -71,7 +71,7 @@ class TaskBasedTemperatureStrategy implements TemperatureStrategyInterface {
 
             if ($temp < 0.0 || $temp > 2.0) {
                 throw new InvalidArgumentException(
-                    'Bucket temperature must be between 0.0 and 2.0, got ' . $temp
+                    'Bucket temperature must be between 0.0 and 2.0, got '.$temp
                 );
             }
         }
@@ -137,6 +137,45 @@ class TaskBasedTemperatureStrategy implements TemperatureStrategyInterface {
     }
 
     /**
+     * Determines the structural signal cap from options.
+     *
+     * @param array $options The request options.
+     *
+     * @return float|null The cap value, or null if no cap applies.
+     */
+    private function determineCap(array $options): ?float {
+        if (
+            (isset($options[ChatOption::JSON_MODE]) && $options[ChatOption::JSON_MODE] === true)
+            || array_key_exists(ChatOption::JSON_SCHEMA, $options)
+        ) {
+            return 0.3;
+        }
+
+        if (isset($options[ChatOption::TOOLS]) && !empty($options[ChatOption::TOOLS])) {
+            return 0.7;
+        }
+
+        return null;
+    }
+
+    /**
+     * Extracts the content of the last user message.
+     *
+     * @param array $messages The conversation messages.
+     *
+     * @return string|null The content of the last user message, or null if not found.
+     */
+    private function extractLastUserContent(array $messages): ?string {
+        for ($i = count($messages) - 1; $i >= 0; $i--) {
+            if ($messages[$i]->getRole() === Role::USER->value) {
+                return $messages[$i]->getContent();
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Returns the default keyword buckets.
      *
      * @return array<int, array{temperature: float, keywords: string[]}> The default buckets.
@@ -189,23 +228,6 @@ class TaskBasedTemperatureStrategy implements TemperatureStrategyInterface {
     }
 
     /**
-     * Extracts the content of the last user message.
-     *
-     * @param array $messages The conversation messages.
-     *
-     * @return string|null The content of the last user message, or null if not found.
-     */
-    private function extractLastUserContent(array $messages): ?string {
-        for ($i = count($messages) - 1; $i >= 0; $i--) {
-            if ($messages[$i]->getRole() === Role::USER->value) {
-                return $messages[$i]->getContent();
-            }
-        }
-
-        return null;
-    }
-
-    /**
      * Matches content against keyword buckets sorted by temperature ascending.
      *
      * @param string $content The lowercase message content.
@@ -216,7 +238,8 @@ class TaskBasedTemperatureStrategy implements TemperatureStrategyInterface {
         // Sort buckets by temperature ascending for deterministic behavior
         $sortedBuckets = $this->buckets;
 
-        usort($sortedBuckets, function (array $a, array $b): int {
+        usort($sortedBuckets, function (array $a, array $b): int
+        {
             return $a['temperature'] <=> $b['temperature'];
         });
 
@@ -229,27 +252,5 @@ class TaskBasedTemperatureStrategy implements TemperatureStrategyInterface {
         }
 
         return $this->default;
-    }
-
-    /**
-     * Determines the structural signal cap from options.
-     *
-     * @param array $options The request options.
-     *
-     * @return float|null The cap value, or null if no cap applies.
-     */
-    private function determineCap(array $options): ?float {
-        if (
-            (isset($options[ChatOption::JSON_MODE]) && $options[ChatOption::JSON_MODE] === true)
-            || array_key_exists(ChatOption::JSON_SCHEMA, $options)
-        ) {
-            return 0.3;
-        }
-
-        if (isset($options[ChatOption::TOOLS]) && !empty($options[ChatOption::TOOLS])) {
-            return 0.7;
-        }
-
-        return null;
     }
 }

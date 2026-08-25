@@ -12,7 +12,7 @@ declare(strict_types=1);
  * 2. Wrapping a provider in an AgentTool
  * 3. Using the agent tool with auto_execute_tools in an orchestrator
  */
-require_once __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\Message;
@@ -63,7 +63,7 @@ $profile = new AgentProfile(
 $phpExpert = new AgentTool(
     name: 'php_expert',
     description: 'A specialized PHP developer agent. Delegate PHP questions, '
-        . 'code reviews, and implementation tasks to this agent.',
+        .'code reviews, and implementation tasks to this agent.',
     provider: $agentProvider,
     profile: $profile,
     messageStrategy: AgentMessageStrategy::TASK_ONLY,
@@ -75,7 +75,7 @@ echo "═══ Basic AgentTool Example ═══\n\n";
 
 $messages = [
     new Message('system', 'You are a helpful assistant. Use the php_expert tool '
-        . 'when the user asks PHP-related questions.'),
+        .'when the user asks PHP-related questions.'),
     new Message('user', 'How do I implement the Strategy pattern in PHP 8.2?'),
 ];
 
@@ -86,4 +86,4 @@ $response = $orchestrator->chat($messages, [
 
 echo "Question: How do I implement the Strategy pattern in PHP 8.2?\n\n";
 echo "Response:\n";
-echo $response->getMessage()->getContent() . "\n";
+echo $response->getMessage()->getContent()."\n";

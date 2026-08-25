@@ -12,7 +12,7 @@ declare(strict_types=1);
  * 2. Nested tool execution: orchestrator → agent → agent's tools
  * 3. Profile with tools set programmatically
  */
-require_once __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\Message;
@@ -53,7 +53,8 @@ $searchTool = new Tool(
         ],
         'required' => ['query'],
     ],
-    handler: function (array $args): string {
+    handler: function (array $args): string
+    {
         // Simulated web search results
         $query = $args['query'];
         $maxResults = $args['max_results'] ?? 3;
@@ -61,17 +62,17 @@ $searchTool = new Tool(
         $results = [
             [
                 'title' => "Understanding {$query} - Wikipedia",
-                'url' => "https://en.wikipedia.org/wiki/" . urlencode($query),
+                'url' => "https://en.wikipedia.org/wiki/".urlencode($query),
                 'snippet' => "A comprehensive overview of {$query} covering history, concepts, and applications.",
             ],
             [
                 'title' => "{$query} Best Practices - Dev.to",
-                'url' => "https://dev.to/article/" . urlencode($query),
+                'url' => "https://dev.to/article/".urlencode($query),
                 'snippet' => "Modern best practices and patterns for working with {$query} in production.",
             ],
             [
                 'title' => "{$query} Documentation",
-                'url' => "https://docs.example.com/" . urlencode($query),
+                'url' => "https://docs.example.com/".urlencode($query),
                 'snippet' => "Official documentation and API reference for {$query}.",
             ],
         ];
@@ -93,15 +94,16 @@ $summarizeTool = new Tool(
         ],
         'required' => ['url'],
     ],
-    handler: function (array $args): string {
+    handler: function (array $args): string
+    {
         // Simulated URL summarization
         $url = $args['url'];
 
         return json_encode([
             'url' => $url,
             'summary' => "This page covers key concepts, implementation details, "
-                . "and practical examples. Main topics include architecture decisions, "
-                . "performance considerations, and integration patterns.",
+                ."and practical examples. Main topics include architecture decisions, "
+                ."performance considerations, and integration patterns.",
             'word_count' => 2500,
         ]);
     },
@@ -111,7 +113,7 @@ $summarizeTool = new Tool(
 
 $researchProfile = new AgentProfile(
     identity: 'You are a research assistant specialized in gathering and synthesizing '
-        . 'information from multiple sources.',
+        .'information from multiple sources.',
     skills: [
         'Web research and fact-finding',
         'Summarizing technical content',
@@ -129,9 +131,9 @@ $researchProfile = new AgentProfile(
         'Clearly distinguish facts from analysis',
     ],
     outputFormat: "Structure response as:\n"
-        . "## Summary\nBrief overview\n\n"
-        . "## Key Findings\nBulleted list\n\n"
-        . "## Sources\nList of URLs used",
+        ."## Summary\nBrief overview\n\n"
+        ."## Key Findings\nBulleted list\n\n"
+        ."## Sources\nList of URLs used",
 );
 
 // Set tools directly on the profile
@@ -140,7 +142,7 @@ $researchProfile->setTools([$searchTool, $summarizeTool]);
 $researchAgent = new AgentTool(
     name: 'research_agent',
     description: 'A research agent that can search the web and summarize content. '
-        . 'Use when the user needs information gathered from external sources.',
+        .'Use when the user needs information gathered from external sources.',
     provider: $agentProvider,
     profile: $researchProfile,
 );
@@ -153,7 +155,7 @@ echo "web_search and summarize_url tools internally.\n\n";
 
 $messages = [
     new Message('system', 'You are a helpful assistant. Use the research_agent tool '
-        . 'when users ask questions that require looking up current information.'),
+        .'when users ask questions that require looking up current information.'),
     new Message('user', 'What are the latest best practices for PHP dependency injection?'),
 ];
 
@@ -164,4 +166,4 @@ $response = $orchestrator->chat($messages, [
 
 echo "Question: What are the latest best practices for PHP dependency injection?\n\n";
 echo "Response (from research agent with sub-tool execution):\n";
-echo $response->getMessage()->getContent() . "\n";
+echo $response->getMessage()->getContent()."\n";

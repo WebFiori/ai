@@ -12,10 +12,10 @@ namespace WebFiori\Ai\Provider;
 
 use WebFiori\Ai\Audit\AuditTrait;
 use WebFiori\Ai\Cache\CacheConfig;
-use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\Cache\CachedResponse;
 use WebFiori\Ai\Cache\CacheInterface;
 use WebFiori\Ai\Cache\CacheKeyGenerator;
+use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\Context\ContextWindowStrategyInterface;
 use WebFiori\Ai\Context\TokenEstimator;
@@ -115,13 +115,6 @@ abstract class AbstractClient implements ProviderInterface {
     private ?ContextWindowStrategyInterface $contextStrategy = null;
 
     /**
-     * Temperature strategy for automatic temperature selection.
-     *
-     * @var TemperatureStrategyInterface|null
-     */
-    private ?TemperatureStrategyInterface $temperatureStrategy = null;
-
-    /**
      * The HTTP client used for making API requests.
      *
      * @var HttpClientInterface
@@ -148,6 +141,13 @@ abstract class AbstractClient implements ProviderInterface {
      * @var StatusEmitterInterface
      */
     private StatusEmitterInterface $statusEmitter;
+
+    /**
+     * Temperature strategy for automatic temperature selection.
+     *
+     * @var TemperatureStrategyInterface|null
+     */
+    private ?TemperatureStrategyInterface $temperatureStrategy = null;
 
     /**
      * Token estimator for counting tokens.
@@ -869,15 +869,6 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
-     * Returns the temperature strategy used for automatic temperature selection.
-     *
-     * @return TemperatureStrategyInterface|null The strategy, or null if none set.
-     */
-    public function getTemperatureStrategy(): ?TemperatureStrategyInterface {
-        return $this->temperatureStrategy;
-    }
-
-    /**
      * Returns the HTTP client used for making API requests.
      *
      * @return HttpClientInterface The HTTP client instance.
@@ -958,6 +949,15 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Returns the temperature strategy used for automatic temperature selection.
+     *
+     * @return TemperatureStrategyInterface|null The strategy, or null if none set.
+     */
+    public function getTemperatureStrategy(): ?TemperatureStrategyInterface {
+        return $this->temperatureStrategy;
+    }
+
+    /**
      * Sets the cache implementation for storing responses.
      *
      * When a cache is set, responses from chat() and embed() calls will be
@@ -1017,18 +1017,6 @@ abstract class AbstractClient implements ProviderInterface {
      */
     public function setContextWindowStrategy(?ContextWindowStrategyInterface $strategy): void {
         $this->contextStrategy = $strategy;
-    }
-
-    /**
-     * Sets the temperature strategy for automatic temperature selection.
-     *
-     * When set, the strategy determines temperature automatically for chat
-     * requests that do not explicitly specify a temperature in options.
-     *
-     * @param TemperatureStrategyInterface|null $strategy The strategy to use, or null to disable.
-     */
-    public function setTemperatureStrategy(?TemperatureStrategyInterface $strategy): void {
-        $this->temperatureStrategy = $strategy;
     }
 
     /**
@@ -1143,6 +1131,18 @@ abstract class AbstractClient implements ProviderInterface {
         $this->statusEmitter = $emitter;
 
         return $this;
+    }
+
+    /**
+     * Sets the temperature strategy for automatic temperature selection.
+     *
+     * When set, the strategy determines temperature automatically for chat
+     * requests that do not explicitly specify a temperature in options.
+     *
+     * @param TemperatureStrategyInterface|null $strategy The strategy to use, or null to disable.
+     */
+    public function setTemperatureStrategy(?TemperatureStrategyInterface $strategy): void {
+        $this->temperatureStrategy = $strategy;
     }
 
     /**
