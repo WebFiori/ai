@@ -49,6 +49,8 @@ use WebFiori\Ai\Redaction\RedactionService;
 use WebFiori\Ai\RetryConfig;
 use WebFiori\Ai\Status;
 use WebFiori\Ai\StatusEmitterInterface;
+use WebFiori\Ai\Temperature\ChatContext;
+use WebFiori\Ai\Temperature\TemperatureStrategyInterface;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Tool\ToolResponse;
@@ -107,6 +109,13 @@ abstract class AbstractClient implements ProviderInterface {
      * @var ContextWindowStrategyInterface|null
      */
     private ?ContextWindowStrategyInterface $contextStrategy = null;
+
+    /**
+     * Temperature strategy for automatic temperature selection.
+     *
+     * @var TemperatureStrategyInterface|null
+     */
+    private ?TemperatureStrategyInterface $temperatureStrategy = null;
 
     /**
      * The HTTP client used for making API requests.
@@ -202,6 +211,14 @@ abstract class AbstractClient implements ProviderInterface {
         $startTime = microtime(true);
         $autoExecute = $options['auto_execute_tools'] ?? false;
         $temperature = $options['temperature'] ?? null;
+
+        // Apply temperature strategy if set and temperature not explicitly provided
+        if ($temperature === null && $this->temperatureStrategy !== null) {
+            $chatContext = new ChatContext($messages, $options);
+            $temperature = $this->temperatureStrategy->temperature($chatContext);
+            $options['temperature'] = $temperature;
+        }
+
         $tools = $options['tools'] ?? [];
         $requestId = $options['request_id'] ?? uniqid('req_', true);
 
@@ -848,6 +865,15 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Returns the temperature strategy used for automatic temperature selection.
+     *
+     * @return TemperatureStrategyInterface|null The strategy, or null if none set.
+     */
+    public function getTemperatureStrategy(): ?TemperatureStrategyInterface {
+        return $this->temperatureStrategy;
+    }
+
+    /**
      * Returns the HTTP client used for making API requests.
      *
      * @return HttpClientInterface The HTTP client instance.
@@ -987,6 +1013,18 @@ abstract class AbstractClient implements ProviderInterface {
      */
     public function setContextWindowStrategy(?ContextWindowStrategyInterface $strategy): void {
         $this->contextStrategy = $strategy;
+    }
+
+    /**
+     * Sets the temperature strategy for automatic temperature selection.
+     *
+     * When set, the strategy determines temperature automatically for chat
+     * requests that do not explicitly specify a temperature in options.
+     *
+     * @param TemperatureStrategyInterface|null $strategy The strategy to use, or null to disable.
+     */
+    public function setTemperatureStrategy(?TemperatureStrategyInterface $strategy): void {
+        $this->temperatureStrategy = $strategy;
     }
 
     /**
