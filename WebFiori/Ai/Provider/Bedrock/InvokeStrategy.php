@@ -10,8 +10,8 @@
  */
 namespace WebFiori\Ai\Provider\Bedrock;
 
-use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\ChatOption;
+use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\ContentPart;
 use WebFiori\Ai\Exception\StreamingException;
 use WebFiori\Ai\Http\HttpRequest;

@@ -10,8 +10,8 @@
  */
 namespace WebFiori\Ai\Provider\Bedrock;
 
-use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\ChatOption;
+use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\EmbeddingResponse;
 use WebFiori\Ai\Exception\AuthenticationException;
 use WebFiori\Ai\Exception\InvalidConfigException;
