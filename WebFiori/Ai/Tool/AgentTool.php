@@ -41,6 +41,13 @@ class AgentTool implements ToolInterface {
     private string $description;
 
     /**
+     * The agent's long-term memory for recall and remember operations.
+     *
+     * @var AgentMemory|null
+     */
+    private ?AgentMemory $memory;
+
+    /**
      * The message strategy controlling how context is passed to the agent.
      *
      * @var AgentMessageStrategy
@@ -76,6 +83,13 @@ class AgentTool implements ToolInterface {
     private ProviderInterface $provider;
 
     /**
+     * The strategy for extracting facts to remember from conversations.
+     *
+     * @var RememberStrategyInterface|null
+     */
+    private ?RememberStrategyInterface $rememberStrategy;
+
+    /**
      * Creates a new AgentTool instance.
      *
      * @param string $name The unique name of this agent tool.
@@ -87,6 +101,8 @@ class AgentTool implements ToolInterface {
      * @param AgentMessageStrategy $messageStrategy Controls how messages are
      *        passed to the sub-agent.
      * @param array<string, mixed> $options Extra options for the agent's chat() call.
+     * @param AgentMemory|null $memory Optional long-term memory for recall/remember.
+     * @param RememberStrategyInterface|null $rememberStrategy Optional strategy for extracting facts to remember.
      */
     public function __construct(
         string $name,
@@ -95,6 +111,8 @@ class AgentTool implements ToolInterface {
         AgentProfile|string $profile,
         AgentMessageStrategy $messageStrategy = AgentMessageStrategy::TASK_ONLY,
         array $options = [],
+        ?AgentMemory $memory = null,
+        ?RememberStrategyInterface $rememberStrategy = null,
     ) {
         $this->name = $name;
         $this->description = $description;
@@ -103,6 +121,8 @@ class AgentTool implements ToolInterface {
         $this->messageStrategy = $messageStrategy;
         $this->options = $options;
         $this->conversationContext = [];
+        $this->memory = $memory;
+        $this->rememberStrategy = $rememberStrategy;
     }
 
     /**
@@ -121,7 +141,21 @@ class AgentTool implements ToolInterface {
         $task = $arguments['task'];
 
         $messages = [];
-        $messages[] = new Message(Role::SYSTEM, $this->profile->render());
+        $systemPrompt = $this->profile->render();
+
+        if ($this->memory !== null) {
+            $memories = $this->memory->recall($task);
+
+            if (!empty($memories)) {
+                $systemPrompt .= "\n\n## Relevant Knowledge (from memory)\n";
+
+                foreach ($memories as $m) {
+                    $systemPrompt .= "- ".$m->getText()."\n";
+                }
+            }
+        }
+
+        $messages[] = new Message(Role::SYSTEM, $systemPrompt);
 
         if ($this->messageStrategy === AgentMessageStrategy::FULL_HISTORY) {
             foreach ($this->conversationContext as $message) {
@@ -140,6 +174,14 @@ class AgentTool implements ToolInterface {
         }
 
         $response = $this->provider->chat($messages, $options);
+
+        if ($this->memory !== null && $this->rememberStrategy !== null) {
+            $facts = $this->rememberStrategy->extract($this->conversationContext, $response->getMessage()->getContent());
+
+            foreach ($facts as $fact) {
+                $this->memory->remember($fact, ['source' => 'agent:'.$this->name]);
+            }
+        }
 
         return $response->getMessage()->getContent();
     }
@@ -160,6 +202,15 @@ class AgentTool implements ToolInterface {
      */
     public function getDescription(): string {
         return $this->description;
+    }
+
+    /**
+     * Returns the agent's long-term memory, if set.
+     *
+     * @return AgentMemory|null The memory instance or null.
+     */
+    public function getMemory(): ?AgentMemory {
+        return $this->memory;
     }
 
     /**
@@ -229,11 +280,38 @@ class AgentTool implements ToolInterface {
     }
 
     /**
+     * Returns the remember strategy, if set.
+     *
+     * @return RememberStrategyInterface|null The strategy or null.
+     */
+    public function getRememberStrategy(): ?RememberStrategyInterface {
+        return $this->rememberStrategy;
+    }
+
+    /**
      * Sets the conversation context messages for FULL_HISTORY mode.
      *
      * @param Message[] $messages The conversation messages to include.
      */
     public function setConversationContext(array $messages): void {
         $this->conversationContext = $messages;
+    }
+
+    /**
+     * Sets the agent's long-term memory.
+     *
+     * @param AgentMemory|null $memory The memory instance or null to disable.
+     */
+    public function setMemory(?AgentMemory $memory): void {
+        $this->memory = $memory;
+    }
+
+    /**
+     * Sets the remember strategy for extracting facts from conversations.
+     *
+     * @param RememberStrategyInterface|null $strategy The strategy or null to disable.
+     */
+    public function setRememberStrategy(?RememberStrategyInterface $strategy): void {
+        $this->rememberStrategy = $strategy;
     }
 }
