@@ -18,6 +18,7 @@ use WebFiori\Ai\Embedding\InMemoryVectorStore;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
 use WebFiori\Ai\Provider\Google\GoogleClientConfig;
+use WebFiori\Ai\Rag\LocalRagProvider;
 use WebFiori\Ai\Tool\AgentMemory;
 use WebFiori\Ai\Tool\KeywordRememberStrategy;
 
@@ -29,7 +30,7 @@ $client = new GoogleClient(new GoogleClientConfig(
 ));
 
 $store = new InMemoryVectorStore();
-$memory = new AgentMemory($store, $client, minScore: 0.5);
+$memory = new AgentMemory(ragProvider: new LocalRagProvider($store, $client), minScore: 0.5);
 
 // ─── Configure memory on the client ──────────────────────────────────────────
 

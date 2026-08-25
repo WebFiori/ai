@@ -8,12 +8,13 @@
 require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 
 
-$provider = new OpenAIClient([
-    'api_key' => getenv('OPENAI_API_KEY'),
-    'model' => 'gpt-4o',
-]);
+$provider = new OpenAIClient(new OpenAIClientConfig(
+    apiKey: getenv('OPENAI_API_KEY') ?: 'sk-...',
+    model: 'gpt-4o',
+));
 
 $texts = [
     'How do I reset my password?',

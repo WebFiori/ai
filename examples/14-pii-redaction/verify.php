@@ -14,6 +14,7 @@ use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 use WebFiori\Ai\Redaction\RedactionConfig;
 use WebFiori\Ai\Redaction\RedactionRule;
 use WebFiori\Ai\Redaction\RedactionService;

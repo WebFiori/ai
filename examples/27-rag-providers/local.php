@@ -27,7 +27,7 @@ use WebFiori\Ai\Rag\RetrievalTool;
 // ─── Setup the embedding provider ────────────────────────────────────────────
 
 $embedder = new GoogleClient(new GoogleClientConfig(
-    apiKey: 'your-google-api-key',
+    credentials: getenv('GCP_CREDENTIALS') ?: '/path/to/service-account.json', api: \WebFiori\Ai\Provider\Google\GoogleApi::VERTEX_AI, projectId: getenv('GCP_PROJECT_ID') ?: 'your-project', location: getenv('GCP_LOCATION') ?: 'us-central1',
     model: 'text-embedding-004',
 ));
 
@@ -125,7 +125,7 @@ $tool = new RetrievalTool(
 
 // The tool can be passed to a chat provider for autonomous retrieval
 $chatClient = new GoogleClient(new GoogleClientConfig(
-    apiKey: 'your-google-api-key',
+    credentials: getenv('GCP_CREDENTIALS') ?: '/path/to/service-account.json', api: \WebFiori\Ai\Provider\Google\GoogleApi::VERTEX_AI, projectId: getenv('GCP_PROJECT_ID') ?: 'your-project', location: getenv('GCP_LOCATION') ?: 'us-central1',
     model: 'gemini-2.5-flash',
 ));
 

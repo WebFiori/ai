@@ -15,6 +15,7 @@ require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Bedrock\BedrockClient;
+use WebFiori\Ai\Provider\Bedrock\BedrockClientConfig;
 
 
 $apiKey = getenv('BEDROCK_API_KEY');
@@ -22,19 +23,19 @@ $region = getenv('AWS_REGION') ?: 'us-east-1';
 
 if ($apiKey) {
     // API key authentication (simpler)
-    $config = [
-        'api_key' => $apiKey,
-        'region' => $region,
-        'model' => 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-    ];
+    $config = new BedrockClientConfig(
+        region: $region,
+        model: getenv('BEDROCK_MODEL') ?: 'us.amazon.nova-lite-v1:0',
+        apiKey: $apiKey,
+    );
 } else {
     // SigV4 authentication
-    $config = [
-        'access_key' => getenv('AWS_ACCESS_KEY_ID'),
-        'secret_key' => getenv('AWS_SECRET_ACCESS_KEY'),
-        'region' => $region,
-        'model' => 'anthropic.claude-3-5-sonnet-20241022-v2:0',
-    ];
+    $config = new BedrockClientConfig(
+        region: $region,
+        model: getenv('BEDROCK_MODEL') ?: 'us.amazon.nova-lite-v1:0',
+        accessKey: getenv('AWS_ACCESS_KEY_ID') ?: null,
+        secretKey: getenv('AWS_SECRET_ACCESS_KEY') ?: null,
+    );
 }
 
 $client = new BedrockClient($config);

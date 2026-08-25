@@ -25,14 +25,14 @@ use WebFiori\Ai\Tool\AgentTool;
 // ─── Setup the orchestrator (primary model) ───────────────────────────────────
 
 $orchestrator = new OpenAIClient(new OpenAIClientConfig(
-    apiKey: 'sk-...',
+    apiKey: getenv('OPENAI_API_KEY') ?: 'sk-...',
     model: 'gpt-4o',
 ));
 
 // ─── Setup the sub-agent provider ────────────────────────────────────────────
 
 $agentProvider = new OpenAIClient(new OpenAIClientConfig(
-    apiKey: 'sk-...',
+    apiKey: getenv('OPENAI_API_KEY') ?: 'sk-...',
     model: 'gpt-4o-mini',
 ));
 

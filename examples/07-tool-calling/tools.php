@@ -25,7 +25,7 @@ use WebFiori\Ai\Tool\ToolResult;
 
 $provider = new GoogleClient(new GoogleClientConfig(
     model: 'gemini-2.5-flash',
-    credentials: __DIR__.'/../../keys/vertex-ai-key.json',
+    credentials: getenv('GCP_CREDENTIALS') ?: '/path/to/service-account.json',
     projectId: 'webfiori',
     location: 'us-central1',
     api: WebFiori\Ai\Provider\Google\GoogleApi::VERTEX_AI,

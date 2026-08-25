@@ -25,7 +25,7 @@ use WebFiori\Ai\Tool\Tool;
 // gemini-3.5-flash auto-detects INTERACTIONS API
 $client = new GoogleClient(new GoogleClientConfig(
     model: 'gemini-3.5-flash',
-    credentials: __DIR__.'/../../keys/vertex-ai-key.json',
+    credentials: getenv('GCP_CREDENTIALS') ?: '/path/to/service-account.json',
 ));
 
 // ─── 1. Basic chat ───────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ echo PHP_EOL.'═══ Manual API Version Override ═══'.PHP_EOL.PHP_EOL;
 // Force INTERACTIONS API even on a gemini-2.x model (for testing)
 $overrideClient = new GoogleClient(new GoogleClientConfig(
     model: 'gemini-2.5-flash',
-    credentials: __DIR__.'/../../keys/vertex-ai-key.json',
+    credentials: getenv('GCP_CREDENTIALS') ?: '/path/to/service-account.json',
     apiVersion: GoogleApiVersion::INTERACTIONS, // Force Interactions API
 ));
 

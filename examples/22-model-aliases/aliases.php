@@ -40,7 +40,7 @@ $aliases = new ModelAliases([
 
 // ─── Use with a single provider ───────────────────────────────────────────────
 $client = new GoogleClient(new GoogleClientConfig(
-    credentials: __DIR__.'/../../keys/vertex-ai-key.json',
+    credentials: getenv('GCP_CREDENTIALS') ?: '/path/to/service-account.json',
     projectId: 'webfiori',
     location: 'us-central1',
     api: GoogleApi::VERTEX_AI,
@@ -67,7 +67,7 @@ $openai = new OpenAIClient(new OpenAIClientConfig(
 $openai->setModelAliases($aliases);
 
 $google = new GoogleClient(new GoogleClientConfig(
-    credentials: __DIR__.'/../../keys/vertex-ai-key.json',
+    credentials: getenv('GCP_CREDENTIALS') ?: '/path/to/service-account.json',
     projectId: 'webfiori',
     location: 'us-central1',
     api: GoogleApi::VERTEX_AI,
