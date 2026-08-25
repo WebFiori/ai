@@ -10,6 +10,8 @@
  */
 namespace WebFiori\Ai\Provider\Bedrock;
 
+use WebFiori\Ai\Auth\AwsCredentialChain;
+use WebFiori\Ai\Auth\AwsSigner;
 use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\EmbeddingResponse;

@@ -20,7 +20,8 @@ use WebFiori\Ai\Provider\ProviderInterface;
  * Default retriever implementation.
  *
  * Embeds queries using a provider, searches a vector store, and returns
- * results above a minimum score threshold.
+ * results above a minimum score threshold. Also supports ingestion and
+ * deletion via the RagProviderInterface contract.
  *
  * Example:
  * ```php
@@ -37,7 +38,7 @@ use WebFiori\Ai\Provider\ProviderInterface;
  *
  * @author Ibrahim
  */
-class Retriever implements RetrieverInterface {
+class Retriever implements RagProviderInterface {
     /**
      * Optional cache for query embeddings.
      *
@@ -112,16 +113,58 @@ class Retriever implements RetrieverInterface {
     }
 
     /**
+     * Deletes a document by ID from the vector store.
+     *
+     * @param string $id The document ID to delete.
+     */
+    public function delete(string $id): void {
+        $this->store->delete($id);
+    }
+
+    /**
+     * Ingests content into the vector store.
+     *
+     * Generates an embedding for the content and stores it with the
+     * original text preserved in metadata.
+     *
+     * @param string $content The text content to ingest.
+     * @param array<string, mixed> $metadata Optional metadata.
+     *
+     * @return string The generated document ID.
+     */
+    public function ingest(string $content, array $metadata = []): string {
+        $id = 'doc_'.substr(md5($content.microtime(true)), 0, 12);
+
+        $embedOptions = [];
+
+        if ($this->embeddingModel !== null) {
+            $embedOptions[ChatOption::MODEL] = $this->embeddingModel;
+        }
+
+        $vector = $this->provider->embed($content, $embedOptions)->getVector();
+
+        $metadata['text'] = $content;
+        $this->store->store($id, $vector, $metadata);
+
+        return $id;
+    }
+
+    /**
      * Retrieves relevant chunks for a query.
      *
      * @param string $query The search query.
      * @param int $topK Maximum number of results.
-     * @param array<string, mixed> $filter Optional metadata filter.
+     * @param array<string, mixed> $options Additional options. Supports:
+     *        - 'filter': array<string, mixed> metadata filter for vector store.
+     *        For backward compatibility, a flat array is treated as a filter.
      *
      * @return RetrievalResult[] Results sorted by score descending.
      */
-    public function retrieve(string $query, int $topK = 5, array $filter = []): array {
+    public function retrieve(string $query, int $topK = 5, array $options = []): array {
         $startTime = microtime(true);
+
+        // Backward compat: if options is a flat metadata filter, use as filter directly
+        $filter = $options['filter'] ?? $options;
 
         // Get query embedding (with optional caching)
         $embeddingStart = microtime(true);

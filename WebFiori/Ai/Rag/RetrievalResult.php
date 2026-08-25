@@ -13,7 +13,7 @@ namespace WebFiori\Ai\Rag;
 /**
  * Immutable DTO representing a retrieval result.
  *
- * Returned by {@see RetrieverInterface::retrieve()} with the retrieved text,
+ * Returned by {@see RagProviderInterface::retrieve()} with the retrieved text,
  * similarity score, and source metadata for citation.
  *
  * @author Ibrahim

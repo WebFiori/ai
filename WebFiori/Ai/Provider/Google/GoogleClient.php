@@ -10,6 +10,7 @@
  */
 namespace WebFiori\Ai\Provider\Google;
 
+use WebFiori\Ai\Auth\GoogleAuth;
 use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\ContentPart;
@@ -78,6 +79,20 @@ class GoogleClient extends AbstractClient {
     private ?string $accessToken = null;
 
     /**
+     * The Google authentication handler.
+     *
+     * @var GoogleAuth
+     */
+    private GoogleAuth $auth;
+
+    /**
+     * Whether the auth handler has been fully initialized with HTTP client.
+     *
+     * @var bool
+     */
+    private bool $authInitialized = false;
+
+    /**
      * The Google client configuration.
      *
      * @var GoogleClientConfig
@@ -106,6 +121,13 @@ class GoogleClient extends AbstractClient {
     public function __construct(GoogleClientConfig $config) {
         parent::__construct($config);
         $this->googleConfig = $config;
+
+        // Initialize reusable auth handler
+        $this->auth = new GoogleAuth(
+            $config->credentials,
+            $config->accessToken,
+            $config->api === GoogleApi::GEMINI
+        );
 
         // Initialize formatter for non-Google publishers
         if ($config->publisher !== 'google') {
@@ -968,111 +990,25 @@ class GoogleClient extends AbstractClient {
     /**
      * Returns the access token for API requests.
      *
-     * If an access_token is configured directly, uses that. Otherwise
-     * generates one from the service account credentials.
+     * Delegates to the GoogleAuth handler which implements the full ADC chain.
      *
      * @return string The OAuth2 access token.
      *
      * @throws AuthenticationException If token generation fails.
      */
     private function getAccessToken(): string {
-        // Use pre-configured access token
-        $token = $this->getConfig('access_token');
-
-        if ($token !== null) {
-            return $token;
+        // Inject the HTTP client on first use (deferred to avoid circular dependency during construction)
+        if (!$this->authInitialized) {
+            $this->auth = new GoogleAuth(
+                $this->googleConfig->credentials,
+                $this->googleConfig->accessToken,
+                $this->isGeminiApi(),
+                $this->getHttpClient()
+            );
+            $this->authInitialized = true;
         }
 
-        // Check cached token
-        if ($this->accessToken !== null && time() < $this->tokenExpiresAt) {
-            return $this->accessToken;
-        }
-
-        // Generate from service account credentials (explicit config)
-        $credentials = $this->getConfig('credentials');
-
-        if (is_string($credentials) && is_file($credentials)) {
-            $credentials = json_decode(file_get_contents($credentials), true);
-        }
-
-        if (is_array($credentials)) {
-            $this->accessToken = $this->generateAccessToken($credentials);
-            $this->tokenExpiresAt = time() + 3500;
-
-            return $this->accessToken;
-        }
-
-        // ADC: GOOGLE_APPLICATION_CREDENTIALS environment variable
-        $envPath = getenv('GOOGLE_APPLICATION_CREDENTIALS');
-
-        if (!empty($envPath) && is_file($envPath)) {
-            $credentials = json_decode(file_get_contents($envPath), true);
-
-            if (is_array($credentials)) {
-                if (($credentials['type'] ?? '') === 'authorized_user') {
-                    $token = $this->refreshGcloudToken($credentials);
-
-                    if ($token !== null) {
-                        $this->accessToken = $token;
-                        $this->tokenExpiresAt = time() + 3500;
-
-                        return $this->accessToken;
-                    }
-                } else {
-                    $this->accessToken = $this->generateAccessToken($credentials);
-                    $this->tokenExpiresAt = time() + 3500;
-
-                    return $this->accessToken;
-                }
-            }
-        }
-
-        // ADC: gcloud default credentials file
-        // Note: authorized_user credentials work with Vertex AI (cloud-platform scope)
-        // but NOT with the free Gemini API (generativelanguage.googleapis.com),
-        // which requires an api_key or service_account credentials.
-        $gcloudPath = $this->getGcloudDefaultCredentialsPath();
-
-        if (is_file($gcloudPath)) {
-            $gcloudCreds = json_decode(file_get_contents($gcloudPath), true);
-
-            if (is_array($gcloudCreds)) {
-                // gcloud default credentials use a different format (authorized_user)
-                if (($gcloudCreds['type'] ?? '') === 'authorized_user') {
-                    $token = $this->refreshGcloudToken($gcloudCreds);
-
-                    if ($token !== null) {
-                        $this->accessToken = $token;
-                        $this->tokenExpiresAt = time() + 3500;
-
-                        return $this->accessToken;
-                    }
-                } else {
-                    // Service account in gcloud path
-                    $this->accessToken = $this->generateAccessToken($gcloudCreds);
-                    $this->tokenExpiresAt = time() + 3500;
-
-                    return $this->accessToken;
-                }
-            }
-        }
-
-        // ADC: GCE/GKE/Cloud Run metadata server
-        $metadataToken = $this->fetchFromMetadataServer();
-
-        if ($metadataToken !== null) {
-            $this->accessToken = $metadataToken['access_token'];
-            $this->tokenExpiresAt = time() + (int) ($metadataToken['expires_in'] ?? 3500) - 60;
-
-            return $this->accessToken;
-        }
-
-        throw new AuthenticationException(
-            'No Google credentials found. Provide "api_key", "access_token", "credentials", '.
-            'set GOOGLE_APPLICATION_CREDENTIALS, run "gcloud auth application-default login", '.
-            'or run on GCE/GKE/Cloud Run.',
-            401
-        );
+        return $this->auth->getAccessToken();
     }
 
     /**

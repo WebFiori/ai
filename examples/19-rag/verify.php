@@ -15,10 +15,10 @@ use WebFiori\Ai\Http\FakeHttpClient;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 use WebFiori\Ai\Rag\ChunkResult;
+use WebFiori\Ai\Rag\RagProviderInterface;
 use WebFiori\Ai\Rag\RetrievalResult;
 use WebFiori\Ai\Rag\RetrievalTool;
 use WebFiori\Ai\Rag\Retriever;
-use WebFiori\Ai\Rag\RetrieverInterface;
 use WebFiori\Ai\Rag\TextChunker;
 
 $passed = 0;
@@ -239,14 +239,20 @@ echo "\nRetrievalTool:\n";
 
 test('exposes correct tool interface', function ()
 {
-    $mockRetriever = new class implements RetrieverInterface
+    $mockProvider = new class implements RagProviderInterface
     {
-        public function retrieve(string $query, int $topK = 5, array $filter = []): array {
+        public function delete(string $id): void {
+        }
+
+        public function ingest(string $content, array $metadata = []): string {
+            return 'doc_test';
+        }
+        public function retrieve(string $query, int $topK = 5, array $options = []): array {
             return [];
         }
     };
 
-    $tool = new RetrievalTool($mockRetriever, name: 'search_docs');
+    $tool = new RetrievalTool($mockProvider, name: 'search_docs');
 
     assert_equals('search_docs', $tool->getName());
     assert_true(str_contains($tool->getDescription(), 'knowledge'));
@@ -258,16 +264,22 @@ test('exposes correct tool interface', function ()
 
 test('executes search and returns JSON', function ()
 {
-    $mockRetriever = new class implements RetrieverInterface
+    $mockProvider = new class implements RagProviderInterface
     {
-        public function retrieve(string $query, int $topK = 5, array $filter = []): array {
+        public function delete(string $id): void {
+        }
+
+        public function ingest(string $content, array $metadata = []): string {
+            return 'doc_test';
+        }
+        public function retrieve(string $query, int $topK = 5, array $options = []): array {
             return [
                 new RetrievalResult('id1', 'Result about '.$query, 0.9, ['source' => 'doc.pdf']),
             ];
         }
     };
 
-    $tool = new RetrievalTool($mockRetriever);
+    $tool = new RetrievalTool($mockProvider);
 
     $output = $tool->execute(['query' => 'water']);
     $data = json_decode($output, true);
@@ -279,14 +291,20 @@ test('executes search and returns JSON', function ()
 
 test('handles empty results gracefully', function ()
 {
-    $mockRetriever = new class implements RetrieverInterface
+    $mockProvider = new class implements RagProviderInterface
     {
-        public function retrieve(string $query, int $topK = 5, array $filter = []): array {
+        public function delete(string $id): void {
+        }
+
+        public function ingest(string $content, array $metadata = []): string {
+            return 'doc_test';
+        }
+        public function retrieve(string $query, int $topK = 5, array $options = []): array {
             return [];
         }
     };
 
-    $tool = new RetrievalTool($mockRetriever);
+    $tool = new RetrievalTool($mockProvider);
 
     $output = $tool->execute(['query' => 'unknown']);
     $data = json_decode($output, true);
