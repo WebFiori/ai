@@ -12,7 +12,7 @@ require_once __DIR__.'/../../vendor/autoload.php';
 use WebFiori\Ai\Embedding\SqliteVectorStore;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Google\GoogleClient;
-
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
 use WebFiori\Ai\Rag\RetrievalTool;
 use WebFiori\Ai\Rag\Retriever;
 use WebFiori\Ai\Rag\TextChunker;
@@ -20,20 +20,24 @@ use WebFiori\Ai\Rag\TextChunker;
 // -------------------------------------------------------
 // Setup: two clients — one for embedding, one for chat
 // -------------------------------------------------------
-$credentials = __DIR__.'/../../vertex-ai-key.json';
+$credentials = getenv('GCP_CREDENTIALS') ?: '/path/to/service-account.json';
 
-$embedClient = new GoogleClient([
-    'api' => 'gemini',
-    'credentials' => $credentials,
-    'model' => 'gemini-embedding-001',
-    'embedding_model' => 'gemini-embedding-001',
-]);
+$embedClient = new GoogleClient(new GoogleClientConfig(
+    model: 'gemini-embedding-001',
+    projectId: 'webfiori',
+    location: 'us-central1',
+    credentials: $credentials,
+    api: \WebFiori\Ai\Provider\Google\GoogleApi::VERTEX_AI,
+    embeddingModel: 'gemini-embedding-001',
+));
 
-$chatClient = new GoogleClient([
-    'api' => 'gemini',
-    'credentials' => $credentials,
-    'model' => 'gemini-2.5-flash',
-]);
+$chatClient = new GoogleClient(new GoogleClientConfig(
+    model: 'gemini-2.5-flash',
+    projectId: 'webfiori',
+    location: 'us-central1',
+    credentials: $credentials,
+    api: \WebFiori\Ai\Provider\Google\GoogleApi::VERTEX_AI,
+));
 
 // -------------------------------------------------------
 // Knowledge base — a short document about GRI water standard
@@ -100,7 +104,7 @@ $retriever = new Retriever($embedClient, $store, [
 ]);
 
 $ragTool = new RetrievalTool(
-    retriever: $retriever,
+    provider: $retriever,
     name: 'search_gri_303',
     description: 'Search the GRI 303 Water and Effluents standard for relevant information.',
     defaultTopK: 3,

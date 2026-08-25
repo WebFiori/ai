@@ -12,13 +12,18 @@
 require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
+use WebFiori\Ai\Provider\Google\GoogleApi;
 use WebFiori\Ai\Provider\Google\GoogleClient;
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
 
 
-$client = new GoogleClient([
-    'credentials' => __DIR__.'/../../vertex-ai-key.json',
-    'model' => 'gemini-3.5-flash',
-]);
+$client = new GoogleClient(new GoogleClientConfig(
+    model: 'gemini-2.5-flash',
+    projectId: getenv('GCP_PROJECT_ID') ?: 'webfiori',
+    location: getenv('GCP_LOCATION') ?: 'us-central1',
+    credentials: getenv('GCP_CREDENTIALS') ?: '/path/to/service-account.json',
+    api: GoogleApi::VERTEX_AI,
+));
 
 // ─── Option A: Simple JSON mode ──────────────────────────────────────────────
 echo '═══ JSON Mode ═══'.PHP_EOL.PHP_EOL;

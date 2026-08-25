@@ -15,6 +15,7 @@ require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\HealthCheckResult;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 use WebFiori\Ai\Provider\ProviderInterface;
 
 echo "=== Health Check Verification ===\n\n";

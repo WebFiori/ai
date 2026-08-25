@@ -11,12 +11,13 @@ require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Anthropic\AnthropicClient;
+use WebFiori\Ai\Provider\Anthropic\AnthropicClientConfig;
 
 
-$client = new AnthropicClient([
-    'api_key' => getenv('ANTHROPIC_API_KEY'),
-    'model' => 'claude-sonnet-4-20250514',
-]);
+$client = new AnthropicClient(new AnthropicClientConfig(
+    apiKey: getenv('ANTHROPIC_API_KEY') ?: 'sk-ant-...',
+    model: getenv('ANTHROPIC_MODEL') ?: 'claude-haiku-4-5-20251001',
+));
 
 $response = $client->chat([
     new Message('system', 'You are a helpful assistant. Be concise.'),

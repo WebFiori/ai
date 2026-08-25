@@ -27,7 +27,7 @@ use WebFiori\Ai\Routing\Strategy\TokenLengthStrategy;
 
 // ─── Providers ────────────────────────────────────────────────────────────────
 
-$credentials = __DIR__.'/../../keys/vertex-ai-key.json';
+$credentials = getenv('GCP_CREDENTIALS') ?: '/path/to/service-account.json';
 
 // ModelAliases — each tier resolves to its own model ID
 $aliases = new ModelAliases([

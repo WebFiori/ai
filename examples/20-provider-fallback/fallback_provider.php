@@ -7,21 +7,22 @@
  * automatic failover for production-ready AI applications.
  */
 
-require_once __DIR__.'/../vendor/autoload.php';
+require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Exception\HttpException;
 use WebFiori\Ai\Exception\ProviderException;
 use WebFiori\Ai\Exception\RateLimitException;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Anthropic\AnthropicClient;
-
+use WebFiori\Ai\Provider\Anthropic\AnthropicClientConfig;
 use WebFiori\Ai\Provider\Fallback\CircuitBreakerConfig;
 use WebFiori\Ai\Provider\Fallback\FallbackConfig;
 use WebFiori\Ai\Provider\Fallback\FallbackProvider;
 use WebFiori\Ai\Provider\Fallback\FallbackStrategy;
 use WebFiori\Ai\Provider\Google\GoogleClient;
-
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 
 
 // =============================================================================
@@ -30,20 +31,20 @@ use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 echo "=== Example 1: Basic Sequential Fallback ===\n\n";
 
 // Create individual providers (replace with your API keys)
-$openai = new OpenAIClient([
-    'api_key' => getenv('OPENAI_API_KEY') ?: 'sk-...',
-    'model' => 'gpt-4o',
-]);
+$openai = new OpenAIClient(new OpenAIClientConfig(
+    apiKey: getenv('OPENAI_API_KEY') ?: 'sk-...',
+    model: 'gpt-4o',
+));
 
-$anthropic = new AnthropicClient([
-    'api_key' => getenv('ANTHROPIC_API_KEY') ?: 'sk-ant-...',
-    'model' => 'claude-sonnet-4-20250514',
-]);
+$anthropic = new AnthropicClient(new AnthropicClientConfig(
+    apiKey: getenv('ANTHROPIC_API_KEY') ?: 'sk-ant-...',
+    model: 'claude-sonnet-4-20250514',
+));
 
-$google = new GoogleClient([
-    'api_key' => getenv('GOOGLE_API_KEY') ?: 'AIza...',
-    'model' => 'gemini-2.5-flash',
-]);
+$google = new GoogleClient(new GoogleClientConfig(
+    model: 'gemini-2.5-flash',
+    apiKey: getenv('GOOGLE_API_KEY') ?: 'AIza...',
+));
 
 // Wrap them in a FallbackProvider - tries OpenAI first, then Anthropic, then Google
 $provider = new FallbackProvider(

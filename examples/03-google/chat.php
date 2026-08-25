@@ -8,17 +8,20 @@
 require_once __DIR__.'/../../vendor/autoload.php';
 
 use WebFiori\Ai\Message;
+use WebFiori\Ai\Provider\Google\GoogleApi;
 use WebFiori\Ai\Provider\Google\GoogleClient;
+use WebFiori\Ai\Provider\Google\GoogleClientConfig;
 
 
-$provider = new GoogleClient([
-    'api' => getenv('GCP_API') ?: 'gemini',
-    'project_id' => getenv('GCP_PROJECT_ID') ?: null,
-    'location' => getenv('GCP_LOCATION') ?: null, // defaults to 'global'
-    'model' => getenv('GCP_MODEL') ?: 'gemini-2.5-flash',
-    'credentials' => getenv('GCP_CREDENTIALS') ?: __DIR__.'/../../vertex-ai-key.json',
-    'access_token' => getenv('GCP_ACCESS_TOKEN') ?: null,
-]);
+$provider = new GoogleClient(new GoogleClientConfig(
+    model: getenv('GCP_MODEL') ?: 'gemini-2.5-flash',
+    apiKey: getenv('GCP_API_KEY') ?: null,
+    projectId: getenv('GCP_PROJECT_ID') ?: null,
+    location: getenv('GCP_LOCATION') ?: 'global',
+    credentials: getenv('GCP_CREDENTIALS') ?: '/path/to/service-account.json',
+    accessToken: getenv('GCP_ACCESS_TOKEN') ?: null,
+    api: getenv('GCP_API') === 'vertex_ai' ? GoogleApi::VERTEX_AI : GoogleApi::GEMINI,
+));
 
 $response = $provider->chat([
     new Message('system', 'You are a helpful assistant. Keep responses concise.'),

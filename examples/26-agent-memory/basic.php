@@ -19,6 +19,7 @@ require_once __DIR__.'/../../vendor/autoload.php';
 use WebFiori\Ai\Embedding\InMemoryVectorStore;
 use WebFiori\Ai\Provider\Google\GoogleClient;
 use WebFiori\Ai\Provider\Google\GoogleClientConfig;
+use WebFiori\Ai\Rag\LocalRagProvider;
 use WebFiori\Ai\Tool\AgentMemory;
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -31,8 +32,7 @@ $embedder = new GoogleClient(new GoogleClientConfig(
 $store = new InMemoryVectorStore();
 
 $memory = new AgentMemory(
-    store: $store,
-    embedder: $embedder,
+    ragProvider: new LocalRagProvider($store, $embedder),
     minScore: 0.5,  // filter out results below 50% similarity
     topK: 5,        // return at most 5 results per recall
 );

@@ -66,7 +66,7 @@ function demonstrateMemory(AgentMemory $memory, string $label): void {
 
 $embedder = new GoogleClient(new GoogleClientConfig(
     model: 'gemini-2.5-flash',
-    apiKey: 'your-api-key',
+    credentials: getenv('GCP_CREDENTIALS') ?: '/path/to/service-account.json', api: \WebFiori\Ai\Provider\Google\GoogleApi::VERTEX_AI, projectId: getenv('GCP_PROJECT_ID') ?: 'your-project', location: getenv('GCP_LOCATION') ?: 'us-central1',
 ));
 
 $localRag = new LocalRagProvider(
