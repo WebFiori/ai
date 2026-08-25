@@ -43,6 +43,10 @@ jobs:
     name: Prepare Production Release Branch / Publish Release
     if: ${{ always() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     needs: [code-coverage, code-quality]
+    permissions:
+      contents: write
+      pull-requests: write
     uses: WebFiori/workflows/.github/workflows/release-php.yaml@v1.2.5
     with:
       branch: 'main'
+    secrets: inherit
