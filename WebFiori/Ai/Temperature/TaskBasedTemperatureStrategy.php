@@ -11,6 +11,8 @@
 namespace WebFiori\Ai\Temperature;
 
 use InvalidArgumentException;
+use WebFiori\Ai\ChatOption;
+use WebFiori\Ai\Role;
 
 /**
  * A temperature strategy that selects temperature based on task type keywords.
@@ -195,7 +197,7 @@ class TaskBasedTemperatureStrategy implements TemperatureStrategyInterface {
      */
     private function extractLastUserContent(array $messages): ?string {
         for ($i = count($messages) - 1; $i >= 0; $i--) {
-            if ($messages[$i]->getRole() === 'user') {
+            if ($messages[$i]->getRole() === Role::USER->value) {
                 return $messages[$i]->getContent();
             }
         }
@@ -238,13 +240,13 @@ class TaskBasedTemperatureStrategy implements TemperatureStrategyInterface {
      */
     private function determineCap(array $options): ?float {
         if (
-            (isset($options['json_mode']) && $options['json_mode'] === true)
-            || array_key_exists('json_schema', $options)
+            (isset($options[ChatOption::JSON_MODE]) && $options[ChatOption::JSON_MODE] === true)
+            || array_key_exists(ChatOption::JSON_SCHEMA, $options)
         ) {
             return 0.3;
         }
 
-        if (isset($options['tools']) && !empty($options['tools'])) {
+        if (isset($options[ChatOption::TOOLS]) && !empty($options[ChatOption::TOOLS])) {
             return 0.7;
         }
 

@@ -10,6 +10,7 @@
  */
 namespace WebFiori\Ai\Routing\Strategy;
 
+use WebFiori\Ai\Role;
 use WebFiori\Ai\Routing\RoutingStrategyInterface;
 
 /**
@@ -95,7 +96,7 @@ class TokenLengthStrategy implements RoutingStrategyInterface {
         $totalLength = 0;
 
         foreach ($messages as $message) {
-            if ($message->getRole() === 'user') {
+            if ($message->getRole() === Role::USER->value) {
                 $totalLength += strlen($message->getContent());
             }
         }

@@ -11,6 +11,7 @@
 namespace WebFiori\Ai\Provider\Formatter;
 
 use WebFiori\Ai\ChatResponse;
+use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\ContentPart;
 use WebFiori\Ai\EmbeddingResponse;
 use WebFiori\Ai\Exception\AuthenticationException;
@@ -27,6 +28,7 @@ use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
+use WebFiori\Ai\Role;
 use WebFiori\Ai\Tool\OpenAIBuiltInTool;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Usage;
@@ -76,7 +78,7 @@ class OpenAIFormatter implements ProviderFormatterInterface {
         string $endpointUrl,
         array $headers
     ): HttpRequest {
-        $model = $options['model'] ?? $this->config->model;
+        $model = $options[ChatOption::MODEL] ?? $this->config->model;
         $body = [
             'model' => $model,
             'messages' => $this->formatMessages($messages, $options),
@@ -96,11 +98,11 @@ class OpenAIFormatter implements ProviderFormatterInterface {
         string $endpointUrl,
         array $headers
     ): HttpRequest {
-        $model = $options['model'] ?? $this->config->embeddingModel;
+        $model = $options[ChatOption::MODEL] ?? $this->config->embeddingModel;
         $body = ['model' => $model, 'input' => $input];
 
-        if (isset($options['dimensions'])) {
-            $body['dimensions'] = $options['dimensions'];
+        if (isset($options[ChatOption::DIMENSIONS])) {
+            $body['dimensions'] = $options[ChatOption::DIMENSIONS];
         }
 
         return new HttpRequest('POST', $endpointUrl, $headers, json_encode($body));
@@ -139,7 +141,7 @@ class OpenAIFormatter implements ProviderFormatterInterface {
         string $endpointUrl,
         array $headers
     ): HttpRequest {
-        $model = $options['model'] ?? $this->config->model;
+        $model = $options[ChatOption::MODEL] ?? $this->config->model;
         $body = [
             'model' => $model,
             'messages' => $this->formatMessages($messages, $options),
@@ -202,7 +204,7 @@ class OpenAIFormatter implements ProviderFormatterInterface {
             function () use ($onComplete, &$accumulatedContent, &$model, &$finishReason)
             {
                 if ($onComplete !== null) {
-                    $message = new Message('assistant', $accumulatedContent);
+                    $message = new Message(Role::ASSISTANT, $accumulatedContent);
                     $response = new ChatResponse($message, $model, null, $finishReason);
                     $onComplete($response);
                 }
@@ -344,8 +346,8 @@ class OpenAIFormatter implements ProviderFormatterInterface {
             }
         }
 
-        if (isset($options['tools']) && count($options['tools']) > 0) {
-            $body['tools'] = $this->formatTools($options['tools']);
+        if (isset($options[ChatOption::TOOLS]) && count($options[ChatOption::TOOLS]) > 0) {
+            $body['tools'] = $this->formatTools($options[ChatOption::TOOLS]);
         }
 
         if (isset($options['built_in_tools']) && count($options['built_in_tools']) > 0) {
@@ -353,9 +355,9 @@ class OpenAIFormatter implements ProviderFormatterInterface {
             $body['tools'] = array_merge($body['tools'] ?? [], $builtIn);
         }
 
-        if (isset($options['json_schema'])) {
-            $body['response_format'] = ['type' => 'json_schema', 'json_schema' => $options['json_schema']];
-        } elseif (!empty($options['json_mode'])) {
+        if (isset($options[ChatOption::JSON_SCHEMA])) {
+            $body['response_format'] = ['type' => 'json_schema', 'json_schema' => $options[ChatOption::JSON_SCHEMA]];
+        } elseif (!empty($options[ChatOption::JSON_MODE])) {
             $body['response_format'] = ['type' => 'json_object'];
         }
     }

@@ -10,6 +10,7 @@
  */
 namespace WebFiori\Ai\Provider\Google;
 
+use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\Http\HttpRequest;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Tool\ToolInterface;
@@ -195,7 +196,7 @@ class InteractionsRequestBuilder {
         }
 
         // Tools in flat format
-        $tools = $options['tools'] ?? [];
+        $tools = $options[ChatOption::TOOLS] ?? [];
 
         if (!empty($tools)) {
             $body['tools'] = $this->formatTools($tools);
@@ -209,8 +210,8 @@ class InteractionsRequestBuilder {
         }
 
         // Stateful mode: include previous interaction ID if provided
-        if (isset($options['previous_interaction_id'])) {
-            $body['previous_interaction_id'] = $options['previous_interaction_id'];
+        if (isset($options[ChatOption::PREVIOUS_INTERACTION_ID])) {
+            $body['previous_interaction_id'] = $options[ChatOption::PREVIOUS_INTERACTION_ID];
             // In stateful mode, don't include full history in input
             unset($body['store']);
         }
@@ -228,22 +229,22 @@ class InteractionsRequestBuilder {
     private function buildGenerationConfig(array $options): array {
         $config = [];
 
-        if (isset($options['temperature'])) {
-            $config['temperature'] = $options['temperature'];
+        if (isset($options[ChatOption::TEMPERATURE])) {
+            $config['temperature'] = $options[ChatOption::TEMPERATURE];
         }
 
-        if (isset($options['max_tokens'])) {
-            $config['max_output_tokens'] = $options['max_tokens'];
+        if (isset($options[ChatOption::MAX_TOKENS])) {
+            $config['max_output_tokens'] = $options[ChatOption::MAX_TOKENS];
         }
 
-        if (isset($options['top_p'])) {
-            $config['top_p'] = $options['top_p'];
+        if (isset($options[ChatOption::TOP_P])) {
+            $config['top_p'] = $options[ChatOption::TOP_P];
         }
 
-        if (isset($options['stop'])) {
-            $config['stop_sequences'] = is_array($options['stop'])
-                ? $options['stop']
-                : [$options['stop']];
+        if (isset($options[ChatOption::STOP])) {
+            $config['stop_sequences'] = is_array($options[ChatOption::STOP])
+                ? $options[ChatOption::STOP]
+                : [$options[ChatOption::STOP]];
         }
 
         if (isset($options['thinking_level'])) {

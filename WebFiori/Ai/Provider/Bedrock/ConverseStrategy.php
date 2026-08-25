@@ -11,11 +11,13 @@
 namespace WebFiori\Ai\Provider\Bedrock;
 
 use WebFiori\Ai\ChatResponse;
+use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\ContentPart;
 use WebFiori\Ai\Exception\StreamingException;
 use WebFiori\Ai\Http\HttpRequest;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
+use WebFiori\Ai\Role;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Usage;
 
@@ -193,7 +195,7 @@ class ConverseStrategy implements InvocationStrategyInterface {
                     $parsedToolCalls[] = new ToolCall($tc['id'], $tc['name'], $args);
                 }
 
-                $message = new Message('assistant', $accumulatedContent, $parsedToolCalls);
+                $message = new Message(Role::ASSISTANT, $accumulatedContent, $parsedToolCalls);
                 $usage = new Usage($inputTokens, $outputTokens);
                 $response = new ChatResponse($message, $modelId, $usage, $finishReason ?? 'stop');
                 $onComplete($response);
@@ -233,7 +235,7 @@ class ConverseStrategy implements InvocationStrategyInterface {
             }
         }
 
-        $message = new Message('assistant', $content, $toolCalls);
+        $message = new Message(Role::ASSISTANT, $content, $toolCalls);
 
         $usage = null;
 
@@ -259,7 +261,7 @@ class ConverseStrategy implements InvocationStrategyInterface {
      * @return array The request body.
      */
     private function buildBody(array $messages, array $options, BedrockClient $client): array {
-        $maxTokens = $options['max_tokens'] ?? $client->getConfig('max_tokens', 4096);
+        $maxTokens = $options[ChatOption::MAX_TOKENS] ?? $client->getConfig('max_tokens', 4096);
 
         $body = [
             'messages' => $this->formatMessages($messages),
@@ -268,12 +270,12 @@ class ConverseStrategy implements InvocationStrategyInterface {
             ],
         ];
 
-        if (isset($options['temperature'])) {
-            $body['inferenceConfig']['temperature'] = $options['temperature'];
+        if (isset($options[ChatOption::TEMPERATURE])) {
+            $body['inferenceConfig']['temperature'] = $options[ChatOption::TEMPERATURE];
         }
 
-        if (isset($options['top_p'])) {
-            $body['inferenceConfig']['topP'] = $options['top_p'];
+        if (isset($options[ChatOption::TOP_P])) {
+            $body['inferenceConfig']['topP'] = $options[ChatOption::TOP_P];
         }
 
         $system = $this->extractSystem($messages);
@@ -282,8 +284,8 @@ class ConverseStrategy implements InvocationStrategyInterface {
             $body['system'] = $system;
         }
 
-        if (isset($options['tools']) && count($options['tools']) > 0) {
-            $body['toolConfig'] = $this->formatTools($options['tools']);
+        if (isset($options[ChatOption::TOOLS]) && count($options[ChatOption::TOOLS]) > 0) {
+            $body['toolConfig'] = $this->formatTools($options[ChatOption::TOOLS]);
         }
 
         return $body;
@@ -298,7 +300,7 @@ class ConverseStrategy implements InvocationStrategyInterface {
      */
     private function extractSystem(array $messages): ?array {
         foreach ($messages as $message) {
-            if ($message->getRole() === 'system') {
+            if ($message->getRole() === Role::SYSTEM->value) {
                 return [['text' => $message->getContent()]];
             }
         }
@@ -468,7 +470,7 @@ class ConverseStrategy implements InvocationStrategyInterface {
         $formatted = [];
 
         foreach ($messages as $message) {
-            if ($message->getRole() === 'system') {
+            if ($message->getRole() === Role::SYSTEM->value) {
                 continue;
             }
 

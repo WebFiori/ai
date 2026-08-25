@@ -12,6 +12,7 @@ namespace WebFiori\Ai\Context;
 
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\ProviderInterface;
+use WebFiori\Ai\Role;
 
 /**
  * Context window strategy that summarizes old messages instead of truncating.
@@ -240,8 +241,8 @@ class SummarizingWindowStrategy implements ContextWindowStrategyInterface {
         ));
 
         $summaryResponse = $this->summarizer->chat([
-            new Message('system', $this->prompt->getInstruction()),
-            new Message('user', $conversationText),
+            new Message(Role::SYSTEM, $this->prompt->getInstruction()),
+            new Message(Role::USER, $conversationText),
         ]);
 
         $summary = $summaryResponse->getMessage()->getContent();
@@ -264,7 +265,7 @@ class SummarizingWindowStrategy implements ContextWindowStrategyInterface {
         $nonSystemMessages = [];
 
         foreach ($messages as $message) {
-            if ($message->getRole() === 'system') {
+            if ($message->getRole() === Role::SYSTEM->value) {
                 $systemMessages[] = $message;
             } else {
                 $nonSystemMessages[] = $message;
@@ -311,7 +312,7 @@ class SummarizingWindowStrategy implements ContextWindowStrategyInterface {
 
         $summary = $this->generateSummary($split['toSummarize']);
         $summaryMessage = new Message(
-            'system',
+            Role::SYSTEM,
             $this->prompt->getSummaryPrefix().$summary
         );
 

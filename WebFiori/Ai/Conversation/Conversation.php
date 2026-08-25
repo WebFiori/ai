@@ -13,6 +13,7 @@ namespace WebFiori\Ai\Conversation;
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\ProviderInterface;
+use WebFiori\Ai\Role;
 
 /**
  * Manages a conversation with an AI provider, including history persistence.
@@ -157,7 +158,7 @@ class Conversation {
         $history = $this->storage->load($this->id);
 
         // Add user message to history
-        $userMessage = new Message('user', $content);
+        $userMessage = new Message(Role::USER, $content);
         $history[] = $userMessage;
 
         // Build messages for the provider (system + history)
@@ -234,7 +235,7 @@ class Conversation {
         $messages = [];
 
         if ($this->systemMessage !== null) {
-            $messages[] = new Message('system', $this->systemMessage);
+            $messages[] = new Message(Role::SYSTEM, $this->systemMessage);
         }
 
         return array_merge($messages, $history);

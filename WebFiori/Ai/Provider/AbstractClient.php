@@ -12,6 +12,7 @@ namespace WebFiori\Ai\Provider;
 
 use WebFiori\Ai\Audit\AuditTrait;
 use WebFiori\Ai\Cache\CacheConfig;
+use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\Cache\CachedResponse;
 use WebFiori\Ai\Cache\CacheInterface;
 use WebFiori\Ai\Cache\CacheKeyGenerator;
@@ -47,6 +48,7 @@ use WebFiori\Ai\RateLimitStatus;
 use WebFiori\Ai\Redaction\RedactionConfig;
 use WebFiori\Ai\Redaction\RedactionService;
 use WebFiori\Ai\RetryConfig;
+use WebFiori\Ai\Role;
 use WebFiori\Ai\Status;
 use WebFiori\Ai\StatusEmitterInterface;
 use WebFiori\Ai\Temperature\ChatContext;
@@ -200,27 +202,27 @@ abstract class AbstractClient implements ProviderInterface {
      *         and context exceeds the limit.
      */
     public function chat(array $messages, array $options = []): ChatResponse {
-        $model = $options['model'] ?? $this->getConfig('model');
+        $model = $options[ChatOption::MODEL] ?? $this->getConfig('model');
 
         // Resolve model alias if registry is set
         if ($this->modelAliases !== null && $model !== null) {
             $model = $this->modelAliases->resolve($model, $this->getName());
-            $options['model'] = $model;
+            $options[ChatOption::MODEL] = $model;
         }
 
         $startTime = microtime(true);
-        $autoExecute = $options['auto_execute_tools'] ?? false;
-        $temperature = $options['temperature'] ?? null;
+        $autoExecute = $options[ChatOption::AUTO_EXECUTE_TOOLS] ?? false;
+        $temperature = $options[ChatOption::TEMPERATURE] ?? null;
 
         // Apply temperature strategy if set and temperature not explicitly provided
         if ($temperature === null && $this->temperatureStrategy !== null) {
             $chatContext = new ChatContext($messages, $options);
             $temperature = $this->temperatureStrategy->temperature($chatContext);
-            $options['temperature'] = $temperature;
+            $options[ChatOption::TEMPERATURE] = $temperature;
         }
 
-        $tools = $options['tools'] ?? [];
-        $requestId = $options['request_id'] ?? uniqid('req_', true);
+        $tools = $options[ChatOption::TOOLS] ?? [];
+        $requestId = $options[ChatOption::REQUEST_ID] ?? uniqid('req_', true);
 
         $this->statusEmitter->emit(Status::PREPARING, [
             'model' => $model,
@@ -296,11 +298,11 @@ abstract class AbstractClient implements ProviderInterface {
             $this->handleErrorResponse($httpResponse);
             $response = $this->parseChatResponse($httpResponse);
 
-            $maxIterations = $options['max_tool_iterations'] ?? 10;
+            $maxIterations = $options[ChatOption::MAX_TOOL_ITERATIONS] ?? 10;
 
             if ($autoExecute && count($tools) > 0) {
                 $iteration = 0;
-                $parallelTools = $options['parallel_tool_execution'] ?? true;
+                $parallelTools = $options[ChatOption::PARALLEL_TOOL_EXECUTION] ?? true;
                 $formattedCount = count($messages); // Track how many messages are already formatted
 
                 while ($response->hasToolCalls() && $iteration < $maxIterations) {
@@ -318,7 +320,7 @@ abstract class AbstractClient implements ProviderInterface {
                         ]);
 
                         $messages[] = new Message(
-                            'tool',
+                            Role::TOOL,
                             '',
                             [],
                             new ToolResult($toolCallId, $result['output'], $result['name'], $result['parts'])
@@ -502,8 +504,8 @@ abstract class AbstractClient implements ProviderInterface {
      * @throws ProviderException If the provider returns an error.
      */
     public function embed(string|array $input, array $options = []): EmbeddingResponse {
-        $model = $options['model'] ?? $this->getConfig('embedding_model', $this->getConfig('model'));
-        $requestId = $options['request_id'] ?? uniqid('req_', true);
+        $model = $options[ChatOption::MODEL] ?? $this->getConfig('embedding_model', $this->getConfig('model'));
+        $requestId = $options[ChatOption::REQUEST_ID] ?? uniqid('req_', true);
         $startTime = microtime(true);
 
         // Check cache
@@ -711,7 +713,7 @@ abstract class AbstractClient implements ProviderInterface {
             return null;
         }
 
-        $model = $options['model'] ?? $this->getConfig('model', '');
+        $model = $options[ChatOption::MODEL] ?? $this->getConfig('model', '');
 
         // Resolve alias
         if ($this->modelAliases !== null && $model !== '') {
@@ -724,7 +726,7 @@ abstract class AbstractClient implements ProviderInterface {
 
         $inputPrice = $this->pricing->getInputPrice($model);
         $outputPrice = $this->pricing->getOutputPrice($model);
-        $maxTokens = $options['max_tokens'] ?? 1024;
+        $maxTokens = $options[ChatOption::MAX_TOKENS] ?? 1024;
 
         // Estimate prompt tokens using the token estimator
         $promptTokens = $this->tokenEstimator->countMessages($messages);
@@ -1169,16 +1171,16 @@ abstract class AbstractClient implements ProviderInterface {
         ?callable $onError = null,
         array $options = []
     ): void {
-        $model = $options['model'] ?? $this->getConfig('model');
+        $model = $options[ChatOption::MODEL] ?? $this->getConfig('model');
 
         // Resolve model alias if registry is set
         if ($this->modelAliases !== null && $model !== null) {
             $model = $this->modelAliases->resolve($model, $this->getName());
-            $options['model'] = $model;
+            $options[ChatOption::MODEL] = $model;
         }
 
-        $tools = $options['tools'] ?? [];
-        $requestId = $options['request_id'] ?? uniqid('req_', true);
+        $tools = $options[ChatOption::TOOLS] ?? [];
+        $requestId = $options[ChatOption::REQUEST_ID] ?? uniqid('req_', true);
         $startTime = microtime(true);
         $tokenCount = 0;
 

@@ -12,6 +12,7 @@ namespace WebFiori\Ai\Provider\Google;
 
 use WebFiori\Ai\ContentPart;
 use WebFiori\Ai\Message;
+use WebFiori\Ai\Role;
 use WebFiori\Ai\Tool\ToolResult;
 
 /**
@@ -41,7 +42,7 @@ class InteractionsMessageFormatter {
         $parts = [];
 
         foreach ($messages as $message) {
-            if ($message->getRole() === 'system') {
+            if ($message->getRole() === Role::SYSTEM->value) {
                 $parts[] = $message->getContent();
             }
         }
@@ -66,16 +67,16 @@ class InteractionsMessageFormatter {
             $role = $message->getRole();
 
             switch ($role) {
-                case 'system':
+                case Role::SYSTEM->value:
                     // Handled separately
                     break;
 
-                case 'user':
+                case Role::USER->value:
                     $input[] = $this->formatUserMessage($message);
 
                     break;
 
-                case 'assistant':
+                case Role::ASSISTANT->value:
                     // In stateless mode, assistant messages carry the raw steps
                     // from the previous Interactions API response so the model
                     // can see its own prior output
@@ -97,7 +98,7 @@ class InteractionsMessageFormatter {
 
                     break;
 
-                case 'tool':
+                case Role::TOOL->value:
                 case 'tool_result':
                     $result = $message->getToolResult();
 

@@ -11,6 +11,7 @@
 namespace WebFiori\Ai\Provider\Formatter;
 
 use WebFiori\Ai\ChatResponse;
+use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\ContentPart;
 use WebFiori\Ai\EmbeddingResponse;
 use WebFiori\Ai\Exception\AuthenticationException;
@@ -26,6 +27,7 @@ use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\Anthropic\AnthropicClientConfig;
+use WebFiori\Ai\Role;
 use WebFiori\Ai\Tool\AnthropicBuiltInTool;
 use WebFiori\Ai\Tool\BuiltInToolInterface;
 use WebFiori\Ai\Tool\ToolCall;
@@ -76,8 +78,8 @@ class AnthropicFormatter implements ProviderFormatterInterface {
         string $endpointUrl,
         array $headers
     ): HttpRequest {
-        $model = $options['model'] ?? $this->config->model;
-        $maxTokens = $options['max_tokens'] ?? $this->config->maxTokens;
+        $model = $options[ChatOption::MODEL] ?? $this->config->model;
+        $maxTokens = $options[ChatOption::MAX_TOKENS] ?? $this->config->maxTokens;
 
         $body = [
             'model' => $model,
@@ -136,8 +138,8 @@ class AnthropicFormatter implements ProviderFormatterInterface {
         string $endpointUrl,
         array $headers
     ): HttpRequest {
-        $model = $options['model'] ?? $this->config->model;
-        $maxTokens = $options['max_tokens'] ?? $this->config->maxTokens;
+        $model = $options[ChatOption::MODEL] ?? $this->config->model;
+        $maxTokens = $options[ChatOption::MAX_TOKENS] ?? $this->config->maxTokens;
 
         $body = [
             'model' => $model,
@@ -276,7 +278,7 @@ class AnthropicFormatter implements ProviderFormatterInterface {
             });
 
             if ($onComplete !== null) {
-                $message = new Message('assistant', $accumulatedContent);
+                $message = new Message(Role::ASSISTANT, $accumulatedContent);
 
                 if (!empty($toolCalls)) {
                     $parsedToolCalls = [];
@@ -286,7 +288,7 @@ class AnthropicFormatter implements ProviderFormatterInterface {
                         $parsedToolCalls[] = new ToolCall($tc['id'], $tc['name'], $args);
                     }
 
-                    $message = new Message('assistant', $accumulatedContent, $parsedToolCalls);
+                    $message = new Message(Role::ASSISTANT, $accumulatedContent, $parsedToolCalls);
                 }
 
                 $usage = new Usage($inputTokens, $outputTokens);
@@ -375,7 +377,7 @@ class AnthropicFormatter implements ProviderFormatterInterface {
             }
         }
 
-        $message = new Message('assistant', $content, $toolCalls);
+        $message = new Message(Role::ASSISTANT, $content, $toolCalls);
 
         $usage = null;
 
@@ -431,12 +433,12 @@ class AnthropicFormatter implements ProviderFormatterInterface {
             }
         }
 
-        if (isset($options['stop'])) {
-            $body['stop_sequences'] = is_array($options['stop']) ? $options['stop'] : [$options['stop']];
+        if (isset($options[ChatOption::STOP])) {
+            $body['stop_sequences'] = is_array($options[ChatOption::STOP]) ? $options[ChatOption::STOP] : [$options[ChatOption::STOP]];
         }
 
-        if (isset($options['tools']) && count($options['tools']) > 0) {
-            $body['tools'] = $this->formatTools($options['tools']);
+        if (isset($options[ChatOption::TOOLS]) && count($options[ChatOption::TOOLS]) > 0) {
+            $body['tools'] = $this->formatTools($options[ChatOption::TOOLS]);
         }
 
         if (isset($options['built_in_tools']) && count($options['built_in_tools']) > 0) {
@@ -444,13 +446,13 @@ class AnthropicFormatter implements ProviderFormatterInterface {
             $body['tools'] = array_merge($body['tools'] ?? [], $builtIn);
         }
 
-        if (isset($options['json_schema'])) {
-            $schemaJson = json_encode($options['json_schema'], JSON_PRETTY_PRINT);
+        if (isset($options[ChatOption::JSON_SCHEMA])) {
+            $schemaJson = json_encode($options[ChatOption::JSON_SCHEMA], JSON_PRETTY_PRINT);
             $instruction = "Respond with valid JSON only. No explanation, no markdown. Use this schema:\n{$schemaJson}";
             $body['system'] = isset($body['system'])
                 ? $body['system']."\n\n".$instruction
                 : $instruction;
-        } elseif (!empty($options['json_mode'])) {
+        } elseif (!empty($options[ChatOption::JSON_MODE])) {
             $instruction = 'Respond with valid JSON only. No explanation, no markdown fences.';
             $body['system'] = isset($body['system'])
                 ? $body['system']."\n\n".$instruction
@@ -467,7 +469,7 @@ class AnthropicFormatter implements ProviderFormatterInterface {
      */
     private function extractSystemMessage(array $messages): ?string {
         foreach ($messages as $message) {
-            if ($message->getRole() === 'system') {
+            if ($message->getRole() === Role::SYSTEM->value) {
                 return $message->getContent();
             }
         }
@@ -653,7 +655,7 @@ class AnthropicFormatter implements ProviderFormatterInterface {
         $formatted = [];
 
         foreach ($messages as $message) {
-            if ($message->getRole() === 'system') {
+            if ($message->getRole() === Role::SYSTEM->value) {
                 continue;
             }
 
