@@ -14,7 +14,7 @@
         "Embeddings",
         "Streaming"
     ],
-    "version": "0.6.0",
+    "version": "0.6.2",
     "license": "MIT",
     "require": {
         "php": ">=8.1",

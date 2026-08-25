@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.6.2](https://github.com/WebFiori/ai/compare/v0.6.0...v0.6.2) (2026-08-25)
+
+
+### Features
+
+* **context:** Add SummarizingWindowStrategy ([#121](https://github.com/WebFiori/ai/issues/121)) ([9785b4a](https://github.com/WebFiori/ai/commit/9785b4a0d5b8a5fafa4a0b8584305a213928e75a))
+* **core:** add dynamic temperature strategy ([dadb4c3](https://github.com/WebFiori/ai/commit/dadb4c310a517a21da6ca68607718f5ff89eeabe)), closes [#122](https://github.com/WebFiori/ai/issues/122)
+
+
+### Bug Fixes
+
+* **live:** Make GCP project and all credentials configurable via env vars ([580bd7c](https://github.com/WebFiori/ai/commit/580bd7c1220cc902d5e88995c15e7d3019acb888))
+
+
+### Miscellaneous Chores
+
+* Merge pull request [#126](https://github.com/WebFiori/ai/issues/126) from WebFiori/dev ([f63edf6](https://github.com/WebFiori/ai/commit/f63edf68adb111e4bc8d91f7cc98cb9c4ca3946f))
+* Merge pull request [#128](https://github.com/WebFiori/ai/issues/128) from WebFiori/dev ([6b22594](https://github.com/WebFiori/ai/commit/6b225940f91fa47d3594e6e47db5d04a561cd362))
+
 ## [0.6.0](https://github.com/WebFiori/ai/compare/v0.5.9...v0.6.0) (2026-08-23)
 
 
