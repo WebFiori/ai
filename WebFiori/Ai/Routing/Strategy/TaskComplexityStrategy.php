@@ -10,6 +10,8 @@
  */
 namespace WebFiori\Ai\Routing\Strategy;
 
+use WebFiori\Ai\ChatOption;
+use WebFiori\Ai\Role;
 use WebFiori\Ai\Routing\RoutingStrategyInterface;
 
 /**
@@ -131,7 +133,7 @@ class TaskComplexityStrategy implements RoutingStrategyInterface {
         $hasAttachments = false;
 
         foreach ($messages as $message) {
-            if ($message->getRole() === 'user') {
+            if ($message->getRole() === Role::USER->value) {
                 $text .= ' '.$message->getContent();
                 $userMessageCount++;
 
@@ -158,7 +160,7 @@ class TaskComplexityStrategy implements RoutingStrategyInterface {
         }
 
         // Signal 3: Multiple tools (agentic task)
-        $toolCount = count($options['tools'] ?? []);
+        $toolCount = count($options[ChatOption::TOOLS] ?? []);
 
         if ($toolCount >= 3) {
             $score++;

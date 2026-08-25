@@ -11,6 +11,7 @@
 namespace WebFiori\Ai\Provider\Google;
 
 use WebFiori\Ai\ChatResponse;
+use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\ContentPart;
 use WebFiori\Ai\EmbeddingResponse;
 use WebFiori\Ai\Exception\AuthenticationException;
@@ -28,6 +29,7 @@ use WebFiori\Ai\ImageRequest;
 use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\AbstractClient;
+use WebFiori\Ai\Role;
 use WebFiori\Ai\Provider\Anthropic\AnthropicClientConfig;
 use WebFiori\Ai\Provider\Formatter\AnthropicFormatter;
 use WebFiori\Ai\Provider\Formatter\OpenAIFormatter;
@@ -201,30 +203,30 @@ class GoogleClient extends AbstractClient {
     private function buildGenerationConfig(array $options): array {
         $config = [];
 
-        if (isset($options['temperature'])) {
-            $config['temperature'] = $options['temperature'];
+        if (isset($options[ChatOption::TEMPERATURE])) {
+            $config['temperature'] = $options[ChatOption::TEMPERATURE];
         }
 
-        if (isset($options['max_tokens'])) {
-            $config['maxOutputTokens'] = $options['max_tokens'];
+        if (isset($options[ChatOption::MAX_TOKENS])) {
+            $config['maxOutputTokens'] = $options[ChatOption::MAX_TOKENS];
         }
 
-        if (isset($options['top_p'])) {
-            $config['topP'] = $options['top_p'];
+        if (isset($options[ChatOption::TOP_P])) {
+            $config['topP'] = $options[ChatOption::TOP_P];
         }
 
-        if (isset($options['stop'])) {
-            $config['stopSequences'] = is_array($options['stop']) ? $options['stop'] : [$options['stop']];
+        if (isset($options[ChatOption::STOP])) {
+            $config['stopSequences'] = is_array($options[ChatOption::STOP]) ? $options[ChatOption::STOP] : [$options[ChatOption::STOP]];
         }
 
         // Structured output / JSON mode
         // Options:
         //   'json_mode' => true                        → plain JSON output
         //   'json_schema' => ['type' => 'object', ...] → JSON with schema validation
-        if (isset($options['json_schema'])) {
+        if (isset($options[ChatOption::JSON_SCHEMA])) {
             $config['responseMimeType'] = 'application/json';
-            $config['responseSchema'] = $options['json_schema'];
-        } elseif (!empty($options['json_mode'])) {
+            $config['responseSchema'] = $options[ChatOption::JSON_SCHEMA];
+        } elseif (!empty($options[ChatOption::JSON_MODE])) {
             $config['responseMimeType'] = 'application/json';
         }
 
@@ -325,7 +327,7 @@ class GoogleClient extends AbstractClient {
             });
 
             if ($onComplete !== null) {
-                $message = new Message('assistant', $accumulatedContent);
+                $message = new Message(Role::ASSISTANT, $accumulatedContent);
                 $response = new ChatResponse($message, $model, $usage, $finishReason);
                 $onComplete($response);
             }
@@ -456,7 +458,7 @@ class GoogleClient extends AbstractClient {
         try {
             $this->getHttpClient()->sendStreaming($request, $processChunk);
 
-            $message = new Message('assistant', $accumulatedContent, $toolCalls);
+            $message = new Message(Role::ASSISTANT, $accumulatedContent, $toolCalls);
 
             if (!empty($allSteps)) {
                 $message->setRawSteps($allSteps);
@@ -487,7 +489,7 @@ class GoogleClient extends AbstractClient {
      */
     private function extractSystemInstruction(array $messages): ?array {
         foreach ($messages as $message) {
-            if ($message->getRole() === 'system') {
+            if ($message->getRole() === Role::SYSTEM->value) {
                 return [
                     'parts' => [['text' => $message->getContent()]],
                 ];
@@ -704,7 +706,7 @@ class GoogleClient extends AbstractClient {
             $role = $message->getRole();
 
             // System messages are handled via systemInstruction
-            if ($role === 'system') {
+            if ($role === Role::SYSTEM->value) {
                 continue;
             }
 
@@ -1384,7 +1386,7 @@ class GoogleClient extends AbstractClient {
      * @return HttpRequest The HTTP request to send.
      */
     protected function buildChatRequest(array $messages, array $options): HttpRequest {
-        $model = $options['model'] ?? $this->getConfig('model', 'gemini-2.5-flash');
+        $model = $options[ChatOption::MODEL] ?? $this->getConfig('model', 'gemini-2.5-flash');
 
         // Route to publisher-specific formatter for Vertex AI Model Garden
         if ($this->publisherFormatter !== null) {
@@ -1422,7 +1424,7 @@ class GoogleClient extends AbstractClient {
             $body['generationConfig'] = $generationConfig;
         }
 
-        $customTools = $options['tools'] ?? [];
+        $customTools = $options[ChatOption::TOOLS] ?? [];
         $builtInTools = $options['built_in_tools'] ?? [];
 
         if (count($customTools) > 0 || count($builtInTools) > 0) {
@@ -1446,7 +1448,7 @@ class GoogleClient extends AbstractClient {
      * @return HttpRequest The HTTP request to send.
      */
     protected function buildEmbedRequest(string|array $input, array $options): HttpRequest {
-        $model = $options['model'] ?? $this->getConfig('embedding_model', 'text-embedding-004');
+        $model = $options[ChatOption::MODEL] ?? $this->getConfig('embedding_model', 'text-embedding-004');
         $texts = is_array($input) ? $input : [$input];
 
         if ($this->isGeminiApi()) {
@@ -1615,7 +1617,7 @@ class GoogleClient extends AbstractClient {
      * @return HttpRequest The HTTP request to send.
      */
     protected function buildStreamChatRequest(array $messages, array $options): HttpRequest {
-        $model = $options['model'] ?? $this->getConfig('model', 'gemini-2.5-flash');
+        $model = $options[ChatOption::MODEL] ?? $this->getConfig('model', 'gemini-2.5-flash');
 
         // Route to publisher-specific formatter for Vertex AI Model Garden
         if ($this->publisherFormatter !== null) {
@@ -1653,7 +1655,7 @@ class GoogleClient extends AbstractClient {
             $body['generationConfig'] = $generationConfig;
         }
 
-        $customTools = $options['tools'] ?? [];
+        $customTools = $options[ChatOption::TOOLS] ?? [];
         $builtInTools = $options['built_in_tools'] ?? [];
 
         if (count($customTools) > 0 || count($builtInTools) > 0) {
@@ -1780,7 +1782,7 @@ class GoogleClient extends AbstractClient {
 
         if (empty($candidates)) {
             return new ChatResponse(
-                new Message('assistant', ''),
+                new Message(Role::ASSISTANT, ''),
                 $this->getConfig('model', 'gemini-2.5-flash'),
                 null,
                 null
@@ -1824,7 +1826,7 @@ class GoogleClient extends AbstractClient {
         }
 
         $message = new Message(
-            'assistant',
+            Role::ASSISTANT,
             $content,
             $toolCalls
         );
@@ -1836,7 +1838,7 @@ class GoogleClient extends AbstractClient {
             $renderedContent = $candidate['groundingMetadata']['searchEntryPoint']['renderedContent'] ?? '';
 
             if ($renderedContent !== '') {
-                $message = new Message('assistant', $renderedContent, []);
+                $message = new Message(Role::ASSISTANT, $renderedContent, []);
             }
         }
 

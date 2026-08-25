@@ -11,6 +11,7 @@
 namespace WebFiori\Ai\Routing;
 
 use WebFiori\Ai\ChatResponse;
+use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\EmbeddingResponse;
 use WebFiori\Ai\HealthCheckResult;
 use WebFiori\Ai\Http\HttpClientInterface;
@@ -192,7 +193,7 @@ class ModelRouter implements ProviderInterface {
         $this->emitRoute($result);
 
         // Inject tier name as model option so the provider's ModelAliases can resolve it
-        $options['model'] = $options['model'] ?? $result->getTier();
+        $options[ChatOption::MODEL] = $options[ChatOption::MODEL] ?? $result->getTier();
 
         return $result->getProvider()->chat($messages, $options);
     }
@@ -457,7 +458,7 @@ class ModelRouter implements ProviderInterface {
         $result = $this->resolve($messages, $options);
         $this->emitRoute($result);
 
-        $options['model'] = $options['model'] ?? $result->getTier();
+        $options[ChatOption::MODEL] = $options[ChatOption::MODEL] ?? $result->getTier();
 
         $result->getProvider()->streamChat($messages, $onToken, $onComplete, $onError, $options);
     }
@@ -576,7 +577,7 @@ class ModelRouter implements ProviderInterface {
         }
 
         // 2. Per-call force_provider option
-        $forceOption = $options['force_provider'] ?? null;
+        $forceOption = $options[ChatOption::FORCE_PROVIDER] ?? null;
 
         if ($forceOption !== null && isset($this->providers[$forceOption])) {
             return new RouteResult(

@@ -10,6 +10,7 @@
  */
 namespace WebFiori\Ai\Cache;
 
+use WebFiori\Ai\ChatOption;
 /**
  * Generates deterministic cache keys for AI requests.
  *
@@ -57,7 +58,7 @@ class CacheKeyGenerator {
             'provider' => $provider,
             'model' => $model,
             'input' => $input,
-            'dimensions' => $options['dimensions'] ?? null,
+            'dimensions' => $options[ChatOption::DIMENSIONS] ?? null,
         ];
 
         return 'embed_'.hash('sha256', json_encode($data));

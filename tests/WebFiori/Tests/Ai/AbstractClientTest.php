@@ -24,6 +24,7 @@ use WebFiori\Ai\ImageResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\AbstractClient;
 use WebFiori\Ai\Provider\ClientConfig;
+use WebFiori\Ai\Temperature\FixedTemperatureStrategy;
 use WebFiori\Ai\Usage;
 
 /**
@@ -194,6 +195,84 @@ class AbstractClientTest extends TestCase {
         $provider->setHttpClient($client);
 
         $this->assertSame($client, $provider->getHttpClient());
+    }
+
+    /**
+     * @test
+     */
+    public function testTemperatureStrategyAppliesWhenNoExplicitTemperature() {
+        $client = new FakeHttpClient();
+        $client->addResponse(new HttpResponse(200, [], json_encode([
+            'content' => 'OK',
+            'model' => 'test-model',
+            'prompt_tokens' => 1,
+            'completion_tokens' => 1,
+        ])));
+
+        $provider = $this->createTestProvider(['model' => 'test-model']);
+        $provider->setHttpClient($client);
+        $provider->setTemperatureStrategy(new FixedTemperatureStrategy(0.4));
+
+        $provider->chat([new Message('user', 'Hi')]);
+
+        $body = json_decode($client->getLastRequest()->getBody(), true);
+        $this->assertEquals(0.4, $body['temperature']);
+    }
+
+    /**
+     * @test
+     */
+    public function testTemperatureStrategySkippedWhenExplicitTemperatureSet() {
+        $client = new FakeHttpClient();
+        $client->addResponse(new HttpResponse(200, [], json_encode([
+            'content' => 'OK',
+            'model' => 'test-model',
+            'prompt_tokens' => 1,
+            'completion_tokens' => 1,
+        ])));
+
+        $provider = $this->createTestProvider(['model' => 'test-model']);
+        $provider->setHttpClient($client);
+        $provider->setTemperatureStrategy(new FixedTemperatureStrategy(0.4));
+
+        $provider->chat([new Message('user', 'Hi')], ['temperature' => 0.8]);
+
+        $body = json_decode($client->getLastRequest()->getBody(), true);
+        $this->assertEquals(0.8, $body['temperature']);
+    }
+
+    /**
+     * @test
+     */
+    public function testNoTemperatureStrategyByDefault() {
+        $provider = $this->createTestProvider(['model' => 'test-model']);
+        $this->assertNull($provider->getTemperatureStrategy());
+    }
+
+    /**
+     * @test
+     */
+    public function testSetAndGetTemperatureStrategy() {
+        $provider = $this->createTestProvider(['model' => 'test-model']);
+        $strategy = new FixedTemperatureStrategy(0.7);
+
+        $provider->setTemperatureStrategy($strategy);
+
+        $this->assertSame($strategy, $provider->getTemperatureStrategy());
+    }
+
+    /**
+     * @test
+     */
+    public function testSetTemperatureStrategyToNull() {
+        $provider = $this->createTestProvider(['model' => 'test-model']);
+        $strategy = new FixedTemperatureStrategy(0.5);
+
+        $provider->setTemperatureStrategy($strategy);
+        $this->assertSame($strategy, $provider->getTemperatureStrategy());
+
+        $provider->setTemperatureStrategy(null);
+        $this->assertNull($provider->getTemperatureStrategy());
     }
 
     /**

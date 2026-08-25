@@ -22,12 +22,21 @@ use WebFiori\Ai\Tool\ToolResult;
  *
  * Basic usage:
  * ```php
+ * $message = new Message(Role::USER, 'Hello, world!');
+ * // or with string (backward compatible):
  * $message = new Message('user', 'Hello, world!');
+ * ```
+ *
+ * Static factory methods:
+ * ```php
+ * $message = Message::user('Hello, world!');
+ * $message = Message::system('You are a helpful assistant.');
+ * $message = Message::assistant('Sure, I can help!');
  * ```
  *
  * Multi-modal usage:
  * ```php
- * $message = new Message('user', [
+ * $message = Message::user([
  *     ContentPart::text('What is in this image?'),
  *     ContentPart::imageUrl('https://example.com/photo.jpg'),
  * ]);
@@ -91,8 +100,8 @@ class Message {
     /**
      * Creates a new message instance.
      *
-     * @param string $role The role of the message sender. Valid values are
-     *        'system', 'user', 'assistant', and 'tool'.
+     * @param string|Role $role The role of the message sender. Accepts a Role
+     *        enum case or a string ('system', 'user', 'assistant', 'tool').
      * @param string|ContentPart[] $content The message content. Can be a string
      *        for text-only messages, or an array of ContentPart objects for
      *        multi-modal messages containing text and images.
@@ -102,12 +111,12 @@ class Message {
      *        Only applicable for tool messages.
      */
     public function __construct(
-        string $role,
+        string|Role $role,
         string|array $content,
         array $toolCalls = [],
         ?ToolResult $toolResult = null
     ) {
-        $this->role = $role;
+        $this->role = $role instanceof Role ? $role->value : $role;
         $this->toolCalls = $toolCalls;
         $this->toolResult = $toolResult;
 
@@ -120,6 +129,51 @@ class Message {
             $this->contentParts = [];
             $this->content = $content;
         }
+    }
+
+    /**
+     * Creates a new assistant message.
+     *
+     * @param string|ContentPart[] $content The message content.
+     * @param ToolCall[] $toolCalls Tool calls requested by the assistant.
+     *
+     * @return self The assistant message.
+     */
+    public static function assistant(string|array $content, array $toolCalls = []): self {
+        return new self(Role::ASSISTANT, $content, $toolCalls);
+    }
+
+    /**
+     * Creates a new system message.
+     *
+     * @param string|ContentPart[] $content The system instruction content.
+     *
+     * @return self The system message.
+     */
+    public static function system(string|array $content): self {
+        return new self(Role::SYSTEM, $content);
+    }
+
+    /**
+     * Creates a new tool result message.
+     *
+     * @param ToolResult $toolResult The tool execution result.
+     *
+     * @return self The tool message.
+     */
+    public static function tool(ToolResult $toolResult): self {
+        return new self(Role::TOOL, '', [], $toolResult);
+    }
+
+    /**
+     * Creates a new user message.
+     *
+     * @param string|ContentPart[] $content The user message content.
+     *
+     * @return self The user message.
+     */
+    public static function user(string|array $content): self {
+        return new self(Role::USER, $content);
     }
 
     /**

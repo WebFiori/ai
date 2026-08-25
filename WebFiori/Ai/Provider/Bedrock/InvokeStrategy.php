@@ -11,12 +11,14 @@
 namespace WebFiori\Ai\Provider\Bedrock;
 
 use WebFiori\Ai\ChatResponse;
+use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\ContentPart;
 use WebFiori\Ai\Exception\StreamingException;
 use WebFiori\Ai\Http\HttpRequest;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Http\SseParser;
 use WebFiori\Ai\Message;
+use WebFiori\Ai\Role;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Usage;
@@ -50,7 +52,7 @@ class InvokeStrategy implements InvocationStrategyInterface {
         array $options,
         BedrockClient $client
     ): HttpRequest {
-        $maxTokens = $options['max_tokens'] ?? $client->getConfig('max_tokens', 4096);
+        $maxTokens = $options[ChatOption::MAX_TOKENS] ?? $client->getConfig('max_tokens', 4096);
         $body = $this->buildModelBody($modelId, $messages, $maxTokens, $options);
         $url = $client->getBedrockEndpoint($modelId, 'invoke');
         $jsonBody = json_encode($body);
@@ -79,7 +81,7 @@ class InvokeStrategy implements InvocationStrategyInterface {
         array $options,
         BedrockClient $client
     ): HttpRequest {
-        $maxTokens = $options['max_tokens'] ?? $client->getConfig('max_tokens', 4096);
+        $maxTokens = $options[ChatOption::MAX_TOKENS] ?? $client->getConfig('max_tokens', 4096);
         $body = $this->buildModelBody($modelId, $messages, $maxTokens, $options);
         $url = $client->getBedrockEndpoint($modelId, 'invoke-with-response-stream');
         $jsonBody = json_encode($body);
@@ -170,7 +172,7 @@ class InvokeStrategy implements InvocationStrategyInterface {
             });
 
             if ($onComplete !== null) {
-                $message = new Message('assistant', $accumulatedContent);
+                $message = new Message(Role::ASSISTANT, $accumulatedContent);
                 $usage = new Usage($inputTokens, $outputTokens);
                 $response = new ChatResponse($message, $modelId, $usage, $finishReason ?? 'stop');
                 $onComplete($response);
@@ -202,7 +204,7 @@ class InvokeStrategy implements InvocationStrategyInterface {
 
         // Llama/Mistral format
         $content = $data['generation'] ?? '';
-        $message = new Message('assistant', $content);
+        $message = new Message(Role::ASSISTANT, $content);
         $finishReason = isset($data['stop_reason']) ? 'stop' : null;
 
         return new ChatResponse($message, $modelId, null, $finishReason);
@@ -222,7 +224,7 @@ class InvokeStrategy implements InvocationStrategyInterface {
         $formatted = [];
 
         foreach ($messages as $message) {
-            if ($message->getRole() === 'system') {
+            if ($message->getRole() === Role::SYSTEM->value) {
                 $system = $message->getContent();
 
                 continue;
@@ -291,12 +293,12 @@ class InvokeStrategy implements InvocationStrategyInterface {
             $body['system'] = $system;
         }
 
-        if (isset($options['temperature'])) {
-            $body['temperature'] = $options['temperature'];
+        if (isset($options[ChatOption::TEMPERATURE])) {
+            $body['temperature'] = $options[ChatOption::TEMPERATURE];
         }
 
-        if (isset($options['tools']) && count($options['tools']) > 0) {
-            $body['tools'] = $this->formatAnthropicTools($options['tools']);
+        if (isset($options[ChatOption::TOOLS]) && count($options[ChatOption::TOOLS]) > 0) {
+            $body['tools'] = $this->formatAnthropicTools($options[ChatOption::TOOLS]);
         }
 
         return $body;
@@ -322,9 +324,9 @@ class InvokeStrategy implements InvocationStrategyInterface {
             $role = $message->getRole();
             $content = $message->getContent(); // getText only, images ignored
 
-            if ($role === 'system') {
+            if ($role === Role::SYSTEM->value) {
                 $prompt .= "[INST] <<SYS>>\n$content\n<</SYS>>\n\n";
-            } elseif ($role === 'user') {
+            } elseif ($role === Role::USER->value) {
                 $prompt .= "$content [/INST]\n";
             } else {
                 $prompt .= "$content\n[INST] ";
@@ -334,7 +336,7 @@ class InvokeStrategy implements InvocationStrategyInterface {
         return [
             'prompt' => $prompt,
             'max_gen_len' => $maxTokens,
-            'temperature' => $options['temperature'] ?? 0.7,
+            'temperature' => $options[ChatOption::TEMPERATURE] ?? 0.7,
         ];
     }
 
@@ -576,7 +578,7 @@ class InvokeStrategy implements InvocationStrategyInterface {
             }
         }
 
-        $message = new Message('assistant', $content, $toolCalls);
+        $message = new Message(Role::ASSISTANT, $content, $toolCalls);
 
         $usage = null;
 

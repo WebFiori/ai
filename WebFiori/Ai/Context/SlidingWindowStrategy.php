@@ -11,6 +11,7 @@
 namespace WebFiori\Ai\Context;
 
 use WebFiori\Ai\Message;
+use WebFiori\Ai\Role;
 use WebFiori\Ai\Tool\ToolInterface;
 
 /**
@@ -147,7 +148,7 @@ class SlidingWindowStrategy implements ContextWindowStrategyInterface {
 
         // Separate system message from others
         foreach ($messages as $message) {
-            if ($message->getRole() === 'system' && $this->preserveSystemMessage) {
+            if ($message->getRole() === Role::SYSTEM->value && $this->preserveSystemMessage) {
                 $systemMessage = $message;
                 $systemTokens = $this->tokenEstimator->countMessage($message);
             } else {
@@ -194,7 +195,7 @@ class SlidingWindowStrategy implements ContextWindowStrategyInterface {
      */
     private function extractSystemMessage(array $messages): array {
         foreach ($messages as $message) {
-            if ($message->getRole() === 'system') {
+            if ($message->getRole() === Role::SYSTEM->value) {
                 return [$message];
             }
         }

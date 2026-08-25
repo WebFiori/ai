@@ -11,6 +11,7 @@
 namespace WebFiori\Ai\Rag;
 
 use WebFiori\Ai\Cache\CacheInterface;
+use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\Embedding\VectorStorageInterface;
 use WebFiori\Ai\MetricsTrait;
 use WebFiori\Ai\Provider\ProviderInterface;
@@ -97,8 +98,8 @@ class Retriever implements RetrieverInterface {
         $this->provider = $provider;
         $this->store = $store;
 
-        if (isset($options['embedding_model'])) {
-            $this->embeddingModel = $options['embedding_model'];
+        if (isset($options[ChatOption::EMBEDDING_MODEL])) {
+            $this->embeddingModel = $options[ChatOption::EMBEDDING_MODEL];
         }
 
         if (isset($options['min_score'])) {
@@ -239,7 +240,7 @@ class Retriever implements RetrieverInterface {
         $options = [];
 
         if ($this->embeddingModel !== null) {
-            $options['model'] = $this->embeddingModel;
+            $options[ChatOption::MODEL] = $this->embeddingModel;
         }
 
         $response = $this->provider->embed($query, $options);

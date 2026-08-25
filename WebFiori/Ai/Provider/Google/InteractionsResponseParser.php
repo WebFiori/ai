@@ -12,6 +12,7 @@ namespace WebFiori\Ai\Provider\Google;
 
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\Message;
+use WebFiori\Ai\Role;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Usage;
 
@@ -95,7 +96,7 @@ class InteractionsResponseParser {
             }
         }
 
-        $message = new Message('assistant', $content, $toolCalls);
+        $message = new Message(Role::ASSISTANT, $content, $toolCalls);
 
         // Store raw steps on the message so stateless follow-up turns
         // can replay the model's full output (including thoughts and function_calls)

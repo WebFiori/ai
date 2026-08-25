@@ -11,6 +11,7 @@
 namespace WebFiori\Ai\Provider\Bedrock;
 
 use WebFiori\Ai\ChatResponse;
+use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\EmbeddingResponse;
 use WebFiori\Ai\Exception\AuthenticationException;
 use WebFiori\Ai\Exception\InvalidConfigException;
@@ -268,7 +269,7 @@ class BedrockClient extends AbstractClient {
      * @return HttpRequest The HTTP request to send.
      */
     protected function buildChatRequest(array $messages, array $options): HttpRequest {
-        $modelId = $options['model'] ?? $this->getConfig('model', 'anthropic.claude-3-5-sonnet-20241022-v2:0');
+        $modelId = $options[ChatOption::MODEL] ?? $this->getConfig('model', 'anthropic.claude-3-5-sonnet-20241022-v2:0');
 
         return $this->strategy->buildChatRequest($modelId, $messages, $options, $this);
     }
@@ -317,7 +318,7 @@ class BedrockClient extends AbstractClient {
      * @return HttpRequest The HTTP request to send.
      */
     protected function buildStreamChatRequest(array $messages, array $options): HttpRequest {
-        $modelId = $options['model'] ?? $this->getConfig('model', 'anthropic.claude-3-5-sonnet-20241022-v2:0');
+        $modelId = $options[ChatOption::MODEL] ?? $this->getConfig('model', 'anthropic.claude-3-5-sonnet-20241022-v2:0');
 
         return $this->strategy->buildStreamChatRequest($modelId, $messages, $options, $this);
     }
