@@ -11,15 +11,15 @@
 namespace WebFiori\Ai\Rag;
 
 /**
- * Configuration for Vertex AI Search (Discovery Engine) RAG provider.
+ * Configuration for Google Search (Discovery Engine) RAG provider.
  *
- * Holds all connection parameters needed to interact with a Vertex AI Search
+ * Holds all connection parameters needed to interact with a Google Search
  * data store, including project, location, data store ID, and authentication
  * credentials.
  *
  * Example:
  * ```php
- * $config = new VertexAISearchConfig(
+ * $config = new GoogleSearchConfig(
  *     projectId: 'my-gcp-project',
  *     location: 'global',
  *     dataStoreId: 'my-datastore-id',
@@ -29,12 +29,12 @@ namespace WebFiori\Ai\Rag;
  *
  * @author Ibrahim
  */
-class VertexAISearchConfig {
+class GoogleSearchConfig {
     /**
      * The collection ID within the data store.
      *
      * Defaults to 'default_collection' which is the standard collection
-     * created by Vertex AI Search.
+     * created by Google Search.
      *
      * @var string
      */
@@ -53,7 +53,7 @@ class VertexAISearchConfig {
     public readonly string|array|null $credentials;
 
     /**
-     * The Vertex AI Search data store ID.
+     * The Google Search data store ID.
      *
      * This is the unique identifier of the data store within the project
      * and location.
@@ -79,11 +79,11 @@ class VertexAISearchConfig {
     public readonly string $projectId;
 
     /**
-     * Creates a new VertexAISearchConfig instance.
+     * Creates a new GoogleSearchConfig instance.
      *
      * @param string $projectId The Google Cloud project ID.
      * @param string $location The GCP region/location (e.g., 'global', 'us').
-     * @param string $dataStoreId The Vertex AI Search data store ID.
+     * @param string $dataStoreId The Google Search data store ID.
      * @param string|array<string, mixed>|null $credentials Path to service account JSON,
      *        credentials array, or null for Application Default Credentials (ADC).
      * @param string $collectionId The collection ID within the data store.

@@ -10,7 +10,7 @@ declare(strict_types=1);
  * Demonstrates:
  * 1. AgentMemory accepting any RagProviderInterface implementation
  * 2. Using remember/recall/forget with LocalRagProvider
- * 3. How the same code works with VertexAISearchProvider (provider swap)
+ * 3. How the same code works with GoogleSearchProvider (provider swap)
  * 4. Superseding (updating) memories
  */
 require_once __DIR__.'/../../vendor/autoload.php';
@@ -18,10 +18,10 @@ require_once __DIR__.'/../../vendor/autoload.php';
 use WebFiori\Ai\Embedding\InMemoryVectorStore;
 use WebFiori\Ai\Provider\Google\GoogleClient;
 use WebFiori\Ai\Provider\Google\GoogleClientConfig;
+use WebFiori\Ai\Rag\GoogleSearchConfig;
+use WebFiori\Ai\Rag\GoogleSearchProvider;
 use WebFiori\Ai\Rag\LocalRagProvider;
 use WebFiori\Ai\Rag\RagProviderInterface;
-use WebFiori\Ai\Rag\VertexAISearchConfig;
-use WebFiori\Ai\Rag\VertexAISearchProvider;
 use WebFiori\Ai\Tool\AgentMemory;
 
 // ─── Helper: demonstrate AgentMemory with any RagProviderInterface ───────────
@@ -117,14 +117,14 @@ $localMemory = new AgentMemory(
 demonstrateMemory($localMemory, 'LocalRagProvider');
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Example 2: AgentMemory with VertexAISearchProvider (same interface)
+// Example 2: AgentMemory with GoogleSearchProvider (same interface)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // The same AgentMemory code works with any RagProviderInterface.
-// Swap LocalRagProvider for VertexAISearchProvider — zero code changes.
+// Swap LocalRagProvider for GoogleSearchProvider — zero code changes.
 
 /*
-$vertexRag = new VertexAISearchProvider(new VertexAISearchConfig(
+$vertexRag = new GoogleSearchProvider(new GoogleSearchConfig(
     projectId: 'my-gcp-project',
     location: 'global',
     dataStoreId: 'my-memory-datastore',
@@ -138,16 +138,16 @@ $vertexMemory = new AgentMemory(
 );
 
 // Exactly the same API — backed by managed cloud infrastructure
-demonstrateMemory($vertexMemory, 'VertexAISearchProvider');
+demonstrateMemory($vertexMemory, 'GoogleSearchProvider');
 */
 
 echo "─── Provider Swap Demonstration ───\n\n";
 echo "The code above shows that AgentMemory accepts any RagProviderInterface.\n";
-echo "Switch from LocalRagProvider to VertexAISearchProvider by changing one line:\n\n";
+echo "Switch from LocalRagProvider to GoogleSearchProvider by changing one line:\n\n";
 echo "  // Local (development/testing)\n";
 echo "  \$memory = new AgentMemory(new LocalRagProvider(\$store, \$embedder));\n\n";
 echo "  // Cloud (production)\n";
-echo "  \$memory = new AgentMemory(new VertexAISearchProvider(\$config));\n\n";
+echo "  \$memory = new AgentMemory(new GoogleSearchProvider(\$config));\n\n";
 echo "All remember/recall/forget calls remain identical.\n";
 
 // ─── Factory pattern for environment-based provider selection ─────────────────
@@ -162,7 +162,7 @@ function createRagProvider(): RagProviderInterface {
 
     if ($env === 'production') {
         // Production: use managed Vertex AI Search
-        return new VertexAISearchProvider(new VertexAISearchConfig(
+        return new GoogleSearchProvider(new GoogleSearchConfig(
             projectId: getenv('GCP_PROJECT_ID') ?: 'my-project',
             location: 'global',
             dataStoreId: getenv('VERTEX_DATASTORE_ID') ?: 'my-datastore',

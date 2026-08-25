@@ -3,35 +3,35 @@
 declare(strict_types=1);
 
 /**
- * Example 27: RAG Providers — VertexAISearchProvider
+ * Example 27: RAG Providers — GoogleSearchProvider
  *
  * Run: php examples/27-rag-providers/vertex_ai.php
  *
  * Demonstrates:
- * 1. Configuring VertexAISearchProvider with explicit credentials
+ * 1. Configuring GoogleSearchProvider with explicit credentials
  * 2. Using Application Default Credentials (ADC) — null credentials
- * 3. Retrieving documents from a Vertex AI Search data store
+ * 3. Retrieving documents from a Google Search data store
  * 4. Ingesting a document into the data store
  * 5. Using the provider with AgentMemory
  *
  * Prerequisites:
- * - A Vertex AI Search data store created in Google Cloud Console
+ * - A Google Search data store created in Google Cloud Console
  * - Service account with "Discovery Engine Editor" role, or ADC configured
  * - For ADC: run `gcloud auth application-default login` or set
  *   GOOGLE_APPLICATION_CREDENTIALS env var
  */
 require_once __DIR__.'/../../vendor/autoload.php';
 
-use WebFiori\Ai\Rag\VertexAISearchConfig;
-use WebFiori\Ai\Rag\VertexAISearchProvider;
+use WebFiori\Ai\Rag\GoogleSearchConfig;
+use WebFiori\Ai\Rag\GoogleSearchProvider;
 use WebFiori\Ai\Tool\AgentMemory;
 
 // ─── Option A: Explicit service account credentials ──────────────────────────
 
-echo "═══ VertexAISearchProvider Example ═══\n\n";
+echo "═══ GoogleSearchProvider Example ═══\n\n";
 echo "─── With Explicit Credentials ───\n\n";
 
-$configExplicit = new VertexAISearchConfig(
+$configExplicit = new GoogleSearchConfig(
     projectId: 'my-gcp-project',
     location: 'global',            // or 'us', 'eu', 'us-central1', etc.
     dataStoreId: 'my-datastore-id',
@@ -39,7 +39,7 @@ $configExplicit = new VertexAISearchConfig(
     collectionId: 'default_collection', // default value, usually unchanged
 );
 
-$providerExplicit = new VertexAISearchProvider($configExplicit);
+$providerExplicit = new GoogleSearchProvider($configExplicit);
 
 echo "Created provider with explicit service account credentials.\n";
 echo "  Project:    {$configExplicit->projectId}\n";
@@ -50,14 +50,14 @@ echo "  Data Store: {$configExplicit->dataStoreId}\n";
 
 echo "\n─── With Application Default Credentials (ADC) ───\n\n";
 
-$configAdc = new VertexAISearchConfig(
+$configAdc = new GoogleSearchConfig(
     projectId: 'my-gcp-project',
     location: 'global',
     dataStoreId: 'my-datastore-id',
     credentials: null, // Uses ADC: GOOGLE_APPLICATION_CREDENTIALS or gcloud auth
 );
 
-$providerAdc = new VertexAISearchProvider($configAdc);
+$providerAdc = new GoogleSearchProvider($configAdc);
 
 echo "Created provider with ADC (credentials: null).\n";
 echo "  This uses GOOGLE_APPLICATION_CREDENTIALS env var or `gcloud auth`.\n";
@@ -132,7 +132,7 @@ echo "Deleted document: {$documentId}\n";
 
 echo "\n─── Using with AgentMemory ───\n\n";
 
-// AgentMemory can use VertexAISearchProvider as its backing store.
+// AgentMemory can use GoogleSearchProvider as its backing store.
 // This gives the agent long-term memory backed by a managed search service.
 
 $memory = new AgentMemory(
@@ -141,7 +141,7 @@ $memory = new AgentMemory(
     topK: 5,
 );
 
-// Remember facts — stored in Vertex AI Search
+// Remember facts — stored in Google Search
 $memoryId = $memory->remember(
     'The user prefers PHP 8.4 with strict typing enabled.',
     ['context' => 'user-preference', 'session' => 'abc123'],

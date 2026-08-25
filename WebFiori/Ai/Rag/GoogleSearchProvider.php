@@ -16,22 +16,22 @@ use WebFiori\Ai\Http\HttpClientInterface;
 use WebFiori\Ai\Http\HttpRequest;
 
 /**
- * RAG provider backed by Vertex AI Search (Discovery Engine).
+ * RAG provider backed by Google Search (Discovery Engine).
  *
  * Uses the Google Discovery Engine API to search, ingest, and delete
- * documents in a Vertex AI Search data store. Authentication is handled
+ * documents in a Google Search data store. Authentication is handled
  * via {@see GoogleAuth} supporting service accounts and ADC.
  *
  * Example:
  * ```php
- * $config = new VertexAISearchConfig(
+ * $config = new GoogleSearchConfig(
  *     projectId: 'my-project',
  *     location: 'global',
  *     dataStoreId: 'my-datastore',
  *     credentials: '/path/to/service-account.json',
  * );
  *
- * $provider = new VertexAISearchProvider($config);
+ * $provider = new GoogleSearchProvider($config);
  *
  * // Search
  * $results = $provider->retrieve('What is PHP?', topK: 5);
@@ -45,7 +45,7 @@ use WebFiori\Ai\Http\HttpRequest;
  *
  * @author Ibrahim
  */
-class VertexAISearchProvider implements RagProviderInterface {
+class GoogleSearchProvider implements RagProviderInterface {
     /**
      * Google authentication handler.
      *
@@ -56,9 +56,9 @@ class VertexAISearchProvider implements RagProviderInterface {
     /**
      * Provider configuration.
      *
-     * @var VertexAISearchConfig
+     * @var GoogleSearchConfig
      */
-    private VertexAISearchConfig $config;
+    private GoogleSearchConfig $config;
 
     /**
      * HTTP client for making API requests.
@@ -68,19 +68,19 @@ class VertexAISearchProvider implements RagProviderInterface {
     private HttpClientInterface $httpClient;
 
     /**
-     * Creates a new VertexAISearchProvider instance.
+     * Creates a new GoogleSearchProvider instance.
      *
-     * @param VertexAISearchConfig $config Configuration for the data store.
+     * @param GoogleSearchConfig $config Configuration for the data store.
      * @param HttpClientInterface|null $httpClient HTTP client instance. Defaults to CurlHttpClient.
      */
-    public function __construct(VertexAISearchConfig $config, ?HttpClientInterface $httpClient = null) {
+    public function __construct(GoogleSearchConfig $config, ?HttpClientInterface $httpClient = null) {
         $this->config = $config;
         $this->auth = new GoogleAuth($config->credentials);
         $this->httpClient = $httpClient ?? new CurlHttpClient();
     }
 
     /**
-     * Deletes a document from the Vertex AI Search data store.
+     * Deletes a document from the Google Search data store.
      *
      * @param string $id The document ID to delete.
      */
@@ -106,14 +106,14 @@ class VertexAISearchProvider implements RagProviderInterface {
     /**
      * Returns the provider configuration.
      *
-     * @return VertexAISearchConfig The configuration instance.
+     * @return GoogleSearchConfig The configuration instance.
      */
-    public function getConfig(): VertexAISearchConfig {
+    public function getConfig(): GoogleSearchConfig {
         return $this->config;
     }
 
     /**
-     * Ingests content into the Vertex AI Search data store.
+     * Ingests content into the Google Search data store.
      *
      * Creates a new document in the default branch of the data store
      * with the provided content encoded as base64 raw bytes.
@@ -163,7 +163,7 @@ class VertexAISearchProvider implements RagProviderInterface {
     }
 
     /**
-     * Retrieves relevant documents from the Vertex AI Search data store.
+     * Retrieves relevant documents from the Google Search data store.
      *
      * Sends a search request to the Discovery Engine API and converts
      * the response into RetrievalResult objects.

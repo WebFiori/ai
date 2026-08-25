@@ -1,6 +1,6 @@
 # RAG Providers — Unified Retrieval-Augmented Generation
 
-Use `RagProviderInterface` to plug different retrieval backends into your AI workflows. The same interface works with local vector stores, Google Vertex AI Search, and AWS Bedrock Knowledge Bases — swap providers without changing application logic.
+Use `RagProviderInterface` to plug different retrieval backends into your AI workflows. The same interface works with local vector stores, Google Search, and AWS Bedrock Knowledge Bases — swap providers without changing application logic.
 
 ## Concepts
 
@@ -17,7 +17,7 @@ Use `RagProviderInterface` to plug different retrieval backends into your AI wor
 | Provider | Backend | Ingest | Delete |
 |----------|---------|--------|--------|
 | `LocalRagProvider` | Local vector store + embeddings | ✅ | ✅ |
-| `VertexAISearchProvider` | Google Discovery Engine | ✅ | ✅ |
+| `GoogleSearchProvider` | Google Discovery Engine | ✅ | ✅ |
 | `BedrockKnowledgeBaseProvider` | AWS Bedrock Knowledge Bases | ❌ (S3 workflow) | ❌ (S3 workflow) |
 
 **RetrievalTool** wraps any `RagProviderInterface` as a tool that chat models can invoke autonomously during conversation.
@@ -26,10 +26,10 @@ Use `RagProviderInterface` to plug different retrieval backends into your AI wor
 
 ## Authentication
 
-### Google Cloud (Vertex AI Search)
+### Google Cloud (Google Search)
 
 Uses `GoogleAuth` which supports:
-- **Service account JSON** — pass the file path or decoded array to `VertexAISearchConfig::$credentials`
+- **Service account JSON** — pass the file path or decoded array to `GoogleSearchConfig::$credentials`
 - **Application Default Credentials (ADC)** — set `credentials: null` and configure `GOOGLE_APPLICATION_CREDENTIALS` or use `gcloud auth application-default login`
 
 ### AWS (Bedrock Knowledge Bases)
@@ -63,13 +63,13 @@ $results = $rag->retrieve('What are property hooks?');
 $rag->delete($id);
 ```
 
-### Vertex AI Search
+### Google Search
 
 ```php
-use WebFiori\Ai\Rag\VertexAISearchConfig;
-use WebFiori\Ai\Rag\VertexAISearchProvider;
+use WebFiori\Ai\Rag\GoogleSearchConfig;
+use WebFiori\Ai\Rag\GoogleSearchProvider;
 
-$provider = new VertexAISearchProvider(new VertexAISearchConfig(
+$provider = new GoogleSearchProvider(new GoogleSearchConfig(
     projectId: 'my-project',
     location: 'global',
     dataStoreId: 'my-datastore',
