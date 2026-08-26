@@ -49,3 +49,7 @@ export GCP_ACCESS_TOKEN="ya29...."
 | 22 | [Model Aliases](22-model-aliases/) | Logical names ('fast', 'smart') that map to provider-specific model IDs |
 | 23 | [Model Router](23-model-router/) | Intelligent routing across providers — rule-based, strategy-based, and tool-based |
 | 24 | [Recording & Replay](24-recording-replay/) | Record real API responses once, replay in CI without API keys |
+| 25 | [Agent Tool](25-agent-tool/) | Delegate tasks to specialist AI sub-agents as tools |
+| 26 | [Agent Memory](26-agent-memory/) | Persistent learning via RAG-backed memory |
+| 27 | [RAG Providers](27-rag-providers/) | Provider-agnostic RAG with local, Google, and Bedrock backends |
+| 28 | [Profile Inheritance](28-profile-inheritance/) | JSON-based profile inheritance via `extends` with configurable merge strategies |
