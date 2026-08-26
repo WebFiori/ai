@@ -33,9 +33,9 @@ class AgentProfile {
     /**
      * Background knowledge or context for the agent.
      *
-     * @var string|null
+     * @var string|array<int, string>|null
      */
-    private ?string $context;
+    private string|array|null $context;
 
     /**
      * Few-shot examples, each with 'input' and 'output' keys.
@@ -101,7 +101,7 @@ class AgentProfile {
      * @param string[] $instructions Behavioral instructions.
      * @param string[] $constraints Limitations or boundaries.
      * @param string|null $outputFormat Expected output format description.
-     * @param string|null $context Background knowledge or context.
+     * @param string|array<int, string>|null $context Background knowledge or context.
      * @param array<int, array{input: string, output: string}> $examples Few-shot examples.
      * @param array<string, mixed> $metadata Version info, not sent to model.
      * @param ToolInterface[] $tools Resolved tool instances.
@@ -112,7 +112,7 @@ class AgentProfile {
         array $instructions = [],
         array $constraints = [],
         ?string $outputFormat = null,
-        ?string $context = null,
+        string|array|null $context = null,
         array $examples = [],
         array $metadata = [],
         array $tools = [],
@@ -282,9 +282,9 @@ class AgentProfile {
     /**
      * Returns the background context.
      *
-     * @return string|null The context string or null.
+     * @return string|array<int, string>|null The context string, array of strings, or null.
      */
-    public function getContext(): ?string {
+    public function getContext(): string|array|null {
         return $this->context;
     }
 
@@ -414,8 +414,12 @@ class AgentProfile {
             $parts[] = "## Output Format\n".$this->outputFormat;
         }
 
-        if ($this->context !== null && $this->context !== '') {
-            $parts[] = "## Context\n".$this->context;
+        if ($this->context !== null && $this->context !== '' && $this->context !== []) {
+            if (is_array($this->context)) {
+                $parts[] = "## Context\n".implode("\n", array_map(fn (string $s): string => '- '.$s, $this->context));
+            } else {
+                $parts[] = "## Context\n".$this->context;
+            }
         }
 
         if (!empty($this->examples)) {
@@ -514,7 +518,7 @@ class AgentProfile {
         $defaults = [
             'identity' => 'replace',
             'output_format' => 'replace',
-            'context' => 'replace',
+            'context' => 'concat',
             'skills' => 'concat',
             'instructions' => 'concat',
             'constraints' => 'concat',
@@ -525,7 +529,7 @@ class AgentProfile {
 
         $validStrategies = ['concat', 'replace', 'merge'];
         $validFields = array_keys($defaults);
-        $scalarFields = ['identity', 'output_format', 'context'];
+        $scalarFields = ['identity', 'output_format'];
 
         foreach ($strategies as $field => $strategy) {
             if (!in_array($field, $validFields, true)) {
@@ -568,10 +572,23 @@ class AgentProfile {
                     break;
 
                 case 'concat':
-                    $result[$field] = array_merge(
-                        $base[$field] ?? [],
-                        $child[$field] ?? []
-                    );
+                    $baseVal = $base[$field] ?? [];
+                    $childVal = $child[$field] ?? [];
+
+                    // Normalize strings to single-element arrays for context field
+                    if (is_string($baseVal) && $baseVal !== '') {
+                        $baseVal = [$baseVal];
+                    } elseif (!is_array($baseVal)) {
+                        $baseVal = [];
+                    }
+
+                    if (is_string($childVal) && $childVal !== '') {
+                        $childVal = [$childVal];
+                    } elseif (!is_array($childVal)) {
+                        $childVal = [];
+                    }
+
+                    $result[$field] = array_merge($baseVal, $childVal);
 
                     break;
 

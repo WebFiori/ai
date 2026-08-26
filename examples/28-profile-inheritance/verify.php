@@ -203,7 +203,7 @@ try {
     AgentProfile::merge(
         base: new AgentProfile(identity: 'B.'),
         child: new AgentProfile(identity: 'C.'),
-        strategies: ['context' => 'concat'],
+        strategies: ['output_format' => 'concat'],
     );
 } catch (RuntimeException $e) {
     $caught = str_contains($e->getMessage(), 'cannot be used on scalar field');
@@ -220,4 +220,35 @@ assert(!array_key_exists('extends', $array), 'extends should not be in toArray o
 assert(!array_key_exists('inheritance_strategy', $array), 'inheritance_strategy should not be in toArray output');
 echo "   ✅ Neither 'extends' nor 'inheritance_strategy' appear in toArray()/toJson()\n";
 
-echo "\n=== All 16 checks passed ✅ ===\n";
+// Test 17: Array context support
+echo "\n17. Array context — render as bullet list\n";
+$profile = new AgentProfile(
+    identity: 'Agent with array context.',
+    context: ['Fiscal year starts April 1.', 'OpCo = operating company.'],
+);
+$rendered = $profile->render();
+
+assert(str_contains($rendered, '## Context'), 'Context section missing');
+assert(str_contains($rendered, '- Fiscal year starts April 1.'), 'First context item missing');
+assert(str_contains($rendered, '- OpCo = operating company.'), 'Second context item missing');
+echo "   ✅ Array context renders as bullet list\n";
+
+// Test 18: Array context concatenates during inheritance
+echo "\n18. Array context concatenates during inheritance\n";
+$base = new AgentProfile(identity: 'Base.', context: ['Base fact.']);
+$child = new AgentProfile(identity: 'Child.', context: ['Child fact.']);
+$merged = AgentProfile::merge(base: $base, child: $child);
+
+assert($merged->getContext() === ['Base fact.', 'Child fact.'], 'Context should concatenate');
+echo "   ✅ Array context concatenates (base + child)\n";
+
+// Test 19: String context normalized to array during inheritance
+echo "\n19. String context normalized to array during inheritance\n";
+$base = new AgentProfile(identity: 'Base.', context: 'String context from base.');
+$child = new AgentProfile(identity: 'Child.', context: ['Array item from child.']);
+$merged = AgentProfile::merge(base: $base, child: $child);
+
+assert($merged->getContext() === ['String context from base.', 'Array item from child.'], 'Mixed context should normalize and concat');
+echo "   ✅ String normalized to array, then concatenated\n";
+
+echo "\n=== All 19 checks passed ✅ ===\n";

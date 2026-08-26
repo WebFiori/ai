@@ -41,7 +41,7 @@ class AgentProfileInheritanceTest extends TestCase {
 
         // Inherited scalars
         $this->assertSame('Respond in markdown.', $profile->getOutputFormat());
-        $this->assertSame('Base context for all agents.', $profile->getContext());
+        $this->assertSame(['Base context for all agents.'], $profile->getContext());
 
         // Inherited arrays
         $this->assertEquals([['input' => 'Hello', 'output' => 'Hi there!']], $profile->getExamples());
@@ -77,7 +77,7 @@ class AgentProfileInheritanceTest extends TestCase {
 
         // Scalar: inherited from base (child doesn't override)
         $this->assertSame('Respond in markdown.', $profile->getOutputFormat());
-        $this->assertSame('Base context for all agents.', $profile->getContext());
+        $this->assertSame(['Base context for all agents.'], $profile->getContext());
 
         // Tools: concat
         $this->assertSame(['base_tool', 'search_orders', 'search_kb'], $profile->getUnresolvedToolRefs());
@@ -138,7 +138,7 @@ class AgentProfileInheritanceTest extends TestCase {
         // Child overrides scalars
         $this->assertSame('Agent with scalar overrides.', $profile->getIdentity());
         $this->assertSame('JSON only.', $profile->getOutputFormat());
-        $this->assertSame('Child-specific context.', $profile->getContext());
+        $this->assertSame(['Base context for all agents.', 'Child-specific context.'], $profile->getContext());
 
         // Arrays still concat from base
         $this->assertSame(['Answer questions clearly', 'Follow company tone'], $profile->getSkills());
@@ -332,7 +332,9 @@ class AgentProfileInheritanceTest extends TestCase {
         // Scalar: child wins
         $this->assertSame('Child identity.', $merged->getIdentity());
         $this->assertSame('Child format.', $merged->getOutputFormat());
-        $this->assertSame('Child context.', $merged->getContext());
+
+        // Context: concat (normalized to array)
+        $this->assertSame(['Base context.', 'Child context.'], $merged->getContext());
 
         // Arrays: concat
         $this->assertSame(['Skill A', 'Skill B', 'Skill C'], $merged->getSkills());
@@ -400,9 +402,10 @@ class AgentProfileInheritanceTest extends TestCase {
 
         $merged = AgentProfile::merge(base: $base, child: $child);
 
-        // output_format and context not set in child (null) → base used
+        // output_format not set in child (null) → base used
         $this->assertSame('Base format.', $merged->getOutputFormat());
-        $this->assertSame('Base context.', $merged->getContext());
+        // context: base is string, child is null → normalized to ['Base context.']
+        $this->assertSame(['Base context.'], $merged->getContext());
     }
 
     public function testMerge_BothEmpty(): void {
@@ -416,7 +419,7 @@ class AgentProfileInheritanceTest extends TestCase {
         $this->assertSame([], $merged->getInstructions());
         $this->assertSame([], $merged->getConstraints());
         $this->assertNull($merged->getOutputFormat());
-        $this->assertNull($merged->getContext());
+        $this->assertSame([], $merged->getContext());
         $this->assertSame([], $merged->getExamples());
         $this->assertSame([], $merged->getMetadata());
     }
@@ -527,6 +530,62 @@ class AgentProfileInheritanceTest extends TestCase {
 
         $this->assertArrayNotHasKey('extends', $array);
         $this->assertArrayNotHasKey('inheritance_strategy', $array);
+    }
+
+    // =========================================================================
+    // Array context inheritance
+    // =========================================================================
+
+    public function testMerge_ArrayContextConcat(): void {
+        $base = AgentProfile::fromArray([
+            'identity' => 'Base.',
+            'context' => ['Base fact 1', 'Base fact 2'],
+        ]);
+
+        $child = AgentProfile::fromArray([
+            'identity' => 'Child.',
+            'context' => ['Child fact 1'],
+        ]);
+
+        $merged = AgentProfile::merge(base: $base, child: $child);
+
+        $this->assertSame(['Base fact 1', 'Base fact 2', 'Child fact 1'], $merged->getContext());
+    }
+
+    public function testMerge_MixedContextStringAndArray(): void {
+        $base = AgentProfile::fromArray([
+            'identity' => 'Base.',
+            'context' => 'Base string context.',
+        ]);
+
+        $child = AgentProfile::fromArray([
+            'identity' => 'Child.',
+            'context' => ['Child array item'],
+        ]);
+
+        $merged = AgentProfile::merge(base: $base, child: $child);
+
+        $this->assertSame(['Base string context.', 'Child array item'], $merged->getContext());
+    }
+
+    public function testMerge_ContextReplaceStrategy(): void {
+        $base = AgentProfile::fromArray([
+            'identity' => 'Base.',
+            'context' => ['Base fact 1', 'Base fact 2'],
+        ]);
+
+        $child = AgentProfile::fromArray([
+            'identity' => 'Child.',
+            'context' => ['Only child context'],
+        ]);
+
+        $merged = AgentProfile::merge(
+            base: $base,
+            child: $child,
+            strategies: ['context' => 'replace'],
+        );
+
+        $this->assertSame(['Only child context'], $merged->getContext());
     }
 
     // =========================================================================

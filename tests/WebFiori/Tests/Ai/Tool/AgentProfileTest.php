@@ -414,6 +414,89 @@ class AgentProfileTest extends TestCase {
         $this->assertStringNotContainsString('Does secret things', $rendered);
     }
 
+    // =========================================================================
+    // Array context
+    // =========================================================================
+
+    public function testConstructionWithArrayContext(): void {
+        $profile = new AgentProfile(
+            identity: 'Agent.',
+            context: ['Fact 1.', 'Fact 2.', 'Fact 3.'],
+        );
+
+        $this->assertSame(['Fact 1.', 'Fact 2.', 'Fact 3.'], $profile->getContext());
+    }
+
+    public function testConstructionWithStringContext(): void {
+        $profile = new AgentProfile(
+            identity: 'Agent.',
+            context: 'Single string context.',
+        );
+
+        $this->assertSame('Single string context.', $profile->getContext());
+    }
+
+    public function testRender_ArrayContext(): void {
+        $profile = new AgentProfile(
+            identity: 'Agent with array context.',
+            context: ['Fiscal year starts April 1.', 'OpCo = operating company.'],
+        );
+
+        $rendered = $profile->render();
+
+        $this->assertStringContainsString('## Context', $rendered);
+        $this->assertStringContainsString('- Fiscal year starts April 1.', $rendered);
+        $this->assertStringContainsString('- OpCo = operating company.', $rendered);
+    }
+
+    public function testRender_EmptyArrayContext(): void {
+        $profile = new AgentProfile(
+            identity: 'Agent.',
+            context: [],
+        );
+
+        $rendered = $profile->render();
+
+        $this->assertStringNotContainsString('## Context', $rendered);
+    }
+
+    public function testFromArray_ArrayContext(): void {
+        $data = [
+            'identity' => 'Agent.',
+            'context' => ['Item 1', 'Item 2'],
+        ];
+
+        $profile = AgentProfile::fromArray($data);
+
+        $this->assertSame(['Item 1', 'Item 2'], $profile->getContext());
+    }
+
+    public function testToArray_ArrayContext(): void {
+        $profile = new AgentProfile(
+            identity: 'Agent.',
+            context: ['A', 'B'],
+        );
+
+        $exported = $profile->toArray();
+
+        $this->assertSame(['A', 'B'], $exported['context']);
+    }
+
+    public function testToArray_StringContext(): void {
+        $profile = new AgentProfile(
+            identity: 'Agent.',
+            context: 'Plain text.',
+        );
+
+        $exported = $profile->toArray();
+
+        $this->assertSame('Plain text.', $exported['context']);
+    }
+
+    // =========================================================================
+    // Render exclusions
+    // =========================================================================
+
     public function testMetadataNotIncludedInRender(): void {
         $profile = new AgentProfile(
             identity: 'Agent with metadata.',
