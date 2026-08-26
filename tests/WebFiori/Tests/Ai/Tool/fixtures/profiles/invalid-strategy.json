@@ -1,0 +1,7 @@
+{
+    "extends": "_base",
+    "inheritance_strategy": {
+        "skills": "invalid_strategy"
+    },
+    "identity": "Agent with bad strategy"
+}

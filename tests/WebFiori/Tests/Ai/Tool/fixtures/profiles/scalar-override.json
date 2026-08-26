@@ -1,0 +1,6 @@
+{
+    "extends": "_base",
+    "identity": "Agent with scalar overrides.",
+    "output_format": "JSON only.",
+    "context": "Child-specific context."
+}

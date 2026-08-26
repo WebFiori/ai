@@ -136,11 +136,22 @@ class AgentProfile {
      * instructions, constraints, output_format, context, examples,
      * metadata, tools (as string[] tool name references).
      *
+     * If the data contains an 'extends' key and a $basePath is provided,
+     * the referenced base profile will be resolved and merged automatically.
+     *
      * @param array<string, mixed> $data The profile data with snake_case keys.
+     * @param string|null $basePath Directory path for resolving 'extends'. If null, 'extends' is ignored.
      *
      * @return self The constructed profile.
      */
-    public static function fromArray(array $data): self {
+    public static function fromArray(array $data, ?string $basePath = null): self {
+        if ($basePath !== null && isset($data['extends']) && $data['extends'] !== '') {
+            $baseFile = rtrim($basePath, '/').'/'.$data['extends'].'.json';
+            $data = self::resolveInheritance($baseFile, [], $data);
+        }
+
+        unset($data['extends'], $data['inheritance_strategy']);
+
         $profile = new self(
             identity: $data['identity'] ?? '',
             skills: $data['skills'] ?? [],
@@ -162,11 +173,15 @@ class AgentProfile {
     /**
      * Creates a profile from a JSON file.
      *
+     * If the JSON contains an 'extends' key, the referenced base profile is
+     * resolved recursively and merged using field-specific strategies.
+     *
      * @param string $path Path to the JSON file.
      *
      * @return self The constructed profile.
      *
-     * @throws RuntimeException If the file does not exist or contains invalid JSON.
+     * @throws RuntimeException If the file does not exist, contains invalid JSON,
+     *                          or has circular inheritance.
      */
     public static function fromFile(string $path): self {
         if (!file_exists($path)) {
@@ -184,6 +199,22 @@ class AgentProfile {
         if (!is_array($data)) {
             throw new RuntimeException('Invalid JSON in profile file: '.$path);
         }
+
+        if (isset($data['extends']) && $data['extends'] !== '') {
+            $realPath = realpath($path);
+
+            if ($realPath === false) {
+                throw new RuntimeException('Profile file not found: '.$path);
+            }
+
+            $baseFile = dirname($realPath).'/'.$data['extends'].'.json';
+            $strategies = $data['inheritance_strategy'] ?? [];
+            unset($data['extends'], $data['inheritance_strategy']);
+            $baseData = self::resolveInheritance($baseFile, [$realPath]);
+            $data = self::mergeProfileData($baseData, $data, $strategies);
+        }
+
+        unset($data['extends'], $data['inheritance_strategy']);
 
         return self::fromArray($data);
     }
@@ -333,6 +364,30 @@ class AgentProfile {
     }
 
     /**
+     * Merges a base profile with a child profile using field-specific strategies.
+     *
+     * Default strategies: arrays concat, scalars replace, metadata merges.
+     * Override specific fields via the $strategies parameter.
+     *
+     * @param self $base The base (parent) profile.
+     * @param self $child The child profile to merge on top.
+     * @param array<string, string> $strategies Optional per-field strategy overrides.
+     *                                          Keys are field names, values are 'concat', 'replace', or 'merge'.
+     *
+     * @return self The merged profile.
+     *
+     * @throws RuntimeException If an invalid strategy is specified.
+     */
+    public static function merge(self $base, self $child, array $strategies = []): self {
+        $baseData = $base->toArray();
+        $childData = $child->toArray();
+
+        $merged = self::mergeProfileData($baseData, $childData, $strategies);
+
+        return self::fromArray($merged);
+    }
+
+    /**
      * Renders the profile into a system prompt string.
      *
      * Only non-empty sections are included in the output.
@@ -442,5 +497,152 @@ class AgentProfile {
      */
     public function toJson(int $flags = JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES): string {
         return json_encode($this->toArray(), $flags);
+    }
+
+    /**
+     * Merges two profile data arrays using field-specific strategies.
+     *
+     * @param array<string, mixed> $base The base profile data.
+     * @param array<string, mixed> $child The child profile data.
+     * @param array<string, string> $strategies Per-field strategy overrides.
+     *
+     * @return array<string, mixed> The merged data.
+     *
+     * @throws RuntimeException If an invalid strategy value is provided.
+     */
+    private static function mergeProfileData(array $base, array $child, array $strategies = []): array {
+        $defaults = [
+            'identity' => 'replace',
+            'output_format' => 'replace',
+            'context' => 'replace',
+            'skills' => 'concat',
+            'instructions' => 'concat',
+            'constraints' => 'concat',
+            'examples' => 'concat',
+            'tools' => 'concat',
+            'metadata' => 'merge',
+        ];
+
+        $validStrategies = ['concat', 'replace', 'merge'];
+        $validFields = array_keys($defaults);
+        $scalarFields = ['identity', 'output_format', 'context'];
+
+        foreach ($strategies as $field => $strategy) {
+            if (!in_array($field, $validFields, true)) {
+                throw new RuntimeException(
+                    "Invalid field '{$field}' in inheritance_strategy. Valid fields: ".implode(', ', $validFields)
+                );
+            }
+
+            if (!in_array($strategy, $validStrategies, true)) {
+                throw new RuntimeException(
+                    "Invalid inheritance strategy '{$strategy}' for field '{$field}'. Valid strategies: ".implode(', ', $validStrategies)
+                );
+            }
+
+            if (in_array($field, $scalarFields, true) && $strategy !== 'replace') {
+                throw new RuntimeException(
+                    "Strategy '{$strategy}' cannot be used on scalar field '{$field}'. Only 'replace' is valid for scalar fields."
+                );
+            }
+        }
+
+        $effective = array_merge($defaults, $strategies);
+        $result = [];
+
+        foreach ($defaults as $field => $defaultStrategy) {
+            $strategy = $effective[$field];
+
+            switch ($strategy) {
+                case 'replace':
+                    if ($field === 'identity') {
+                        $result[$field] = ($child[$field] ?? '') !== ''
+                            ? $child[$field]
+                            : ($base[$field] ?? '');
+                    } else {
+                        $result[$field] = array_key_exists($field, $child) && $child[$field] !== null
+                            ? $child[$field]
+                            : ($base[$field] ?? null);
+                    }
+
+                    break;
+
+                case 'concat':
+                    $result[$field] = array_merge(
+                        $base[$field] ?? [],
+                        $child[$field] ?? []
+                    );
+
+                    break;
+
+                case 'merge':
+                    $result[$field] = array_merge(
+                        $base[$field] ?? [],
+                        $child[$field] ?? []
+                    );
+
+                    break;
+
+                default:
+                    throw new RuntimeException(
+                        "Invalid inheritance strategy '{$strategy}' for field '{$field}'"
+                    );
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Recursively resolves profile inheritance by loading and merging base profiles.
+     *
+     * @param string $path Path to the base profile file.
+     * @param array<int, string> $visited List of already-visited real paths for circular detection.
+     * @param array<string, mixed>|null $childData Optional child data to merge after resolution.
+     *
+     * @return array<string, mixed> The resolved profile data.
+     *
+     * @throws RuntimeException If the file is missing, contains invalid JSON, or creates a circular reference.
+     */
+    private static function resolveInheritance(string $path, array $visited, ?array $childData = null): array {
+        $realPath = realpath($path);
+
+        if ($realPath === false) {
+            throw new RuntimeException('Profile file not found: '.$path);
+        }
+
+        if (in_array($realPath, $visited, true)) {
+            $chain = implode(' → ', array_map('basename', $visited));
+
+            throw new RuntimeException(
+                'Circular profile inheritance detected: '.$chain.' → '.basename($realPath)
+            );
+        }
+
+        $visited[] = $realPath;
+        $contents = file_get_contents($realPath);
+        $data = json_decode($contents, true);
+
+        if (!is_array($data)) {
+            throw new RuntimeException('Invalid JSON in profile file: '.$path);
+        }
+
+        if (isset($data['extends']) && $data['extends'] !== '') {
+            $baseFile = dirname($realPath).'/'.$data['extends'].'.json';
+            $strategies = $data['inheritance_strategy'] ?? [];
+            unset($data['extends'], $data['inheritance_strategy']);
+            $baseData = self::resolveInheritance($baseFile, $visited);
+            $data = self::mergeProfileData($baseData, $data, $strategies);
+        } else {
+            unset($data['extends'], $data['inheritance_strategy']);
+        }
+
+        if ($childData !== null) {
+            $strategies = $childData['inheritance_strategy'] ?? [];
+            unset($childData['extends'], $childData['inheritance_strategy']);
+            $data = self::mergeProfileData($data, $childData, $strategies);
+        }
+
+        return $data;
     }
 }

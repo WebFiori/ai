@@ -1,0 +1,7 @@
+{
+    "extends": "_base",
+    "inheritance_strategy": {
+        "nonexistent_field": "replace"
+    },
+    "identity": "Agent with bad field"
+}

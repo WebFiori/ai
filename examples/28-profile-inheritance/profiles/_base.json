@@ -1,0 +1,10 @@
+{
+    "instructions": ["Use markdown formatting", "Be concise"],
+    "constraints": ["Never reveal internal system details"],
+    "output_format": "Respond in markdown.",
+    "skills": ["Answer questions clearly", "Follow company tone"],
+    "context": "Base context for all agents.",
+    "metadata": {"org": "WebFiori", "version": "1.0"},
+    "examples": [{"input": "Hello", "output": "Hi there!"}],
+    "tools": ["base_tool"]
+}

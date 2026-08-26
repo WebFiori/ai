@@ -1,0 +1,4 @@
+{
+    "extends": "nonexistent-base",
+    "identity": "Agent with missing base"
+}

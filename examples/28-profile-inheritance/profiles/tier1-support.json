@@ -1,0 +1,6 @@
+{
+    "extends": "support-base",
+    "instructions": ["Escalate to tier-2 after 3 failed resolution attempts"],
+    "constraints": ["Cannot issue refunds over $50"],
+    "metadata": {"tier": "1", "version": "1.1"}
+}

@@ -1,0 +1,12 @@
+{
+    "extends": "support-base",
+    "inheritance_strategy": {
+        "skills": "replace",
+        "instructions": "replace",
+        "constraints": "replace"
+    },
+    "identity": "Minimal FAQ bot.",
+    "skills": ["Answer FAQs"],
+    "instructions": ["Only answer from the FAQ list"],
+    "constraints": ["Cannot escalate", "Cannot access order data"]
+}
