@@ -83,4 +83,45 @@ class CurlHttpClientTest extends TestCase {
 
         $this->assertFalse($client->getVerifySsl());
     }
+
+    /**
+     * @test
+     */
+    public function testConnectionReuseDefaultDisabled() {
+        $client = new CurlHttpClient();
+        $this->assertFalse($client->isConnectionReuseEnabled());
+    }
+
+    /**
+     * @test
+     */
+    public function testEnableConnectionReuse() {
+        $client = new CurlHttpClient();
+        $result = $client->enableConnectionReuse(true);
+
+        $this->assertSame($client, $result);
+        $this->assertTrue($client->isConnectionReuseEnabled());
+    }
+
+    /**
+     * @test
+     */
+    public function testDisableConnectionReuse() {
+        $client = new CurlHttpClient();
+        $client->enableConnectionReuse(true);
+        $client->enableConnectionReuse(false);
+
+        $this->assertFalse($client->isConnectionReuseEnabled());
+    }
+
+    /**
+     * @test
+     */
+    public function testCloseConnection() {
+        $client = new CurlHttpClient();
+        $client->enableConnectionReuse(true);
+        // Should not throw even with no active connection
+        $client->closeConnection();
+        $this->assertTrue($client->isConnectionReuseEnabled());
+    }
 }
