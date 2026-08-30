@@ -187,7 +187,31 @@ class GoogleAuthExtendedTest extends TestCase {
         );
 
         $this->expectException(AuthenticationException::class);
-        $this->expectExceptionMessage('Failed to sign JWT');
+        $this->expectExceptionMessage('Invalid or missing private key');
+        $auth->getAccessToken();
+    }
+
+    /**
+     * @test
+     */
+    public function testMalformedPemPrivateKeyThrowsAuth() {
+        // A key with a valid PEM envelope but garbage body — passes the
+        // string check but fails openssl_pkey_get_private() without a warning.
+        $credentials = [
+            'type' => 'service_account',
+            'client_email' => 'test@test.iam.gserviceaccount.com',
+            'private_key' => "-----BEGIN PRIVATE KEY-----\nbm90LXZhbGlkLWtleQ==\n-----END PRIVATE KEY-----\n",
+        ];
+
+        $httpClient = new FakeHttpClient();
+
+        $auth = new GoogleAuth(
+            credentials: $credentials,
+            httpClient: $httpClient
+        );
+
+        $this->expectException(AuthenticationException::class);
+        $this->expectExceptionMessage('Invalid private key');
         $auth->getAccessToken();
     }
 
