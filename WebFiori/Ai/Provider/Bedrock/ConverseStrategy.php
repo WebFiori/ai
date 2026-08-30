@@ -19,6 +19,7 @@ use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Role;
 use WebFiori\Ai\Tool\ToolCall;
+use WebFiori\Ai\Tool\ToolInterface;
 use WebFiori\Ai\Usage;
 
 /**
@@ -535,7 +536,7 @@ class ConverseStrategy implements InvocationStrategyInterface {
     /**
      * Formats tools for the Converse API.
      *
-     * @param \WebFiori\Ai\Tool\ToolInterface[] $tools The tools to format.
+     * @param ToolInterface[] $tools The tools to format.
      *
      * @return array Formatted tool config.
      */

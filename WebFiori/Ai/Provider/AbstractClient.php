@@ -19,6 +19,7 @@ use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\Context\ContextWindowStrategyInterface;
 use WebFiori\Ai\Context\TokenEstimator;
+use WebFiori\Ai\ContextUsage;
 use WebFiori\Ai\CostEstimate;
 use WebFiori\Ai\CostResult;
 use WebFiori\Ai\EmbeddingResponse;
@@ -887,6 +888,66 @@ abstract class AbstractClient implements ProviderInterface {
      */
     public function getConfig(string $key, mixed $default = null): mixed {
         return $this->config[$key] ?? $default;
+    }
+
+    /**
+     * Returns a structured snapshot of context window usage.
+     *
+     * Useful for pre-send warnings and UI gauges. The used token count is
+     * estimated from the input messages by default; if a {@see ChatResponse}
+     * with usage data is provided, its exact prompt token count is used
+     * instead (and {@see ContextUsage::isEstimated()} returns false).
+     *
+     * The context window ceiling is resolved in order:
+     * 1. The explicit $maxTokens argument, if provided.
+     * 2. The context window strategy's getMaxTokens(), if a strategy is set
+     *    and exposes it.
+     * 3. null — usage still reports used tokens; derived values are null.
+     *
+     * @param Message[] $messages The messages to measure.
+     * @param ToolInterface[] $tools Optional tools to include in the count.
+     * @param int|null $maxTokens Explicit context window ceiling override.
+     * @param ChatResponse|null $response Optional response to source exact
+     *                                    prompt tokens from.
+     *
+     * @return ContextUsage The usage snapshot.
+     */
+    public function getContextUsage(
+        array $messages,
+        array $tools = [],
+        ?int $maxTokens = null,
+        ?ChatResponse $response = null,
+    ): ContextUsage {
+        $estimated = true;
+        $used = $this->tokenEstimator->count($messages, $tools);
+
+        if ($response !== null) {
+            $usage = $response->getUsage();
+
+            if ($usage !== null) {
+                $used = $usage->getPromptTokens();
+                $estimated = false;
+            }
+        }
+
+        // Resolve the ceiling: explicit → strategy → null.
+        $max = $maxTokens;
+        $reserved = 0;
+
+        if ($this->contextStrategy !== null) {
+            $reserved = $this->contextStrategy->getReservedTokens();
+
+            if ($max === null && method_exists($this->contextStrategy, 'getMaxTokens')) {
+                $max = $this->contextStrategy->getMaxTokens();
+            }
+        }
+
+        return new ContextUsage(
+            usedTokens: $used,
+            maxTokens: $max,
+            reservedTokens: $reserved,
+            estimated: $estimated,
+        );
     }
 
     /**

@@ -10,11 +10,13 @@
  */
 namespace WebFiori\Ai\Rag;
 
+use WebFiori\Ai\Auth\AwsCredentialChain;
+
 /**
  * Configuration for the Bedrock Knowledge Base RAG provider.
  *
  * Holds the AWS region, knowledge base ID, and optional credentials.
- * If accessKey/secretKey are null, {@see \WebFiori\Ai\Auth\AwsCredentialChain}
+ * If accessKey/secretKey are null, {@see AwsCredentialChain}
  * resolves credentials automatically (environment variables, credentials file,
  * or instance metadata).
  *
@@ -42,7 +44,7 @@ class BedrockKbConfig {
      * AWS access key ID for SigV4 authentication.
      *
      * If null, credentials are resolved automatically via
-     * {@see \WebFiori\Ai\Auth\AwsCredentialChain}.
+     * {@see AwsCredentialChain}.
      *
      * @var string|null
      */
@@ -75,7 +77,7 @@ class BedrockKbConfig {
      * AWS secret access key for SigV4 authentication.
      *
      * If null, credentials are resolved automatically via
-     * {@see \WebFiori\Ai\Auth\AwsCredentialChain}.
+     * {@see AwsCredentialChain}.
      *
      * @var string|null
      */

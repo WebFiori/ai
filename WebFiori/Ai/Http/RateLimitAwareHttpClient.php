@@ -10,6 +10,7 @@
  */
 namespace WebFiori\Ai\Http;
 
+use WebFiori\Ai\Exception\HttpException;
 use WebFiori\Ai\RateLimitStatus;
 
 /**
@@ -108,7 +109,7 @@ class RateLimitAwareHttpClient implements HttpClientInterface {
      *
      * @return HttpResponse The response from the provider.
      *
-     * @throws \WebFiori\Ai\Exception\HttpException If the request fails.
+     * @throws HttpException If the request fails.
      */
     public function send(HttpRequest $request): HttpResponse {
         $response = $this->inner->send($request);

@@ -10,6 +10,9 @@
  */
 namespace WebFiori\Ai\Http;
 
+use WebFiori\Ai\Exception\HttpException;
+use WebFiori\Ai\Exception\StreamingException;
+
 /**
  * Contract for making outbound HTTP requests to AI provider APIs.
  *
@@ -27,7 +30,7 @@ interface HttpClientInterface {
      *
      * @return HttpResponse The response received from the server.
      *
-     * @throws \WebFiori\Ai\Exception\HttpException If the request fails due to
+     * @throws HttpException If the request fails due to
      *         a transport error (connection timeout, DNS failure, etc.).
      */
     public function send(HttpRequest $request): HttpResponse;
@@ -42,9 +45,9 @@ interface HttpClientInterface {
      * @param callable $onChunk Callback invoked for each chunk of data received.
      *        The callback signature is: function(string $chunk): void
      *
-     * @throws \WebFiori\Ai\Exception\HttpException If the request fails due to
+     * @throws HttpException If the request fails due to
      *         a transport error.
-     * @throws \WebFiori\Ai\Exception\StreamingException If an error occurs
+     * @throws StreamingException If an error occurs
      *         during stream processing.
      */
     public function sendStreaming(HttpRequest $request, callable $onChunk): void;

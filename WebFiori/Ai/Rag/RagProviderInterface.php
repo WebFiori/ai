@@ -10,6 +10,8 @@
  */
 namespace WebFiori\Ai\Rag;
 
+use WebFiori\Ai\Exception\UnsupportedFeatureException;
+
 /**
  * Contract for RAG (Retrieval-Augmented Generation) providers.
  *
@@ -25,7 +27,7 @@ interface RagProviderInterface {
      *
      * @param string $id The document ID to delete.
      *
-     * @throws \WebFiori\Ai\Exception\UnsupportedFeatureException If the provider
+     * @throws UnsupportedFeatureException If the provider
      *         doesn't support deletion.
      */
     public function delete(string $id): void;
@@ -38,7 +40,7 @@ interface RagProviderInterface {
      *
      * @return string The document/record ID.
      *
-     * @throws \WebFiori\Ai\Exception\UnsupportedFeatureException If the provider
+     * @throws UnsupportedFeatureException If the provider
      *         doesn't support ingestion.
      */
     public function ingest(string $content, array $metadata = []): string;
