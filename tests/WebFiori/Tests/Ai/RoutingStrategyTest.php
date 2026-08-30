@@ -305,7 +305,7 @@ class RoutingStrategyTest extends TestCase {
     }
 
     public function testSetStrategyReturnsSelf(): void {
-        $router = new ModelRouter(['fast' => $this->createMock(\WebFiori\Ai\Provider\ProviderInterface::class)]);
+        $router = new ModelRouter(['fast' => $this->createStub(\WebFiori\Ai\Provider\ProviderInterface::class)]);
         $result = $router->setStrategy(new AlwaysStrategy('fast'));
         $this->assertSame($router, $result);
     }

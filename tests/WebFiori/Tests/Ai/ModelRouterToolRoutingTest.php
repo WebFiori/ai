@@ -463,7 +463,7 @@ class ModelRouterToolRoutingTest extends TestCase {
     // =========================================================================
 
     private function mockProvider(string $name = 'mock'): \WebFiori\Ai\Provider\ProviderInterface {
-        $mock = $this->createMock(\WebFiori\Ai\Provider\ProviderInterface::class);
+        $mock = $this->createStub(\WebFiori\Ai\Provider\ProviderInterface::class);
         $mock->method('getName')->willReturn($name);
         $mock->method('healthCheck')->willReturn(\WebFiori\Ai\HealthCheckResult::success(10, 'test'));
         $mock->method('chat')->willReturn(new ChatResponse(new Message('assistant', 'ok'), $name));

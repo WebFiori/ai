@@ -383,7 +383,7 @@ class FallbackProviderTest extends TestCase {
         $p1 = $this->createMock(ProviderInterface::class);
         $p2 = $this->createMock(ProviderInterface::class);
         
-        $httpClient = $this->createMock(\WebFiori\Ai\Http\HttpClientInterface::class);
+        $httpClient = $this->createStub(\WebFiori\Ai\Http\HttpClientInterface::class);
         
         $p1->expects($this->once())->method('setHttpClient')->with($httpClient);
         $p2->expects($this->once())->method('setHttpClient')->with($httpClient);

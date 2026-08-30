@@ -557,7 +557,7 @@ class ModelRouterTest extends TestCase {
     public function testSetHttpClientPropagatesAll(): void {
         $p1 = $this->createMock(ProviderInterface::class);
         $p2 = $this->createMock(ProviderInterface::class);
-        $http = $this->createMock(\WebFiori\Ai\Http\HttpClientInterface::class);
+        $http = $this->createStub(\WebFiori\Ai\Http\HttpClientInterface::class);
 
         $p1->expects($this->once())->method('setHttpClient')->with($http);
         $p2->expects($this->once())->method('setHttpClient')->with($http);
