@@ -31,7 +31,8 @@ The context window ceiling (`maxTokens`) is resolved in order:
 
 1. Explicit `$maxTokens` argument
 2. Context window strategy's `getMaxTokens()` (if a strategy is set)
-3. `null` — `usedTokens` is still reported; derived values are `null`
+3. `ContextWindowConfig` lookup by the model name (ships with defaults for common models)
+4. `null` — `usedTokens` is still reported; derived values are `null`
 
 ```php
 // (1) Explicit
@@ -41,9 +42,28 @@ $client->getContextUsage($messages, maxTokens: 8000);
 $client->setContextWindowStrategy(new SlidingWindowStrategy(maxTokens: 8000, reserveForCompletion: 2000));
 $client->getContextUsage($messages);
 
-// (3) Unknown — used reported, max/remaining/percentage null
+// (3) Auto-inferred from the model (e.g. gpt-4o → 128000)
 $client->getContextUsage($messages);
+
+// (4) Unknown model — used reported, max/remaining/percentage null
 ```
+
+### Model context window table (`ContextWindowConfig`)
+
+Ships with defaults for common OpenAI, Google, Anthropic, and Bedrock models. Override or extend as needed:
+
+```php
+use WebFiori\Ai\Context\ContextWindowConfig;
+
+$config = $client->getContextWindowConfig();      // default table, auto-created
+$config->getContextWindow('gpt-4o');              // 128000
+$config->setContextWindow('my-fine-tune', 32000); // add/override
+
+// Or replace entirely
+$client->setContextWindowConfig(new ContextWindowConfig(['gpt-4o' => 200000]));
+```
+
+Unknown models return `null` — no guessing. Sizes drift as providers ship models, so override when needed.
 
 ## Estimated vs Actual
 

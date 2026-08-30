@@ -167,7 +167,9 @@ class ContextUsageTest extends TestCase {
     }
 
     public function testGetContextUsageNoCeilingWhenNoStrategyOrMax(): void {
-        $client = $this->makeClient();
+        // Use a model absent from the default ContextWindowConfig table so no
+        // ceiling can be inferred from any source.
+        $client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'unlisted-model'));
         $messages = [new Message('user', 'Hello')];
 
         $usage = $client->getContextUsage($messages);

@@ -17,6 +17,7 @@ use WebFiori\Ai\Cache\CacheInterface;
 use WebFiori\Ai\Cache\CacheKeyGenerator;
 use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\ChatResponse;
+use WebFiori\Ai\Context\ContextWindowConfig;
 use WebFiori\Ai\Context\ContextWindowStrategyInterface;
 use WebFiori\Ai\Context\TokenEstimator;
 use WebFiori\Ai\ContextUsage;
@@ -116,6 +117,15 @@ abstract class AbstractClient implements ProviderInterface {
      * @var ContextWindowStrategyInterface|null
      */
     private ?ContextWindowStrategyInterface $contextStrategy = null;
+
+    /**
+     * Model context window size table for ceiling inference.
+     *
+     * Lazily initialized with built-in defaults on first access.
+     *
+     * @var ContextWindowConfig|null
+     */
+    private ?ContextWindowConfig $contextWindowConfig = null;
 
     /**
      * The HTTP client used for making API requests.
@@ -902,7 +912,8 @@ abstract class AbstractClient implements ProviderInterface {
      * 1. The explicit $maxTokens argument, if provided.
      * 2. The context window strategy's getMaxTokens(), if a strategy is set
      *    and exposes it.
-     * 3. null — usage still reports used tokens; derived values are null.
+     * 3. The context window config lookup by the resolved model name.
+     * 4. null — usage still reports used tokens; derived values are null.
      *
      * @param Message[] $messages The messages to measure.
      * @param ToolInterface[] $tools Optional tools to include in the count.
@@ -930,7 +941,7 @@ abstract class AbstractClient implements ProviderInterface {
             }
         }
 
-        // Resolve the ceiling: explicit → strategy → null.
+        // Resolve the ceiling: explicit → strategy → model config → null.
         $max = $maxTokens;
         $reserved = 0;
 
@@ -942,12 +953,41 @@ abstract class AbstractClient implements ProviderInterface {
             }
         }
 
+        // Fall back to the model context window table.
+        if ($max === null) {
+            $model = $response !== null ? $response->getModel() : $this->getConfig('model', '');
+
+            if ($this->modelAliases !== null && $model !== '') {
+                $model = $this->modelAliases->resolve($model, $this->getName());
+            }
+
+            if ($model !== '') {
+                $max = $this->getContextWindowConfig()->getContextWindow($model);
+            }
+        }
+
         return new ContextUsage(
             usedTokens: $used,
             maxTokens: $max,
             reservedTokens: $reserved,
             estimated: $estimated,
         );
+    }
+
+    /**
+     * Returns the model context window configuration.
+     *
+     * Lazily initialized with the built-in default table on first access,
+     * so callers always receive a usable instance.
+     *
+     * @return ContextWindowConfig The context window config.
+     */
+    public function getContextWindowConfig(): ContextWindowConfig {
+        if ($this->contextWindowConfig === null) {
+            $this->contextWindowConfig = new ContextWindowConfig();
+        }
+
+        return $this->contextWindowConfig;
     }
 
     /**
@@ -1102,6 +1142,19 @@ abstract class AbstractClient implements ProviderInterface {
      */
     public function setCacheConfig(CacheConfig $config): void {
         $this->cacheConfig = $config;
+    }
+
+    /**
+     * Sets the model context window configuration.
+     *
+     * Used by {@see getContextUsage()} to infer the context window ceiling
+     * from the model name when no explicit value or strategy provides one.
+     *
+     * @param ContextWindowConfig|null $config The config, or null to reset to
+     *        the built-in defaults on next access.
+     */
+    public function setContextWindowConfig(?ContextWindowConfig $config): void {
+        $this->contextWindowConfig = $config;
     }
 
     /**
