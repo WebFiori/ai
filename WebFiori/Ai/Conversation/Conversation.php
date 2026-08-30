@@ -11,6 +11,9 @@
 namespace WebFiori\Ai\Conversation;
 
 use WebFiori\Ai\ChatResponse;
+use WebFiori\Ai\Exception\AuthenticationException;
+use WebFiori\Ai\Exception\ProviderException;
+use WebFiori\Ai\Exception\RateLimitException;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\ProviderInterface;
 use WebFiori\Ai\Role;
@@ -150,9 +153,9 @@ class Conversation {
      *
      * @return ChatResponse The AI-generated response.
      *
-     * @throws \WebFiori\Ai\Exception\AuthenticationException If credentials are invalid.
-     * @throws \WebFiori\Ai\Exception\RateLimitException If the rate limit is exceeded.
-     * @throws \WebFiori\Ai\Exception\ProviderException If the provider returns an error.
+     * @throws AuthenticationException If credentials are invalid.
+     * @throws RateLimitException If the rate limit is exceeded.
+     * @throws ProviderException If the provider returns an error.
      */
     public function send(string $content, array $options = []): ChatResponse {
         $history = $this->storage->load($this->id);

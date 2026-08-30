@@ -10,6 +10,7 @@
  */
 namespace WebFiori\Ai\Context;
 
+use WebFiori\Ai\Exception\ContextOverflowException;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Tool\ToolInterface;
 
@@ -38,7 +39,7 @@ interface ContextWindowStrategyInterface {
      *
      * @return Message[] The truncated messages that fit within the limit.
      *
-     * @throws \WebFiori\Ai\Exception\ContextOverflowException If strategy
+     * @throws ContextOverflowException If strategy
      *         does not support truncation and limit is exceeded.
      */
     public function truncate(array $messages, int $maxTokens, array $tools = []): array;

@@ -10,6 +10,7 @@
  */
 namespace WebFiori\Ai\Http;
 
+use WebFiori\Ai\Exception\HttpException;
 use WebFiori\Ai\RetryConfig;
 
 /**
@@ -90,7 +91,7 @@ class RetryableHttpClient implements HttpClientInterface {
      *
      * @return HttpResponse The successful response.
      *
-     * @throws \WebFiori\Ai\Exception\HttpException If all retry attempts fail.
+     * @throws HttpException If all retry attempts fail.
      * @throws \Throwable If a non-retryable exception occurs.
      */
     public function send(HttpRequest $request): HttpResponse {

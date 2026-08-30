@@ -12,6 +12,9 @@ namespace WebFiori\Ai\Provider\Formatter;
 
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\EmbeddingResponse;
+use WebFiori\Ai\Exception\AuthenticationException;
+use WebFiori\Ai\Exception\ProviderException;
+use WebFiori\Ai\Exception\RateLimitException;
 use WebFiori\Ai\Http\HttpRequest;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\ImageRequest;
@@ -105,9 +108,9 @@ interface ProviderFormatterInterface {
      *
      * @param HttpResponse $response The HTTP response to check.
      *
-     * @throws \WebFiori\Ai\Exception\AuthenticationException If 401/403.
-     * @throws \WebFiori\Ai\Exception\RateLimitException If 429.
-     * @throws \WebFiori\Ai\Exception\ProviderException For other errors.
+     * @throws AuthenticationException If 401/403.
+     * @throws RateLimitException If 429.
+     * @throws ProviderException For other errors.
      */
     public function handleErrorResponse(HttpResponse $response): void;
 

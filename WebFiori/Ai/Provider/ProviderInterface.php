@@ -12,6 +12,12 @@ namespace WebFiori\Ai\Provider;
 
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\EmbeddingResponse;
+use WebFiori\Ai\Exception\AuthenticationException;
+use WebFiori\Ai\Exception\HttpException;
+use WebFiori\Ai\Exception\ProviderException;
+use WebFiori\Ai\Exception\RateLimitException;
+use WebFiori\Ai\Exception\StreamingException;
+use WebFiori\Ai\Exception\UnsupportedFeatureException;
 use WebFiori\Ai\HealthCheckResult;
 use WebFiori\Ai\Http\HttpClientInterface;
 use WebFiori\Ai\ImageRequest;
@@ -24,7 +30,7 @@ use WebFiori\Ai\Message;
  * This interface defines the common operations that all AI providers
  * (OpenAI, Google, Anthropic, Bedrock) must implement. Providers
  * that do not support a specific operation should throw
- * {@see \WebFiori\Ai\Exception\UnsupportedFeatureException}.
+ * {@see UnsupportedFeatureException}.
  *
  * @author Ibrahim
  */
@@ -38,10 +44,10 @@ interface ProviderInterface {
      *
      * @return ChatResponse The AI-generated response.
      *
-     * @throws \WebFiori\Ai\Exception\AuthenticationException If credentials are invalid.
-     * @throws \WebFiori\Ai\Exception\RateLimitException If the rate limit is exceeded.
-     * @throws \WebFiori\Ai\Exception\ProviderException If the provider returns an error.
-     * @throws \WebFiori\Ai\Exception\HttpException If a transport error occurs.
+     * @throws AuthenticationException If credentials are invalid.
+     * @throws RateLimitException If the rate limit is exceeded.
+     * @throws ProviderException If the provider returns an error.
+     * @throws HttpException If a transport error occurs.
      */
     public function chat(array $messages, array $options = []): ChatResponse;
 
@@ -55,9 +61,9 @@ interface ProviderInterface {
      *
      * @return EmbeddingResponse The embedding response containing vector(s).
      *
-     * @throws \WebFiori\Ai\Exception\UnsupportedFeatureException If the provider
+     * @throws UnsupportedFeatureException If the provider
      *         does not support embeddings.
-     * @throws \WebFiori\Ai\Exception\ProviderException If the provider returns an error.
+     * @throws ProviderException If the provider returns an error.
      */
     public function embed(string|array $input, array $options = []): EmbeddingResponse;
 
@@ -69,9 +75,9 @@ interface ProviderInterface {
      *
      * @return ImageResponse The response containing generated image(s).
      *
-     * @throws \WebFiori\Ai\Exception\UnsupportedFeatureException If the provider
+     * @throws UnsupportedFeatureException If the provider
      *         does not support image generation.
-     * @throws \WebFiori\Ai\Exception\ProviderException If the provider returns an error.
+     * @throws ProviderException If the provider returns an error.
      */
     public function generateImage(ImageRequest $request): ImageResponse;
 
@@ -127,12 +133,12 @@ interface ProviderInterface {
      * @param callable|null $onComplete Optional callback invoked when streaming
      *        completes. Signature: function(ChatResponse $response): void
      * @param callable|null $onError Optional callback invoked on stream error.
-     *        Signature: function(\WebFiori\Ai\Exception\StreamingException $e): void
+     *        Signature: function(StreamingException $e): void
      * @param array<string, mixed> $options Additional provider-specific options.
      *
-     * @throws \WebFiori\Ai\Exception\AuthenticationException If credentials are invalid.
-     * @throws \WebFiori\Ai\Exception\RateLimitException If the rate limit is exceeded.
-     * @throws \WebFiori\Ai\Exception\ProviderException If the provider returns an error.
+     * @throws AuthenticationException If credentials are invalid.
+     * @throws RateLimitException If the rate limit is exceeded.
+     * @throws ProviderException If the provider returns an error.
      */
     public function streamChat(
         array $messages,
