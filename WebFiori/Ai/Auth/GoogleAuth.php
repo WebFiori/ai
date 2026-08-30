@@ -263,8 +263,25 @@ class GoogleAuth {
         $signInput = $base64Header.'.'.$base64Claim;
 
         $privateKey = $credentials['private_key'] ?? '';
+
+        if (!is_string($privateKey) || !str_contains($privateKey, 'PRIVATE KEY')) {
+            throw new AuthenticationException(
+                'Invalid or missing private key in Google service account credentials.',
+                401
+            );
+        }
+
+        $keyResource = openssl_pkey_get_private($privateKey);
+
+        if ($keyResource === false) {
+            throw new AuthenticationException(
+                'Invalid private key in Google service account credentials.',
+                401
+            );
+        }
+
         $signature = '';
-        $success = openssl_sign($signInput, $signature, $privateKey, OPENSSL_ALGO_SHA256);
+        $success = openssl_sign($signInput, $signature, $keyResource, OPENSSL_ALGO_SHA256);
 
         if (!$success) {
             throw new AuthenticationException(
@@ -315,7 +332,7 @@ class GoogleAuth {
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        unset($ch);
 
         if ($response === false || $httpCode >= 400) {
             throw new AuthenticationException(
@@ -391,7 +408,7 @@ class GoogleAuth {
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        unset($ch);
 
         if ($response === false || $httpCode >= 400) {
             return null;

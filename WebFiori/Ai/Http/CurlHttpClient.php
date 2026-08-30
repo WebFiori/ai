@@ -96,7 +96,8 @@ class CurlHttpClient implements HttpClientInterface {
      */
     public function closeConnection(): void {
         if ($this->persistentHandle !== null) {
-            curl_close($this->persistentHandle);
+            // curl_close() is a deprecated no-op since PHP 8.0 (CurlHandle is a
+            // GC-managed object). Dropping the reference frees the handle.
             $this->persistentHandle = null;
             $this->lastHost = null;
         }
@@ -198,7 +199,7 @@ class CurlHttpClient implements HttpClientInterface {
             $errorMessage = curl_error($ch);
 
             if (!$this->reuseConnection) {
-                curl_close($ch);
+                unset($ch);
             } else {
                 // Connection may be broken, reset it
                 $this->closeConnection();
@@ -213,7 +214,7 @@ class CurlHttpClient implements HttpClientInterface {
         $statusCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
         if (!$this->reuseConnection) {
-            curl_close($ch);
+            unset($ch);
         }
 
         return new HttpResponse($statusCode, $responseHeaders, $body);
@@ -253,7 +254,7 @@ class CurlHttpClient implements HttpClientInterface {
         $result = curl_exec($ch);
 
         if ($streamError !== null) {
-            curl_close($ch);
+            unset($ch);
 
             throw new StreamingException(
                 'Stream processing error: '.$streamError->getMessage(),
@@ -265,7 +266,7 @@ class CurlHttpClient implements HttpClientInterface {
         if ($result === false) {
             $errorCode = curl_errno($ch);
             $errorMessage = curl_error($ch);
-            curl_close($ch);
+            unset($ch);
 
             throw new HttpException(
                 'cURL streaming request failed: '.$errorMessage,
@@ -273,7 +274,7 @@ class CurlHttpClient implements HttpClientInterface {
             );
         }
 
-        curl_close($ch);
+        unset($ch);
     }
 
     /**
