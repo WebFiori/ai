@@ -32,9 +32,10 @@ assert($usage->isEstimated() === true, 'Should be estimated');
 assert($usage->getUsedPercentage() !== null, 'Percentage should be computed');
 echo "   ✅ used={$usage->getUsedTokens()}, max=8000, pct=".round($usage->getUsedPercentage(), 1)."%, estimated=true\n";
 
-// Test 2: Unknown ceiling (no maxTokens, no strategy)
+// Test 2: Unknown ceiling (unlisted model, no maxTokens, no strategy)
 echo "\n2. Unknown ceiling — used reported, derived values null\n";
-$usage = $client->getContextUsage([new Message('user', 'Hello')]);
+$unlistedClient = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'unlisted-model'));
+$usage = $unlistedClient->getContextUsage([new Message('user', 'Hello')]);
 
 assert($usage->getMaxTokens() === null, 'Max should be null');
 assert($usage->getRemainingTokens() === null, 'Remaining should be null');
@@ -101,4 +102,29 @@ assert(array_key_exists('over_budget', $array), 'has over_budget');
 assert(array_key_exists('estimated', $array), 'has estimated');
 echo "   ✅ toArray keys: ".implode(', ', array_keys($array))."\n";
 
-echo "\n=== All 7 checks passed ✅ ===\n";
+// Test 8: Ceiling auto-inferred from the model (ContextWindowConfig)
+echo "\n8. Ceiling auto-inferred from model via ContextWindowConfig\n";
+$gptClient = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'gpt-4o'));
+$usage = $gptClient->getContextUsage([new Message('user', 'Hi')]);
+
+assert($usage->getMaxTokens() === 128000, 'gpt-4o should infer 128000');
+assert($usage->getUsedPercentage() !== null, 'Percentage available from inferred ceiling');
+echo "   ✅ gpt-4o → max=128000 (no explicit maxTokens, no strategy)\n";
+
+// Test 9: Unknown model → no inference, ceiling stays null
+echo "\n9. Unknown model → no ceiling inferred\n";
+$unknownClient = new OpenAIClient(new OpenAIClientConfig(apiKey: 'test-key', model: 'some-unlisted-model'));
+$usage = $unknownClient->getContextUsage([new Message('user', 'Hi')]);
+
+assert($usage->getMaxTokens() === null, 'Unknown model → null ceiling');
+echo "   ✅ unknown model → max=null (graceful)\n";
+
+// Test 10: Override the context window table
+echo "\n10. Override a model's context window\n";
+$gptClient->getContextWindowConfig()->setContextWindow('gpt-4o', 32000);
+$usage = $gptClient->getContextUsage([new Message('user', 'Hi')]);
+
+assert($usage->getMaxTokens() === 32000, 'Override should apply');
+echo "   ✅ overridden gpt-4o → max=32000\n";
+
+echo "\n=== All 10 checks passed ✅ ===\n";
