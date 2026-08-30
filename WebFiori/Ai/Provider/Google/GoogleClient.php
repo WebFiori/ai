@@ -591,10 +591,12 @@ class GoogleClient extends AbstractClient {
             }
 
             curl_multi_remove_handle($multiHandle, $ch);
-            curl_close($ch);
+            unset($ch);
         }
 
-        curl_multi_close($multiHandle);
+        // curl_multi_close() is a deprecated no-op since PHP 8.0; the
+        // CurlMultiHandle object is freed when $multiHandle goes out of scope.
+        unset($multiHandle);
 
         return $results;
     }

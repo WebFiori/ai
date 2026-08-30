@@ -332,7 +332,7 @@ class GoogleAuth {
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        unset($ch);
 
         if ($response === false || $httpCode >= 400) {
             throw new AuthenticationException(
@@ -408,7 +408,7 @@ class GoogleAuth {
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        unset($ch);
 
         if ($response === false || $httpCode >= 400) {
             return null;

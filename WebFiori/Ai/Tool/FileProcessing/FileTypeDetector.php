@@ -143,8 +143,9 @@ class FileTypeDetector {
         // For local files try finfo first (magic bytes are most accurate)
         if (!$isUrl && file_exists($pathOrUrl) && function_exists('finfo_open')) {
             $finfo = finfo_open(FILEINFO_MIME_TYPE);
-            $mime = finfo_file($finfo, $pathOrUrl);
-            finfo_close($finfo);
+            $mime = $finfo !== false ? finfo_file($finfo, $pathOrUrl) : false;
+            // finfo_close() is a deprecated no-op since PHP 8.1 (finfo is a
+            // GC-managed object) and is freed when $finfo goes out of scope.
 
             if ($mime !== false && $mime !== 'application/octet-stream') {
                 // finfo returns 'application/zip' for OOXML formats
