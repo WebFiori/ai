@@ -31,16 +31,21 @@ class CacheKeyGenerator {
      * @return string The cache key.
      */
     public function forChat(string $provider, string $model, array $messages, array $options): string {
+        $ctx = hash_init('sha256');
+
+        hash_update($ctx, $provider);
+        hash_update($ctx, "\0");
+        hash_update($ctx, $model);
+        hash_update($ctx, "\0");
+
+        foreach ($messages as $message) {
+            $this->hashMessage($ctx, $message);
+        }
+
         $relevantOptions = $this->extractRelevantOptions($options);
+        hash_update($ctx, json_encode($relevantOptions));
 
-        $data = [
-            'provider' => $provider,
-            'model' => $model,
-            'messages' => $this->serializeMessages($messages),
-            'options' => $relevantOptions,
-        ];
-
-        return 'chat_'.hash('sha256', json_encode($data));
+        return 'chat_'.hash_final($ctx);
     }
 
     /**
@@ -95,22 +100,41 @@ class CacheKeyGenerator {
     }
 
     /**
-     * Serializes messages into a consistent format for hashing.
+     * Feeds a single message's identifying state into a hash context.
      *
-     * @param array $messages The messages to serialize.
+     * Hashes the role, content, any tool calls (assistant messages), and any
+     * tool result (tool messages). Field separators are written between values
+     * so that distinct field boundaries cannot collide.
      *
-     * @return array The serialized messages.
+     * @param \HashContext $ctx The incremental hash context to update.
+     * @param mixed $message The message to hash. Expected to be a Message instance.
      */
-    private function serializeMessages(array $messages): array {
-        $serialized = [];
+    private function hashMessage(\HashContext $ctx, $message): void {
+        hash_update($ctx, $message->getRole());
+        hash_update($ctx, "\0");
+        hash_update($ctx, $message->getContent());
+        hash_update($ctx, "\0");
 
-        foreach ($messages as $message) {
-            $serialized[] = [
-                'role' => $message->getRole(),
-                'content' => $message->getContent(),
-            ];
+        foreach ($message->getToolCalls() as $toolCall) {
+            hash_update($ctx, 'tc:');
+            hash_update($ctx, $toolCall->getId());
+            hash_update($ctx, "\0");
+            hash_update($ctx, $toolCall->getName());
+            hash_update($ctx, "\0");
+            hash_update($ctx, json_encode($toolCall->getArguments()));
+            hash_update($ctx, "\0");
         }
 
-        return $serialized;
+        $toolResult = $message->getToolResult();
+
+        if ($toolResult !== null) {
+            hash_update($ctx, 'tr:');
+            hash_update($ctx, $toolResult->getToolCallId());
+            hash_update($ctx, "\0");
+            hash_update($ctx, $toolResult->getName());
+            hash_update($ctx, "\0");
+            hash_update($ctx, $toolResult->getContent());
+            hash_update($ctx, "\0");
+        }
     }
 }

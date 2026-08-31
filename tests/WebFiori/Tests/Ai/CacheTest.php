@@ -23,6 +23,8 @@ use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
+use WebFiori\Ai\Tool\ToolCall;
+use WebFiori\Ai\Tool\ToolResult;
 use WebFiori\Ai\Usage;
 
 /**
@@ -218,6 +220,87 @@ class CacheTest extends TestCase {
         $key2 = $generator->forChat('openai', 'gpt-4o', [new Message('user', 'Hi')], []);
 
         $this->assertNotSame($key1, $key2);
+    }
+
+    /**
+     * @test
+     */
+    public function testCacheKeyGeneratorDifferentToolCalls() {
+        $generator = new CacheKeyGenerator();
+
+        // Same role and (empty) content, but different tool call arguments.
+        $msg1 = new Message('assistant', '', [new ToolCall('call_1', 'get_weather', ['city' => 'Paris'])]);
+        $msg2 = new Message('assistant', '', [new ToolCall('call_1', 'get_weather', ['city' => 'London'])]);
+
+        $key1 = $generator->forChat('openai', 'gpt-4o', [$msg1], []);
+        $key2 = $generator->forChat('openai', 'gpt-4o', [$msg2], []);
+
+        $this->assertNotSame($key1, $key2);
+    }
+
+    /**
+     * @test
+     */
+    public function testCacheKeyGeneratorDifferentToolCallNames() {
+        $generator = new CacheKeyGenerator();
+
+        $msg1 = new Message('assistant', '', [new ToolCall('call_1', 'get_weather', [])]);
+        $msg2 = new Message('assistant', '', [new ToolCall('call_1', 'get_time', [])]);
+
+        $key1 = $generator->forChat('openai', 'gpt-4o', [$msg1], []);
+        $key2 = $generator->forChat('openai', 'gpt-4o', [$msg2], []);
+
+        $this->assertNotSame($key1, $key2);
+    }
+
+    /**
+     * @test
+     */
+    public function testCacheKeyGeneratorSameToolCallsAreDeterministic() {
+        $generator = new CacheKeyGenerator();
+
+        $msg1 = new Message('assistant', '', [new ToolCall('call_1', 'get_weather', ['city' => 'Paris'])]);
+        $msg2 = new Message('assistant', '', [new ToolCall('call_1', 'get_weather', ['city' => 'Paris'])]);
+
+        $key1 = $generator->forChat('openai', 'gpt-4o', [$msg1], []);
+        $key2 = $generator->forChat('openai', 'gpt-4o', [$msg2], []);
+
+        $this->assertSame($key1, $key2);
+    }
+
+    /**
+     * @test
+     */
+    public function testCacheKeyGeneratorDifferentToolResults() {
+        $generator = new CacheKeyGenerator();
+
+        // Tool messages have empty content; the differentiating data is in the result.
+        $msg1 = Message::tool(new ToolResult('call_1', 'sunny, 25C', 'get_weather'));
+        $msg2 = Message::tool(new ToolResult('call_1', 'storm, 5C', 'get_weather'));
+
+        $key1 = $generator->forChat('openai', 'gpt-4o', [$msg1], []);
+        $key2 = $generator->forChat('openai', 'gpt-4o', [$msg2], []);
+
+        $this->assertNotSame($key1, $key2);
+    }
+
+    /**
+     * @test
+     */
+    public function testCacheKeyGeneratorLargeConversationDeterministic() {
+        $generator = new CacheKeyGenerator();
+        $messages = [];
+
+        for ($i = 0; $i < 200; $i++) {
+            $messages[] = new Message($i % 2 === 0 ? 'user' : 'assistant', 'Message number '.$i);
+        }
+
+        $key1 = $generator->forChat('openai', 'gpt-4o', $messages, ['temperature' => 0]);
+        $key2 = $generator->forChat('openai', 'gpt-4o', $messages, ['temperature' => 0]);
+
+        $this->assertSame($key1, $key2);
+        $this->assertStringStartsWith('chat_', $key1);
+        $this->assertSame(64 + 5, strlen($key1));
     }
 
     /**
