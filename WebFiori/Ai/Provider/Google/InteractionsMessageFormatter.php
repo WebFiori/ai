@@ -26,6 +26,10 @@ use WebFiori\Ai\Tool\ToolResult;
  * - Assistant messages → raw steps array from previous response
  * - Tool results → {type: 'function_result', name: '...', call_id: '...', result: [...]}
  *
+ * @internal This class is an implementation detail of GoogleClient's
+ *           Interactions API support. It is not part of the public API and
+ *           may change without a major version bump.
+ *
  * @author Ibrahim
  */
 class InteractionsMessageFormatter {

@@ -33,6 +33,10 @@ use WebFiori\Ai\Usage;
  * Use this strategy when you need model-specific parameters not available
  * through the Converse API, or when targeting models that only support Invoke.
  *
+ * @internal This Bedrock invocation strategy is an implementation detail of
+ *           BedrockClient. It is not part of the public API and may change
+ *           without a major version bump.
+ *
  * @author Ibrahim
  */
 class InvokeStrategy implements InvocationStrategyInterface {

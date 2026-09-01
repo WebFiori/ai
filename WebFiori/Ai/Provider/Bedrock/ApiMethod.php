@@ -13,12 +13,14 @@ namespace WebFiori\Ai\Provider\Bedrock;
 /**
  * Defines the available AWS Bedrock Runtime invocation API methods.
  *
- * Use these constants when configuring the BedrockClient to select
- * which Bedrock API surface to use for requests.
+ * Use these enum cases when configuring the BedrockClient to select
+ * which Bedrock API surface to use for requests. The backing string values
+ * (`converse`, `invoke`, `responses`) are what get serialized in
+ * array-based configuration.
  *
  * @author Ibrahim
  */
-class ApiMethod {
+enum ApiMethod: string {
     /**
      * Unified chat API that works across all supported models.
      *
@@ -32,7 +34,7 @@ class ApiMethod {
      * Supports: chat, streaming, tools, system messages.
      * All of these work identically regardless of the underlying model.
      */
-    const CONVERSE = 'converse';
+    case CONVERSE = 'converse';
 
     /**
      * Raw model invocation using each model's native request format.
@@ -47,7 +49,7 @@ class ApiMethod {
      * Use this when you need model-specific parameters not exposed by
      * the Converse API, or when working with models that only support Invoke.
      */
-    const INVOKE = 'invoke';
+    case INVOKE = 'invoke';
 
     /**
      * Stateful session-based invocation API.
@@ -62,5 +64,5 @@ class ApiMethod {
      * Note: Not all models support this API. Check AWS documentation for
      * model compatibility before using this method.
      */
-    const RESPONSES = 'responses';
+    case RESPONSES = 'responses';
 }

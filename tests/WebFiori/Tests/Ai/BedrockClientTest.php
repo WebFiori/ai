@@ -256,7 +256,7 @@ class BedrockClientTest extends TestCase {
      *
      * @return BedrockClient
      */
-    private function createProvider(string $apiMethod = ApiMethod::CONVERSE): BedrockClient {
+    private function createProvider(ApiMethod|string $apiMethod = ApiMethod::CONVERSE): BedrockClient {
         return new BedrockClient(new BedrockClientConfig(
             region: 'us-east-1',
             model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',

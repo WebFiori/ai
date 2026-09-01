@@ -41,6 +41,11 @@ use WebFiori\Ai\Usage;
  * and can be reused across different transport contexts — direct API calls
  * via AnthropicClient and Vertex AI Model Garden via GoogleClient.
  *
+ * @internal This class is an implementation detail used internally by the
+ *           provider clients. It is not part of the public API and may change
+ *           without a major version bump. Use the provider client classes
+ *           (e.g. AnthropicClient) instead.
+ *
  * @author Ibrahim
  */
 class AnthropicFormatter implements ProviderFormatterInterface {
@@ -108,9 +113,9 @@ class AnthropicFormatter implements ProviderFormatterInterface {
         array $headers
     ): HttpRequest {
         throw new UnsupportedFeatureException(
-            'Anthropic does not support embeddings. Consider using OpenAI or Google for embeddings.',
             'embeddings',
-            'anthropic'
+            'anthropic',
+            'Anthropic does not support embeddings. Consider using OpenAI or Google for embeddings.'
         );
     }
 
@@ -123,9 +128,9 @@ class AnthropicFormatter implements ProviderFormatterInterface {
         array $headers
     ): HttpRequest {
         throw new UnsupportedFeatureException(
-            'Anthropic does not support image generation. Consider using OpenAI (DALL-E) or Google (Imagen).',
             'image_generation',
-            'anthropic'
+            'anthropic',
+            'Anthropic does not support image generation. Consider using OpenAI (DALL-E) or Google (Imagen).'
         );
     }
 
@@ -403,9 +408,9 @@ class AnthropicFormatter implements ProviderFormatterInterface {
      */
     public function parseEmbedResponse(HttpResponse $response): EmbeddingResponse {
         throw new UnsupportedFeatureException(
-            'Anthropic does not support embeddings.',
             'embeddings',
-            'anthropic'
+            'anthropic',
+            'Anthropic does not support embeddings.'
         );
     }
 
@@ -414,9 +419,9 @@ class AnthropicFormatter implements ProviderFormatterInterface {
      */
     public function parseImageResponse(HttpResponse $response): ImageResponse {
         throw new UnsupportedFeatureException(
-            'Anthropic does not support image generation.',
             'image_generation',
-            'anthropic'
+            'anthropic',
+            'Anthropic does not support image generation.'
         );
     }
 

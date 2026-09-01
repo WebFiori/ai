@@ -28,6 +28,10 @@ use WebFiori\Ai\Usage;
  * The interaction `id` is stored as the response's requestId to enable
  * stateful follow-up requests via `previous_interaction_id`.
  *
+ * @internal This class is an implementation detail of GoogleClient's
+ *           Interactions API support. It is not part of the public API and
+ *           may change without a major version bump.
+ *
  * @author Ibrahim
  */
 class InteractionsResponseParser {

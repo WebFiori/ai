@@ -40,10 +40,12 @@ class UnsupportedFeatureException extends AiException {
      *        (e.g., 'embeddings', 'image_generation').
      * @param string $providerName The name of the provider that does not
      *        support the feature.
+     * @param string|null $message Optional custom message. When null, a
+     *        default message is generated from the feature and provider.
      */
-    public function __construct(string $feature, string $providerName) {
+    public function __construct(string $feature, string $providerName, ?string $message = null) {
         parent::__construct(
-            sprintf("The '%s' feature is not supported by the '%s' provider.", $feature, $providerName)
+            $message ?? sprintf("The '%s' feature is not supported by the '%s' provider.", $feature, $providerName)
         );
         $this->feature = $feature;
         $this->providerName = $providerName;
