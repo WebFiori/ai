@@ -3,7 +3,7 @@
 namespace WebFiori\Tests\Ai;
 
 use PHPUnit\Framework\TestCase;
-use WebFiori\Ai\Provider\Bedrock\AwsCredentialChain;
+use WebFiori\Ai\Auth\AwsCredentialChain;
 
 /**
  * Tests for AwsCredentialChain.
