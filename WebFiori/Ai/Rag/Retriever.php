@@ -10,6 +10,7 @@
  */
 namespace WebFiori\Ai\Rag;
 
+use WebFiori\Ai\Cache\CachedResponse;
 use WebFiori\Ai\Cache\CacheInterface;
 use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\Embedding\VectorStorageInterface;
@@ -39,6 +40,16 @@ use WebFiori\Ai\Provider\ProviderInterface;
  * @author Ibrahim
  */
 class Retriever implements RagProviderInterface {
+    /**
+     * Default time-to-live, in seconds, for cached query embeddings.
+     *
+     * Query embeddings are deterministic for a given query + model, so a
+     * long TTL is safe (defaults to 24 hours).
+     *
+     * @var int
+     */
+    private const EMBEDDING_CACHE_TTL = 86400;
+
     /**
      * Optional cache for query embeddings.
      *
@@ -275,7 +286,7 @@ class Retriever implements RagProviderInterface {
             if ($cached !== null) {
                 $this->wasCacheHit = true;
 
-                return $cached;
+                return $cached->getData();
             }
         }
 
@@ -291,7 +302,11 @@ class Retriever implements RagProviderInterface {
 
         // Store in cache
         if ($this->cache !== null) {
-            $this->cache->set($cacheKey, $vector);
+            $this->cache->set(
+                $cacheKey,
+                new CachedResponse($vector, 'embedding'),
+                self::EMBEDDING_CACHE_TTL
+            );
         }
 
         return $vector;
