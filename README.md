@@ -97,6 +97,90 @@ $response = $client->chat([
 ]);
 ```
 
+### Embeddings
+
+Generate vector embeddings for semantic search, clustering, or RAG. Supported by
+OpenAI and Google (see the [provider comparison](#provider-comparison)).
+
+The typical flow is: turn your documents into vectors once, store them, then at
+query time embed the user's question and find the closest vectors.
+
+```mermaid
+flowchart LR
+    subgraph Indexing["Indexing (once)"]
+        A[Documents] --> B["embed()"]
+        B --> C[Vectors]
+        C --> D[(Vector Store)]
+    end
+    subgraph Query["Query (per request)"]
+        E[User question] --> F["embed()"]
+        F --> G[Query vector]
+        G --> H{"store.query()"}
+        D --> H
+        H --> I[Top-K matches]
+        I --> J[Use in app: RAG, search, dedup]
+    end
+```
+
+```php
+use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
+
+$client = new OpenAIClient(new OpenAIClientConfig(
+    apiKey: 'sk-...',
+    model: 'gpt-4o',
+));
+
+// Embed one or many texts in a single call
+$response = $client->embed(
+    ['How do I reset my password?', 'Account recovery steps'],
+    ['model' => 'text-embedding-3-small'],
+);
+
+echo 'Dimensions: '.$response->getDimensions().PHP_EOL;
+$vectors = $response->getVectors(); // array of float[] vectors
+```
+
+Pair embeddings with the built-in vector store for semantic search:
+
+```php
+use WebFiori\Ai\Embedding\InMemoryVectorStore;
+
+$store = new InMemoryVectorStore();
+$store->store('doc-1', $vectors[0], ['text' => 'How do I reset my password?']);
+
+$queryVector = $client->embed('forgot my login', ['model' => 'text-embedding-3-small'])->getVector();
+$results = $store->query($queryVector, topK: 3);
+
+foreach ($results as $record) {
+    printf("[%.3f] %s\n", $record->getScore(), $record->getMetadata()['text']);
+}
+```
+
+### Image Generation
+
+Generate images from text prompts. Supported by OpenAI (DALL·E) and Google (Imagen).
+
+```php
+use WebFiori\Ai\ImageRequest;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
+
+$client = new OpenAIClient(new OpenAIClientConfig(apiKey: 'sk-...'));
+
+$request = new ImageRequest(
+    prompt: 'A serene Japanese garden with a bridge over a koi pond, watercolor style',
+    size: '1024x1024',
+    quality: 'hd',
+    style: 'natural',
+);
+
+$response = $client->generateImage($request);
+$image = $response->getImages()[0];
+
+echo 'URL: '.$image->getUrl().PHP_EOL;
+```
+
 ### Provider Fallback
 
 ```php
@@ -190,6 +274,95 @@ $response = $client->chat(
     ['tools' => [$chartTool], 'auto_execute_tools' => true]
 );
 ```
+
+## Provider Comparison
+
+Feature support varies by provider. All providers share the same interface, so
+switching is a config change — but the following operations are provider-specific:
+
+| Feature                    | OpenAI | Google (Gemini/Vertex) | Anthropic | AWS Bedrock |
+|----------------------------|:------:|:----------------------:|:---------:|:-----------:|
+| Chat completions           |   ✅   |          ✅            |    ✅     |     ✅      |
+| Streaming                  |   ✅   |          ✅            |    ✅     |     ✅      |
+| Tool / function calling    |   ✅   |          ✅            |    ✅     |     ✅      |
+| Structured output (JSON)   |   ✅   |          ✅            |    ✅     |     ✅      |
+| Vision / multi-modal input |   ✅   |          ✅            |    ✅     |     ✅      |
+| Embeddings                 |   ✅   |          ✅            |    ❌     |     ❌¹     |
+| Image generation           |   ✅   |          ✅            |    ❌     |     ❌¹     |
+
+Calling an unsupported operation throws `UnsupportedFeatureException` with a
+message pointing to a provider that supports it.
+
+¹ Not yet implemented for Bedrock. Anthropic has no embeddings or image-generation
+API; use OpenAI or Google for those.
+
+## Configuration Reference
+
+Each provider has a typed config class extending `ClientConfig`. Common options
+(`model`, `timeout`, `connectTimeout`) are shared; the rest are provider-specific.
+
+### Common options (all providers)
+
+| Option           | Type     | Default | Description                       |
+|------------------|----------|---------|-----------------------------------|
+| `model`          | `string` | *(provider default)* | Default model for chat completions. |
+| `timeout`        | `int`    | `30`    | Request timeout in seconds.       |
+| `connectTimeout` | `int`    | `10`    | Connection timeout in seconds.    |
+
+### OpenAI — `OpenAIClientConfig`
+
+| Option           | Type          | Default                      | Description                                  |
+|------------------|---------------|------------------------------|----------------------------------------------|
+| `apiKey`         | `string`      | *(required)*                 | OpenAI API key.                              |
+| `model`          | `string`      | `gpt-4o`                     | Default chat model.                          |
+| `organization`   | `?string`     | `null`                       | OpenAI organization ID.                      |
+| `baseUrl`        | `string`      | `https://api.openai.com/v1`  | Override for Azure OpenAI / compatible APIs. |
+| `embeddingModel` | `string`      | `text-embedding-3-small`     | Model used by `embed()`.                     |
+| `imageModel`     | `string`      | `dall-e-3`                   | Model used by `generateImage()`.             |
+
+### Google — `GoogleClientConfig`
+
+Authentication priority: `apiKey` > `accessToken` > `credentials`.
+
+| Option           | Type                        | Default                                       | Description                                        |
+|------------------|-----------------------------|-----------------------------------------------|----------------------------------------------------|
+| `model`          | `string`                    | `gemini-2.5-flash`                            | Default chat model.                                |
+| `apiKey`         | `?string`                   | `null`                                        | Gemini API key from Google AI Studio.              |
+| `projectId`      | `?string`                   | `null`                                        | GCP project ID (required for Vertex AI).           |
+| `location`       | `string`                    | `global`                                      | GCP region, or `global` for automatic routing.     |
+| `credentials`    | `string\|array\|null`       | `null`                                        | Service-account JSON path or array.                |
+| `accessToken`    | `?string`                   | `null`                                        | Pre-fetched OAuth2 access token.                   |
+| `api`            | `GoogleApi`                 | `GoogleApi::GEMINI`                           | `GEMINI` or `VERTEX` endpoint.                     |
+| `apiVersion`     | `GoogleApiVersion`          | `AUTO`                                         | `AUTO` detects Interactions API for gemini-3.x.    |
+| `embeddingModel` | `string`                    | `text-embedding-004`                          | Model used by `embed()`.                           |
+| `imageModel`     | `string`                    | `gemini-2.5-flash-preview-image-generation`   | Model used by `generateImage()`.                   |
+| `publisher`      | `string`                    | `google`                                      | Model Garden publisher (`anthropic`, `meta`, ...). |
+
+### Anthropic — `AnthropicClientConfig`
+
+| Option             | Type     | Default                       | Description                  |
+|--------------------|----------|-------------------------------|------------------------------|
+| `apiKey`           | `string` | *(required)*                  | Anthropic API key.           |
+| `model`            | `string` | `claude-sonnet-4-20250514`    | Default chat model.          |
+| `maxTokens`        | `int`    | `4096`                        | Default max response tokens. |
+| `baseUrl`          | `string` | `https://api.anthropic.com`   | API base URL.                |
+| `anthropicVersion` | `string` | `2023-06-01`                  | API version header value.    |
+
+### AWS Bedrock — `BedrockClientConfig`
+
+Supports API-key auth or SigV4 (access/secret keys, session token, or a named profile).
+
+| Option         | Type      | Default                                       | Description                              |
+|----------------|-----------|-----------------------------------------------|------------------------------------------|
+| `region`       | `string`  | *(required)*                                  | AWS region (e.g., `us-east-1`).          |
+| `model`        | `string`  | `anthropic.claude-3-5-sonnet-20241022-v2:0`   | Default chat model.                      |
+| `apiKey`       | `?string` | `null`                                        | Bedrock API key (simple auth).           |
+| `accessKey`    | `?string` | `null`                                        | AWS access key ID (SigV4).               |
+| `secretKey`    | `?string` | `null`                                        | AWS secret access key (SigV4).           |
+| `sessionToken` | `?string` | `null`                                        | AWS session token (temporary creds).     |
+| `profile`      | `?string` | `null`                                        | AWS profile name for the credential chain. |
+| `apiMethod`    | `string`  | `ApiMethod::CONVERSE`                         | Invocation API (`CONVERSE` or `INVOKE`). |
+| `maxTokens`    | `int`     | `4096`                                        | Default max response tokens.             |
 
 ## Documentation
 
