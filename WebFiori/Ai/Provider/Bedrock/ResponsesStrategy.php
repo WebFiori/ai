@@ -50,9 +50,9 @@ class ResponsesStrategy implements InvocationStrategyInterface {
         BedrockClient $client
     ): HttpRequest {
         throw new UnsupportedFeatureException(
-            'The Bedrock Responses API (ApiMethod::RESPONSES) is not yet implemented.',
             'responses',
-            'bedrock'
+            'bedrock',
+            'The Bedrock Responses API (ApiMethod::RESPONSES) is not yet implemented.'
         );
     }
 
@@ -75,9 +75,9 @@ class ResponsesStrategy implements InvocationStrategyInterface {
         BedrockClient $client
     ): HttpRequest {
         throw new UnsupportedFeatureException(
-            'The Bedrock Responses API (ApiMethod::RESPONSES) is not yet implemented.',
             'responses',
-            'bedrock'
+            'bedrock',
+            'The Bedrock Responses API (ApiMethod::RESPONSES) is not yet implemented.'
         );
     }
 
@@ -100,9 +100,9 @@ class ResponsesStrategy implements InvocationStrategyInterface {
         ?callable $onError
     ): void {
         throw new UnsupportedFeatureException(
-            'The Bedrock Responses API (ApiMethod::RESPONSES) is not yet implemented.',
             'responses',
-            'bedrock'
+            'bedrock',
+            'The Bedrock Responses API (ApiMethod::RESPONSES) is not yet implemented.'
         );
     }
 
@@ -118,9 +118,9 @@ class ResponsesStrategy implements InvocationStrategyInterface {
      */
     public function parseChatResponse(HttpResponse $response, string $modelId): ChatResponse {
         throw new UnsupportedFeatureException(
-            'The Bedrock Responses API (ApiMethod::RESPONSES) is not yet implemented.',
             'responses',
-            'bedrock'
+            'bedrock',
+            'The Bedrock Responses API (ApiMethod::RESPONSES) is not yet implemented.'
         );
     }
 }

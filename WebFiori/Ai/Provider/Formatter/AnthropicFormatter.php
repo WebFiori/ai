@@ -108,9 +108,9 @@ class AnthropicFormatter implements ProviderFormatterInterface {
         array $headers
     ): HttpRequest {
         throw new UnsupportedFeatureException(
-            'Anthropic does not support embeddings. Consider using OpenAI or Google for embeddings.',
             'embeddings',
-            'anthropic'
+            'anthropic',
+            'Anthropic does not support embeddings. Consider using OpenAI or Google for embeddings.'
         );
     }
 
@@ -123,9 +123,9 @@ class AnthropicFormatter implements ProviderFormatterInterface {
         array $headers
     ): HttpRequest {
         throw new UnsupportedFeatureException(
-            'Anthropic does not support image generation. Consider using OpenAI (DALL-E) or Google (Imagen).',
             'image_generation',
-            'anthropic'
+            'anthropic',
+            'Anthropic does not support image generation. Consider using OpenAI (DALL-E) or Google (Imagen).'
         );
     }
 
@@ -403,9 +403,9 @@ class AnthropicFormatter implements ProviderFormatterInterface {
      */
     public function parseEmbedResponse(HttpResponse $response): EmbeddingResponse {
         throw new UnsupportedFeatureException(
-            'Anthropic does not support embeddings.',
             'embeddings',
-            'anthropic'
+            'anthropic',
+            'Anthropic does not support embeddings.'
         );
     }
 
@@ -414,9 +414,9 @@ class AnthropicFormatter implements ProviderFormatterInterface {
      */
     public function parseImageResponse(HttpResponse $response): ImageResponse {
         throw new UnsupportedFeatureException(
-            'Anthropic does not support image generation.',
             'image_generation',
-            'anthropic'
+            'anthropic',
+            'Anthropic does not support image generation.'
         );
     }
 
