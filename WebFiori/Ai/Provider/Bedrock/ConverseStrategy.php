@@ -31,6 +31,10 @@ use WebFiori\Ai\Usage;
  *
  * This is the recommended strategy for most use cases.
  *
+ * @internal This Bedrock invocation strategy is an implementation detail of
+ *           BedrockClient. It is not part of the public API and may change
+ *           without a major version bump.
+ *
  * @author Ibrahim
  */
 class ConverseStrategy implements InvocationStrategyInterface {

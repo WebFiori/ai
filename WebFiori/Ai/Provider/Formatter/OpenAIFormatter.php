@@ -41,6 +41,11 @@ use WebFiori\Ai\Usage;
  * OpenAIClient, Azure OpenAI, OpenAI-compatible endpoints (Groq, Together AI),
  * or any future transport using the OpenAI request/response format.
  *
+ * @internal This class is an implementation detail used internally by the
+ *           provider clients. It is not part of the public API and may change
+ *           without a major version bump. Use the provider client classes
+ *           (e.g. OpenAIClient) instead.
+ *
  * @author Ibrahim
  */
 class OpenAIFormatter implements ProviderFormatterInterface {

@@ -26,6 +26,10 @@ use WebFiori\Ai\Message;
  * Not all models support this API. Check AWS documentation for
  * compatibility before using this strategy.
  *
+ * @internal This Bedrock invocation strategy is an implementation detail of
+ *           BedrockClient. It is not part of the public API and may change
+ *           without a major version bump.
+ *
  * @author Ibrahim
  *
  * @todo Full implementation in a future milestone.

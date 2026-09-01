@@ -34,6 +34,10 @@ use WebFiori\Ai\Message;
  * AnthropicClient (direct API) and by GoogleClient (Vertex AI Model Garden),
  * since both use the same Anthropic Messages API format.
  *
+ * @internal This interface is an internal seam between provider clients and
+ *           their request/response formatters. It is not part of the public
+ *           API and may change without a major version bump.
+ *
  * @author Ibrahim
  */
 interface ProviderFormatterInterface {

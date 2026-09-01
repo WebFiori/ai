@@ -24,6 +24,10 @@ use WebFiori\Ai\Tool\ToolInterface;
  * - No systemInstruction field — system text passed via system_instruction param
  * - store: false for stateless mode
  *
+ * @internal This class is an implementation detail of GoogleClient's
+ *           Interactions API support. It is not part of the public API and
+ *           may change without a major version bump.
+ *
  * @author Ibrahim
  */
 class InteractionsRequestBuilder {

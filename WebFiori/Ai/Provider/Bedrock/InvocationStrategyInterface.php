@@ -22,6 +22,10 @@ use WebFiori\Ai\Message;
  * defined in {@see ApiMethod}. Implementations handle request building,
  * response parsing, and streaming for their specific API surface.
  *
+ * @internal This interface is an internal seam for Bedrock invocation
+ *           strategies. It is not part of the public API and may change
+ *           without a major version bump.
+ *
  * @author Ibrahim
  */
 interface InvocationStrategyInterface {

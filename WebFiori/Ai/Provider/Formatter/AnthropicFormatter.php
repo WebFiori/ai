@@ -41,6 +41,11 @@ use WebFiori\Ai\Usage;
  * and can be reused across different transport contexts — direct API calls
  * via AnthropicClient and Vertex AI Model Garden via GoogleClient.
  *
+ * @internal This class is an implementation detail used internally by the
+ *           provider clients. It is not part of the public API and may change
+ *           without a major version bump. Use the provider client classes
+ *           (e.g. AnthropicClient) instead.
+ *
  * @author Ibrahim
  */
 class AnthropicFormatter implements ProviderFormatterInterface {

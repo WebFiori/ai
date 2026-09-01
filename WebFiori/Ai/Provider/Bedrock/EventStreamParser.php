@@ -24,6 +24,10 @@ namespace WebFiori\Ai\Provider\Bedrock;
  * Each event has headers including ':event-type' which identifies the
  * message type (messageStart, contentBlockDelta, messageStop, metadata, etc.).
  *
+ * @internal This parser is an implementation detail of the Bedrock streaming
+ *           strategies. It is not part of the public API and may change
+ *           without a major version bump.
+ *
  * @author Ibrahim
  */
 class EventStreamParser {
