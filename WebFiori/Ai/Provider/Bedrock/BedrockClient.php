@@ -244,19 +244,19 @@ class BedrockClient extends AbstractClient {
     /**
      * Creates the invocation strategy for the given API method.
      *
-     * @param string $apiMethod One of the {@see ApiMethod} constants.
+     * @param string $apiMethod The backing value of an {@see ApiMethod} case.
      *
      * @return InvocationStrategyInterface The strategy instance.
      *
      * @throws InvalidConfigException If the API method is not recognized.
      */
     private function createStrategy(string $apiMethod): InvocationStrategyInterface {
-        return match ($apiMethod) {
+        return match (ApiMethod::tryFrom($apiMethod)) {
             ApiMethod::CONVERSE => new ConverseStrategy(),
             ApiMethod::INVOKE => new InvokeStrategy(),
             ApiMethod::RESPONSES => new ResponsesStrategy(),
             default => throw new InvalidConfigException(
-                "Unknown api_method \"$apiMethod\". Use one of the ApiMethod constants.",
+                "Unknown api_method \"$apiMethod\". Use one of the ApiMethod cases.",
                 'api_method'
             ),
         };

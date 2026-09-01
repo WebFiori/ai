@@ -31,7 +31,7 @@ use WebFiori\Ai\Tool\Tool;
  * All requests go through a FakeHttpClient — no network or real credentials.
  */
 class BedrockStrategyExtendedTest extends TestCase {
-    private function client(string $apiMethod = ApiMethod::CONVERSE): BedrockClient {
+    private function client(ApiMethod|string $apiMethod = ApiMethod::CONVERSE): BedrockClient {
         return new BedrockClient(new BedrockClientConfig(
             region: 'us-east-1',
             model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
