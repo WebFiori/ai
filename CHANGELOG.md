@@ -1,5 +1,66 @@
 # Changelog
 
+## [1.0.0](https://github.com/WebFiori/ai/compare/v0.6.3...v1.0.0) (2026-09-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* **bedrock:** remove deprecated AwsSigner/AwsCredentialChain shims
+* **bedrock:** convert ApiMethod to a string-backed enum
+
+### Features
+
+* add WebFiori AI library expert agent profile ([7f329f7](https://github.com/WebFiori/ai/commit/7f329f73a0b18a49d62e08b0d45f1d767862907a))
+* agent profile, examples fixes, RAG improvements, ADR updates ([241977a](https://github.com/WebFiori/ai/commit/241977a79dd8f0fc8782bb98648dd24f13a944c3))
+* **agents:** add AgentMemory — persistent learning via RAG and feedback ([fa23cfe](https://github.com/WebFiori/ai/commit/fa23cfe89d262c0b1e3ceacf5e66e717b70f597a)), closes [#124](https://github.com/WebFiori/ai/issues/124)
+* **agents:** add profile inheritance via 'extends' key in AgentProfile ([8563408](https://github.com/WebFiori/ai/commit/85634082b6507fb6d9d831d2e3331b31681d7f86)), closes [#133](https://github.com/WebFiori/ai/issues/133)
+* **agents:** add profile inheritance via extends key ([fd85234](https://github.com/WebFiori/ai/commit/fd8523438b9e7ddd7bfeef7a9ffd0b1a90c382e3))
+* **agents:** support array type for AgentProfile context field ([a80bd67](https://github.com/WebFiori/ai/commit/a80bd67b21b34f0517529f3ea0df05b671256f97))
+* **agents:** support array type for AgentProfile context field ([1a95a84](https://github.com/WebFiori/ai/commit/1a95a84e78d7e8a657bf7d57ac42748e9f4df15e)), closes [#134](https://github.com/WebFiori/ai/issues/134)
+* **context:** add ContextUsage snapshot via getContextUsage() ([e9059ef](https://github.com/WebFiori/ai/commit/e9059ef4924ea5ee048ff33ba605fb1d89043522)), closes [#137](https://github.com/WebFiori/ai/issues/137)
+* **context:** add ContextWindowConfig model context-window table ([1ec797d](https://github.com/WebFiori/ai/commit/1ec797d88d4619a7086360ceddd94059e62c16be))
+* **context:** add ContextWindowConfig model context-window table ([5eabc61](https://github.com/WebFiori/ai/commit/5eabc618d9663d2f8631c4c35a2dc98e956d2f5c)), closes [#138](https://github.com/WebFiori/ai/issues/138)
+* **rag:** add RagProviderInterface — unified provider-agnostic RAG ([4b887a6](https://github.com/WebFiori/ai/commit/4b887a64ef3975942fe4bde142ba485e830e7650)), closes [#125](https://github.com/WebFiori/ai/issues/125)
+
+
+### Bug Fixes
+
+* **auth:** validate private key before signing JWT in GoogleAuth ([4d2b02b](https://github.com/WebFiori/ai/commit/4d2b02bdc3353cba4dedc55faa6517a4755ff3d9))
+* **examples:** update all examples to current API ([3a855c9](https://github.com/WebFiori/ai/commit/3a855c92a6d025c558c9841cff829db4a4f33fab))
+* **exception:** correct UnsupportedFeatureException argument order ([6a2129e](https://github.com/WebFiori/ai/commit/6a2129e00800b9ac4da6cb0167548c444f6be5ff)), closes [#37](https://github.com/WebFiori/ai/issues/37)
+* **http:** remove deprecated curl_close() calls in CurlHttpClient ([3eac572](https://github.com/WebFiori/ai/commit/3eac572219cbdcd0f61620931b70965e6f612450))
+* **rag:** correct GoogleRagProvider retrieveContexts API format ([ae87f67](https://github.com/WebFiori/ai/commit/ae87f67eed22760d265b605aefbba2abe20eea9f))
+* **rag:** correct Retriever query-embedding cache to honor CacheInterface ([375bc51](https://github.com/WebFiori/ai/commit/375bc51c1a3d012dcf79cf054bf7ab7586f12e8b)), closes [#36](https://github.com/WebFiori/ai/issues/36)
+* remove deprecated resource-free calls for PHP 8.5 ([2da2976](https://github.com/WebFiori/ai/commit/2da297663a091a90bbce651f38a8a94a0587ee38))
+
+
+### Performance Improvements
+
+* **cache:** use incremental hashing for chat cache keys ([4fc361f](https://github.com/WebFiori/ai/commit/4fc361fbeff98195546a2379b674f56be57f5762)), closes [#65](https://github.com/WebFiori/ai/issues/65)
+
+
+### Miscellaneous Chores
+
+* align release-please-config.json with webfiori/http ([87a4d84](https://github.com/WebFiori/ai/commit/87a4d8448bd9f1a840ad630d6d90eb312754ef7c))
+* Merge pull request [#130](https://github.com/WebFiori/ai/issues/130) from WebFiori/dev ([e8030e1](https://github.com/WebFiori/ai/commit/e8030e19ed30d9c54221a9fa6b1e2879fab7d3db))
+* Merge pull request [#131](https://github.com/WebFiori/ai/issues/131) from WebFiori/dev ([974ee10](https://github.com/WebFiori/ai/commit/974ee1013d5032b79de053a0df492cb1f75fb642))
+* Merge pull request [#139](https://github.com/WebFiori/ai/issues/139) from WebFiori/dev ([8b2c6fb](https://github.com/WebFiori/ai/commit/8b2c6fb81fb7fd14dd4156595424aeec2643e817))
+* Merge pull request [#140](https://github.com/WebFiori/ai/issues/140) from WebFiori/dev ([d60fe1d](https://github.com/WebFiori/ai/commit/d60fe1de60201e768604ae92974fdaad4cf189a7))
+* Merge pull request [#142](https://github.com/WebFiori/ai/issues/142) from WebFiori/perf/cache-incremental-hashing ([733cc8b](https://github.com/WebFiori/ai/commit/733cc8bd605fca770698833fc85a0302df3d3a06))
+* Merge pull request [#150](https://github.com/WebFiori/ai/issues/150) from WebFiori/dev ([e75735e](https://github.com/WebFiori/ai/commit/e75735e60699531cdf91aed26abcf0c2ea1e7eb3))
+* Merge pull request [#151](https://github.com/WebFiori/ai/issues/151) from WebFiori/dev ([a79ceda](https://github.com/WebFiori/ai/commit/a79ceda6682a1c44fbc4f7b3d5e57a8c2ccb1723))
+* re-trigger release-please after backfilling v0.6.2 release ([7b6defc](https://github.com/WebFiori/ai/commit/7b6defcc5ac3dc23803faa8bbf0f2a1508c93377))
+* re-trigger release-please after marking [#127](https://github.com/WebFiori/ai/issues/127) released ([ae7ff3d](https://github.com/WebFiori/ai/commit/ae7ff3d27f7eb982dd2d79bbd513c6ec8097786b))
+* re-trigger release-please after state reset ([0d19db2](https://github.com/WebFiori/ai/commit/0d19db2d455e2a3cbe605df07e8d6672771cb52d))
+* remove accidentally committed .db file ([53d0b5d](https://github.com/WebFiori/ai/commit/53d0b5d185564252d1a86ba8673a4921bbe1d2d5))
+* Update php85.yaml ([ca6cfad](https://github.com/WebFiori/ai/commit/ca6cfad4975eee81db1856b666fa2d369222f938))
+
+
+### Code Refactoring
+
+* **bedrock:** convert ApiMethod to a string-backed enum ([133604b](https://github.com/WebFiori/ai/commit/133604b94475054113eb84294f6624d4c6cd6f39)), closes [#37](https://github.com/WebFiori/ai/issues/37)
+* **bedrock:** remove deprecated AwsSigner/AwsCredentialChain shims ([974cd45](https://github.com/WebFiori/ai/commit/974cd458d7f3923b66120905b1d5dd8d2a1bac9a)), closes [#37](https://github.com/WebFiori/ai/issues/37)
+
 ## [0.6.2](https://github.com/WebFiori/ai/compare/v0.6.0...v0.6.2) (2026-08-25)
 
 
