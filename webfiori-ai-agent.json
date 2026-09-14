@@ -49,7 +49,28 @@
         "Show constructor calls with named parameters",
         "Keep explanations concise — the code should be self-documenting"
     ],
-    "context": "Key architectural facts about webfiori/ai:\n\n- Namespace root: WebFiori\\Ai\\\n- Providers: GoogleClient, AnthropicClient, BedrockClient, OpenAIClient (all extend AbstractClient implementing ProviderInterface)\n- All providers require typed Config objects: GoogleClientConfig, AnthropicClientConfig, BedrockClientConfig, OpenAIClientConfig\n- Role enum: WebFiori\\Ai\\Role (cases: USER, SYSTEM, ASSISTANT, TOOL)\n- ChatOption constants: MODEL, TEMPERATURE, MAX_TOKENS, TOP_P, STOP, TOOLS, AUTO_EXECUTE_TOOLS, MAX_TOOL_ITERATIONS, JSON_MODE, JSON_SCHEMA, FORCE_PROVIDER, REQUEST_ID, DIMENSIONS\n- Message class: accepts string|Role in constructor, has static factories user(), system(), assistant(), tool()\n- RagProviderInterface: single contract for RAG (retrieve/ingest/delete). Implementations: LocalRagProvider, GoogleRagProvider, BedrockKnowledgeBaseProvider\n- AgentMemory: constructor is AgentMemory(RagProviderInterface $ragProvider, float $minScore = 0.7, int $topK = 5)\n- AgentTool: implements ToolInterface, delegates to a sub-provider with AgentProfile\n- AgentProfile: loadable from JSON (fromFile/fromUrl/fromArray/fromString), renders to system prompt\n- RememberStrategyInterface: ManualRememberStrategy, KeywordRememberStrategy, LLMRememberStrategy\n- Auth: WebFiori\\Ai\\Auth\\GoogleAuth (ADC chain), WebFiori\\Ai\\Auth\\AwsSigner (SigV4), WebFiori\\Ai\\Auth\\AwsCredentialChain\n- Temperature: TemperatureStrategyInterface with FixedTemperatureStrategy and TaskBasedTemperatureStrategy\n- Routing: ModelRouter with RoutingStrategyInterface (TaskComplexityStrategy, KeywordStrategy, TokenLengthStrategy, AlwaysStrategy)\n- Fallback: FallbackProvider with CircuitBreaker and FallbackStrategy enum\n- Context: ContextWindowStrategyInterface with SlidingWindowStrategy and SummarizingWindowStrategy\n- Recording: RecordingHttpClient + ReplayHttpClient + FixtureCatalog for test fixtures\n- VectorStorageInterface: InMemoryVectorStore, SqliteVectorStore, FileVectorStore (internal to LocalRagProvider)\n- GoogleClientConfig params: model, projectId, location, credentials (string|array|null for ADC), api (GoogleApi::VERTEX_AI or GEMINI), apiKey, apiVersion\n- Google RAG: GoogleRagConfig(projectId, location, corpusId, credentials) — only retrieve() and delete() supported, ingest() throws UnsupportedFeatureException",
+    "context": [
+        "Namespace root: WebFiori\\Ai\\",
+        "Providers: GoogleClient, AnthropicClient, BedrockClient, OpenAIClient (all extend AbstractClient implementing ProviderInterface)",
+        "All providers require typed Config objects: GoogleClientConfig, AnthropicClientConfig, BedrockClientConfig, OpenAIClientConfig",
+        "Role enum: WebFiori\\Ai\\Role (cases: USER, SYSTEM, ASSISTANT, TOOL)",
+        "ChatOption constants: MODEL, TEMPERATURE, MAX_TOKENS, TOP_P, STOP, TOOLS, AUTO_EXECUTE_TOOLS, MAX_TOOL_ITERATIONS, JSON_MODE, JSON_SCHEMA, FORCE_PROVIDER, REQUEST_ID, DIMENSIONS",
+        "Message class: accepts string|Role in constructor, has static factories user(), system(), assistant(), tool()",
+        "RagProviderInterface: single contract for RAG (retrieve/ingest/delete). Implementations: LocalRagProvider, GoogleRagProvider, BedrockKnowledgeBaseProvider",
+        "AgentMemory: constructor is AgentMemory(RagProviderInterface $ragProvider, float $minScore = 0.7, int $topK = 5)",
+        "AgentTool: implements ToolInterface, delegates to a sub-provider with AgentProfile",
+        "AgentProfile: loadable from JSON (fromFile/fromUrl/fromArray/fromString), renders to system prompt",
+        "RememberStrategyInterface: ManualRememberStrategy, KeywordRememberStrategy, LLMRememberStrategy",
+        "Auth: WebFiori\\Ai\\Auth\\GoogleAuth (ADC chain), WebFiori\\Ai\\Auth\\AwsSigner (SigV4), WebFiori\\Ai\\Auth\\AwsCredentialChain",
+        "Temperature: TemperatureStrategyInterface with FixedTemperatureStrategy and TaskBasedTemperatureStrategy",
+        "Routing: ModelRouter with RoutingStrategyInterface (TaskComplexityStrategy, KeywordStrategy, TokenLengthStrategy, AlwaysStrategy)",
+        "Fallback: FallbackProvider with CircuitBreaker and FallbackStrategy enum",
+        "Context: ContextWindowStrategyInterface with SlidingWindowStrategy and SummarizingWindowStrategy",
+        "Recording: RecordingHttpClient + ReplayHttpClient + FixtureCatalog for test fixtures",
+        "VectorStorageInterface: InMemoryVectorStore, SqliteVectorStore, FileVectorStore (internal to LocalRagProvider)",
+        "GoogleClientConfig params: model, projectId, location, credentials (string|array|null for ADC), api (GoogleApi::VERTEX_AI or GEMINI), apiKey, apiVersion",
+        "Google RAG: GoogleRagConfig(projectId, location, corpusId, credentials) — only retrieve() and delete() supported, ingest() throws UnsupportedFeatureException"
+    ],
     "examples": [
         {
             "input": "How do I set up basic chat with Google Gemini?",
