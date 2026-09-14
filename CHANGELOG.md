@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.1.0](https://github.com/WebFiori/ai/compare/v1.0.0...v1.1.0) (2026-09-14)
+
+
+### Features
+
+* **AgentProfile:** accept array examples[].output as authoring sugar ([db233f9](https://github.com/WebFiori/ai/commit/db233f9f6da867019bffcd43e96b0faaa6b668c3)), closes [#157](https://github.com/WebFiori/ai/issues/157)
+* **AgentProfile:** allow output_format to be string|array (parity with context) ([e65b454](https://github.com/WebFiori/ai/commit/e65b454e20eac195b9f51f02df12a0c2476f9f67)), closes [#157](https://github.com/WebFiori/ai/issues/157)
+
+
+### Miscellaneous Chores
+
+* **deps:** bump WebFiori/workflows/.github/workflows/coverage-codecov.yaml ([335eaf9](https://github.com/WebFiori/ai/commit/335eaf9a37ef6595e569a972949da66bbad506f0))
+* **deps:** bump WebFiori/workflows/.github/workflows/coverage-codecov.yaml from 1.2.5 to 1.2.7 ([d41fc7a](https://github.com/WebFiori/ai/commit/d41fc7af24cedb938069eed8cd16ca1ed1b8e2a3))
+* **deps:** bump WebFiori/workflows/.github/workflows/quality-sonarcloud.yaml ([eff5c2a](https://github.com/WebFiori/ai/commit/eff5c2ac0e97527a1c9ce3b745f3dfa98910ca06))
+* **deps:** bump WebFiori/workflows/.github/workflows/quality-sonarcloud.yaml from 1.2.6 to 1.2.7 ([53a1c74](https://github.com/WebFiori/ai/commit/53a1c74e29ed1d2056aa3990849e81a55f7be8a6))
+* **deps:** bump WebFiori/workflows/.github/workflows/test-php.yaml ([ea41ac3](https://github.com/WebFiori/ai/commit/ea41ac3d15757f6c47c6f61c9bafb12ba7068f32))
+* **deps:** bump WebFiori/workflows/.github/workflows/test-php.yaml from 1.2.5 to 1.2.7 ([a47e37f](https://github.com/WebFiori/ai/commit/a47e37febe6a0b344f41c2cfa5d804a281af8ae6))
+* Merge pull request [#158](https://github.com/WebFiori/ai/issues/158) from WebFiori/dev ([9b19188](https://github.com/WebFiori/ai/commit/9b19188e20b1aafb7584016ed399ba2fbfae4238))
+
 ## [1.0.0](https://github.com/WebFiori/ai/compare/v0.6.3...v1.0.0) (2026-09-02)
 
 
