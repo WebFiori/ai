@@ -40,6 +40,9 @@ class AgentProfile {
     /**
      * Few-shot examples, each with 'input' and 'output' keys.
      *
+     * The 'output' is always stored as a string. When authored as an array of
+     * strings, it is normalized to a newline-joined string by the constructor.
+     *
      * @var array<int, array{input: string, output: string}>
      */
     private array $examples;
@@ -102,7 +105,9 @@ class AgentProfile {
      * @param string[] $constraints Limitations or boundaries.
      * @param string|array<int, string>|null $outputFormat Expected output format description.
      * @param string|array<int, string>|null $context Background knowledge or context.
-     * @param array<int, array{input: string, output: string}> $examples Few-shot examples.
+     * @param array<int, array{input: string, output: string|array<int, string>}> $examples Few-shot examples.
+     *                                                                                        An 'output' authored as an array of strings is
+     *                                                                                        normalized to a newline-joined string.
      * @param array<string, mixed> $metadata Version info, not sent to model.
      * @param ToolInterface[] $tools Resolved tool instances.
      */
@@ -123,7 +128,17 @@ class AgentProfile {
         $this->constraints = $constraints;
         $this->outputFormat = $outputFormat;
         $this->context = $context;
-        $this->examples = $examples;
+        $this->examples = array_map(
+            static function (array $example): array
+            {
+                if (isset($example['output']) && is_array($example['output'])) {
+                    $example['output'] = implode("\n", $example['output']);
+                }
+
+                return $example;
+            },
+            $examples
+        );
         $this->metadata = $metadata;
         $this->tools = $tools;
         $this->toolRefs = [];
