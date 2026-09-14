@@ -494,6 +494,91 @@ class AgentProfileTest extends TestCase {
     }
 
     // =========================================================================
+    // Array output format
+    // =========================================================================
+
+    public function testConstructionWithArrayOutputFormat(): void {
+        $profile = new AgentProfile(
+            identity: 'Agent.',
+            outputFormat: ['Use markdown.', 'Include a code block.', 'End with a summary.'],
+        );
+
+        $this->assertSame(
+            ['Use markdown.', 'Include a code block.', 'End with a summary.'],
+            $profile->getOutputFormat()
+        );
+    }
+
+    public function testConstructionWithStringOutputFormat(): void {
+        $profile = new AgentProfile(
+            identity: 'Agent.',
+            outputFormat: 'Single string format.',
+        );
+
+        $this->assertSame('Single string format.', $profile->getOutputFormat());
+    }
+
+    public function testRender_ArrayOutputFormat(): void {
+        $profile = new AgentProfile(
+            identity: 'Agent with array output format.',
+            outputFormat: ['Respond in JSON.', 'Include a "status" field.'],
+        );
+
+        $rendered = $profile->render();
+
+        $this->assertStringContainsString('## Output Format', $rendered);
+        $this->assertStringContainsString('- Respond in JSON.', $rendered);
+        $this->assertStringContainsString('- Include a "status" field.', $rendered);
+    }
+
+    public function testRender_StringOutputFormat(): void {
+        $profile = new AgentProfile(
+            identity: 'Agent.',
+            outputFormat: 'Plain markdown only.',
+        );
+
+        $rendered = $profile->render();
+
+        $this->assertStringContainsString('## Output Format', $rendered);
+        $this->assertStringContainsString('Plain markdown only.', $rendered);
+        // A single string must not be rendered as a bullet list.
+        $this->assertStringNotContainsString('- Plain markdown only.', $rendered);
+    }
+
+    public function testRender_EmptyArrayOutputFormat(): void {
+        $profile = new AgentProfile(
+            identity: 'Agent.',
+            outputFormat: [],
+        );
+
+        $rendered = $profile->render();
+
+        $this->assertStringNotContainsString('## Output Format', $rendered);
+    }
+
+    public function testFromArray_ArrayOutputFormat(): void {
+        $data = [
+            'identity' => 'Agent.',
+            'output_format' => ['Rule 1', 'Rule 2'],
+        ];
+
+        $profile = AgentProfile::fromArray($data);
+
+        $this->assertSame(['Rule 1', 'Rule 2'], $profile->getOutputFormat());
+    }
+
+    public function testToArray_ArrayOutputFormat(): void {
+        $profile = new AgentProfile(
+            identity: 'Agent.',
+            outputFormat: ['A', 'B'],
+        );
+
+        $exported = $profile->toArray();
+
+        $this->assertSame(['A', 'B'], $exported['output_format']);
+    }
+
+    // =========================================================================
     // Render exclusions
     // =========================================================================
 

@@ -68,9 +68,9 @@ class AgentProfile {
     /**
      * Expected output format description.
      *
-     * @var string|null
+     * @var string|array<int, string>|null
      */
-    private ?string $outputFormat;
+    private string|array|null $outputFormat;
 
     /**
      * List of skill descriptions.
@@ -100,7 +100,7 @@ class AgentProfile {
      * @param string[] $skills List of skill descriptions.
      * @param string[] $instructions Behavioral instructions.
      * @param string[] $constraints Limitations or boundaries.
-     * @param string|null $outputFormat Expected output format description.
+     * @param string|array<int, string>|null $outputFormat Expected output format description.
      * @param string|array<int, string>|null $context Background knowledge or context.
      * @param array<int, array{input: string, output: string}> $examples Few-shot examples.
      * @param array<string, mixed> $metadata Version info, not sent to model.
@@ -111,7 +111,7 @@ class AgentProfile {
         array $skills = [],
         array $instructions = [],
         array $constraints = [],
-        ?string $outputFormat = null,
+        string|array|null $outputFormat = null,
         string|array|null $context = null,
         array $examples = [],
         array $metadata = [],
@@ -327,9 +327,9 @@ class AgentProfile {
     /**
      * Returns the expected output format description.
      *
-     * @return string|null The output format or null.
+     * @return string|array<int, string>|null The output format string, array of strings, or null.
      */
-    public function getOutputFormat(): ?string {
+    public function getOutputFormat(): string|array|null {
         return $this->outputFormat;
     }
 
@@ -366,13 +366,14 @@ class AgentProfile {
     /**
      * Merges a base profile with a child profile using field-specific strategies.
      *
-     * Default strategies: arrays concat, scalars replace, metadata merges.
-     * Override specific fields via the $strategies parameter.
+     * Default strategies: list and string-or-array fields merge, scalar fields replace,
+     * metadata merges by key. Override specific fields via the $strategies parameter.
      *
      * @param self $base The base (parent) profile.
      * @param self $child The child profile to merge on top.
      * @param array<string, string> $strategies Optional per-field strategy overrides.
-     *                                          Keys are field names, values are 'concat', 'replace', or 'merge'.
+     *                                          Keys are field names, values are 'merge' or 'replace'.
+     *                                          ('concat' is accepted as a deprecated alias for 'merge'.)
      *
      * @return self The merged profile.
      *
@@ -410,8 +411,12 @@ class AgentProfile {
             $parts[] = "## Constraints\n".implode("\n", array_map(fn (string $s): string => '- '.$s, $this->constraints));
         }
 
-        if ($this->outputFormat !== null && $this->outputFormat !== '') {
-            $parts[] = "## Output Format\n".$this->outputFormat;
+        if ($this->outputFormat !== null && $this->outputFormat !== '' && $this->outputFormat !== []) {
+            if (is_array($this->outputFormat)) {
+                $parts[] = "## Output Format\n".implode("\n", array_map(fn (string $s): string => '- '.$s, $this->outputFormat));
+            } else {
+                $parts[] = "## Output Format\n".$this->outputFormat;
+            }
         }
 
         if ($this->context !== null && $this->context !== '' && $this->context !== []) {
@@ -518,18 +523,26 @@ class AgentProfile {
         $defaults = [
             'identity' => 'replace',
             'output_format' => 'replace',
-            'context' => 'concat',
-            'skills' => 'concat',
-            'instructions' => 'concat',
-            'constraints' => 'concat',
-            'examples' => 'concat',
-            'tools' => 'concat',
+            'context' => 'merge',
+            'skills' => 'merge',
+            'instructions' => 'merge',
+            'constraints' => 'merge',
+            'examples' => 'merge',
+            'tools' => 'merge',
             'metadata' => 'merge',
         ];
 
-        $validStrategies = ['concat', 'replace', 'merge'];
+        // 'concat' is a deprecated alias for 'merge'. Normalize silently so the
+        // rest of the method only deals with the current vocabulary.
+        foreach ($strategies as $field => $strategy) {
+            if ($strategy === 'concat') {
+                $strategies[$field] = 'merge';
+            }
+        }
+
+        $validStrategies = ['merge', 'replace'];
         $validFields = array_keys($defaults);
-        $scalarFields = ['identity', 'output_format'];
+        $scalarFields = ['identity'];
 
         foreach ($strategies as $field => $strategy) {
             if (!in_array($field, $validFields, true)) {
@@ -571,11 +584,13 @@ class AgentProfile {
 
                     break;
 
-                case 'concat':
+                case 'merge':
                     $baseVal = $base[$field] ?? [];
                     $childVal = $child[$field] ?? [];
 
-                    // Normalize strings to single-element arrays for context field
+                    // Normalize string values to single-element arrays so that
+                    // string-or-array fields (context, output_format) concatenate.
+                    // Associative arrays (metadata) are left untouched and merge by key.
                     if (is_string($baseVal) && $baseVal !== '') {
                         $baseVal = [$baseVal];
                     } elseif (!is_array($baseVal)) {
@@ -589,14 +604,6 @@ class AgentProfile {
                     }
 
                     $result[$field] = array_merge($baseVal, $childVal);
-
-                    break;
-
-                case 'merge':
-                    $result[$field] = array_merge(
-                        $base[$field] ?? [],
-                        $child[$field] ?? []
-                    );
 
                     break;
 

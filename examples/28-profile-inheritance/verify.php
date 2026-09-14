@@ -44,7 +44,7 @@ echo "   ✅ Constraints concatenate through 3 levels (3 total)\n";
 echo "   ✅ Metadata shallow-merges (child overrides 'version', adds 'tier')\n";
 
 // Test 3: Skills concatenation (default strategy)
-echo "\n3. Skills concatenation (default: concat)\n";
+echo "\n3. Skills concatenation (default: merge)\n";
 $profile = AgentProfile::fromFile($fixturesDir.'/support-base.json');
 
 $skills = $profile->getSkills();
@@ -127,8 +127,8 @@ $child = new AgentProfile(
 $merged = AgentProfile::merge(base: $base, child: $child);
 
 assert($merged->getIdentity() === 'Child agent.', 'Child identity should win');
-assert($merged->getSkills() === ['Skill A', 'Skill B'], 'Skills should concat');
-assert($merged->getInstructions() === ['Rule 1', 'Rule 2'], 'Instructions should concat');
+assert($merged->getSkills() === ['Skill A', 'Skill B'], 'Skills should merge');
+assert($merged->getInstructions() === ['Rule 1', 'Rule 2'], 'Instructions should merge');
 assert($merged->getOutputFormat() === 'JSON.', 'Child output_format should win');
 assert($merged->getMetadata()['version'] === '2.0', 'Child metadata version should win');
 assert($merged->getMetadata()['author'] === 'dev', 'Child metadata author should be added');
@@ -196,20 +196,20 @@ assert($caught, 'Should throw RuntimeException for invalid field');
 echo "   ✅ Invalid field name throws RuntimeException\n";
 
 // Test 15: Scalar strategy validation
-echo "\n15. Concat strategy on scalar field rejected\n";
+echo "\n15. merge strategy on identity (scalar) rejected\n";
 $caught = false;
 
 try {
     AgentProfile::merge(
         base: new AgentProfile(identity: 'B.'),
         child: new AgentProfile(identity: 'C.'),
-        strategies: ['output_format' => 'concat'],
+        strategies: ['identity' => 'merge'],
     );
 } catch (RuntimeException $e) {
     $caught = str_contains($e->getMessage(), 'cannot be used on scalar field');
 }
-assert($caught, 'Should throw RuntimeException for concat on scalar');
-echo "   ✅ Concat/merge on scalar fields rejected\n";
+assert($caught, 'Should throw RuntimeException for merge on scalar identity');
+echo "   ✅ merge on scalar field 'identity' rejected\n";
 
 // Test 16: extends and inheritance_strategy not in output
 echo "\n16. extends and inheritance_strategy stripped from output\n";
@@ -251,4 +251,30 @@ $merged = AgentProfile::merge(base: $base, child: $child);
 assert($merged->getContext() === ['String context from base.', 'Array item from child.'], 'Mixed context should normalize and concat');
 echo "   ✅ String normalized to array, then concatenated\n";
 
-echo "\n=== All 19 checks passed ✅ ===\n";
+// Test 20: Array output_format — render as bullet list
+echo "\n20. Array output_format — render as bullet list\n";
+$profile = new AgentProfile(
+    identity: 'Agent with array output format.',
+    outputFormat: ['Respond in JSON.', 'Include a "status" field.'],
+);
+$rendered = $profile->render();
+
+assert(str_contains($rendered, '## Output Format'), 'Output Format section missing');
+assert(str_contains($rendered, '- Respond in JSON.'), 'First output_format item missing');
+assert(str_contains($rendered, '- Include a "status" field.'), 'Second output_format item missing');
+echo "   ✅ Array output_format renders as bullet list\n";
+
+// Test 21: output_format merges during inheritance (opt-in via strategy)
+echo "\n21. Array output_format merges during inheritance\n";
+$base = new AgentProfile(identity: 'Base.', outputFormat: ['Use markdown.']);
+$child = new AgentProfile(identity: 'Child.', outputFormat: ['Add a summary.']);
+$merged = AgentProfile::merge(
+    base: $base,
+    child: $child,
+    strategies: ['output_format' => 'merge'],
+);
+
+assert($merged->getOutputFormat() === ['Use markdown.', 'Add a summary.'], 'output_format should merge');
+echo "   ✅ output_format concatenates when strategy is 'merge'\n";
+
+echo "\n=== All 21 checks passed ✅ ===\n";

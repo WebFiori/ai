@@ -14,13 +14,13 @@ Demonstrates how `AgentProfile` supports JSON-based inheritance via the `extends
 | Field | Default | Behavior |
 |-------|---------|----------|
 | `identity` | replace | Child wins (fallback to base if empty) |
-| `output_format` | replace | Child wins if present |
-| `context` | replace | Child wins if present |
-| `skills` | concat | Base + child combined |
-| `instructions` | concat | Base + child combined |
-| `constraints` | concat | Base + child combined |
-| `examples` | concat | Base + child combined |
-| `tools` | concat | Base + child combined |
+| `output_format` | replace | Child wins if present (string or array) |
+| `context` | merge | Base + child combined |
+| `skills` | merge | Base + child combined |
+| `instructions` | merge | Base + child combined |
+| `constraints` | merge | Base + child combined |
+| `examples` | merge | Base + child combined |
+| `tools` | merge | Base + child combined |
 | `metadata` | merge | Shallow merge (child keys override) |
 
 ## Override with `inheritance_strategy`
@@ -37,7 +37,12 @@ Demonstrates how `AgentProfile` supports JSON-based inheritance via the `extends
 }
 ```
 
-Valid values: `concat`, `replace`, `merge`. Only `replace` is valid for scalar fields (`identity`, `output_format`, `context`).
+Valid values: `merge` and `replace`. `merge` combines base and child (lists append,
+maps merge by key, string-or-array fields concatenate); `replace` makes the child
+value win. `identity` is always `replace` and cannot be overridden.
+
+> **Note:** `concat` is still accepted as a deprecated alias for `merge` and may be
+> removed in a future major version. Prefer `merge`.
 
 ## API
 

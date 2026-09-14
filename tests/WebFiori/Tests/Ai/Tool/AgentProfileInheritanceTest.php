@@ -444,7 +444,21 @@ class AgentProfileInheritanceTest extends TestCase {
         AgentProfile::merge(base: $base, child: $child, strategies: ['bogus' => 'replace']);
     }
 
-    public function testMerge_ConcatStrategyOnScalarField_Throws(): void {
+    public function testMerge_MergeStrategyOnIdentity_Throws(): void {
+        $base = new AgentProfile(identity: 'Base.');
+        $child = new AgentProfile(identity: 'Child.');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage("Strategy 'merge' cannot be used on scalar field 'identity'");
+
+        AgentProfile::merge(
+            base: $base,
+            child: $child,
+            strategies: ['identity' => 'merge'],
+        );
+    }
+
+    public function testMerge_OutputFormatMergeStrategy_Concatenates(): void {
         $base = new AgentProfile(
             identity: 'Base.',
             outputFormat: 'Base format.',
@@ -455,14 +469,95 @@ class AgentProfileInheritanceTest extends TestCase {
             outputFormat: 'Child format.',
         );
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage("Strategy 'concat' cannot be used on scalar field 'output_format'");
-
-        AgentProfile::merge(
+        // output_format is no longer scalar — 'merge' is now allowed and concatenates.
+        $merged = AgentProfile::merge(
             base: $base,
             child: $child,
-            strategies: ['output_format' => 'concat'],
+            strategies: ['output_format' => 'merge'],
         );
+
+        $this->assertSame(['Base format.', 'Child format.'], $merged->getOutputFormat());
+    }
+
+    public function testMerge_ArrayOutputFormatMerge(): void {
+        $base = AgentProfile::fromArray([
+            'identity' => 'Base.',
+            'output_format' => ['Use markdown', 'Include code blocks'],
+        ]);
+
+        $child = AgentProfile::fromArray([
+            'identity' => 'Child.',
+            'output_format' => ['Add a summary section'],
+        ]);
+
+        $merged = AgentProfile::merge(
+            base: $base,
+            child: $child,
+            strategies: ['output_format' => 'merge'],
+        );
+
+        $this->assertSame(
+            ['Use markdown', 'Include code blocks', 'Add a summary section'],
+            $merged->getOutputFormat()
+        );
+    }
+
+    public function testMerge_ArrayOutputFormatReplaceDefault(): void {
+        $base = AgentProfile::fromArray([
+            'identity' => 'Base.',
+            'output_format' => ['Use markdown'],
+        ]);
+
+        $child = AgentProfile::fromArray([
+            'identity' => 'Child.',
+            'output_format' => ['JSON only'],
+        ]);
+
+        // Default strategy for output_format is 'replace' → child wins.
+        $merged = AgentProfile::merge(base: $base, child: $child);
+
+        $this->assertSame(['JSON only'], $merged->getOutputFormat());
+    }
+
+    public function testMerge_MixedOutputFormatStringAndArray(): void {
+        $base = AgentProfile::fromArray([
+            'identity' => 'Base.',
+            'output_format' => 'Base string format.',
+        ]);
+
+        $child = AgentProfile::fromArray([
+            'identity' => 'Child.',
+            'output_format' => ['Child array item'],
+        ]);
+
+        $merged = AgentProfile::merge(
+            base: $base,
+            child: $child,
+            strategies: ['output_format' => 'merge'],
+        );
+
+        $this->assertSame(['Base string format.', 'Child array item'], $merged->getOutputFormat());
+    }
+
+    public function testMerge_ConcatAliasBehavesAsMerge(): void {
+        $base = new AgentProfile(
+            identity: 'Base.',
+            skills: ['Skill A'],
+        );
+
+        $child = new AgentProfile(
+            identity: 'Child.',
+            skills: ['Skill B'],
+        );
+
+        // 'concat' is a deprecated alias for 'merge' and must behave identically.
+        $merged = AgentProfile::merge(
+            base: $base,
+            child: $child,
+            strategies: ['skills' => 'concat'],
+        );
+
+        $this->assertSame(['Skill A', 'Skill B'], $merged->getSkills());
     }
 
     public function testMerge_ToolsConcatDefault(): void {
