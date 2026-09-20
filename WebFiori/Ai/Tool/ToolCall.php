@@ -64,6 +64,28 @@ class ToolCall {
     }
 
     /**
+     * Reconstructs a ToolCall from its array representation.
+     *
+     * @param array<string, mixed> $data The serialized data with keys 'id',
+     *        'name', 'arguments', and optionally 'raw_part'.
+     *
+     * @return self The reconstructed tool call.
+     */
+    public static function fromArray(array $data): self {
+        $call = new self(
+            (string) ($data['id'] ?? ''),
+            (string) ($data['name'] ?? ''),
+            (array) ($data['arguments'] ?? [])
+        );
+
+        if (isset($data['raw_part']) && is_array($data['raw_part'])) {
+            $call->setRawPart($data['raw_part']);
+        }
+
+        return $call;
+    }
+
+    /**
      * Returns the arguments to pass to the tool.
      *
      * @return array<string, mixed> The tool call arguments.
@@ -106,5 +128,19 @@ class ToolCall {
      */
     public function setRawPart(array $part): void {
         $this->rawPart = $part;
+    }
+
+    /**
+     * Exports the tool call to a JSON-safe associative array.
+     *
+     * @return array<string, mixed> The serialized tool call.
+     */
+    public function toArray(): array {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'arguments' => $this->arguments,
+            'raw_part' => $this->rawPart,
+        ];
     }
 }

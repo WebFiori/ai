@@ -260,6 +260,25 @@ class ContentPart {
     }
 
     /**
+     * Reconstructs a ContentPart from its array representation.
+     *
+     * Reconstructs directly from the stored 'type' and 'data' rather than the
+     * validating factories, so already-serialized parts round-trip without
+     * re-validation or filesystem access.
+     *
+     * @param array<string, mixed> $data The serialized data with keys 'type'
+     *        and 'data'.
+     *
+     * @return self The reconstructed content part.
+     */
+    public static function fromArray(array $data): self {
+        return new self(
+            (string) ($data['type'] ?? self::TYPE_TEXT),
+            (array) ($data['data'] ?? [])
+        );
+    }
+
+    /**
      * Creates a content part from a Google Cloud Storage URI.
      *
      * This is primarily supported by Google Vertex AI provider.
@@ -477,6 +496,18 @@ class ContentPart {
      */
     public static function text(string $text): self {
         return new self(self::TYPE_TEXT, ['text' => $text]);
+    }
+
+    /**
+     * Exports the content part to a JSON-safe associative array.
+     *
+     * @return array<string, mixed> The serialized content part.
+     */
+    public function toArray(): array {
+        return [
+            'type' => $this->type,
+            'data' => $this->data,
+        ];
     }
 
     /**

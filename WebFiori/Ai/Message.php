@@ -144,6 +144,51 @@ class Message {
     }
 
     /**
+     * Reconstructs a Message from its array representation.
+     *
+     * Round-trips role, text or multi-modal content, tool calls, tool result,
+     * and raw steps.
+     *
+     * @param array<string, mixed> $data The serialized message data.
+     *
+     * @return self The reconstructed message.
+     */
+    public static function fromArray(array $data): self {
+        if (($data['is_multi_modal'] ?? false) === true) {
+            $content = [];
+
+            foreach ($data['content_parts'] ?? [] as $part) {
+                $content[] = ContentPart::fromArray($part);
+            }
+        } else {
+            $content = (string) ($data['content'] ?? '');
+        }
+
+        $toolCalls = [];
+
+        foreach ($data['tool_calls'] ?? [] as $call) {
+            $toolCalls[] = ToolCall::fromArray($call);
+        }
+
+        $toolResult = isset($data['tool_result']) && is_array($data['tool_result'])
+            ? ToolResult::fromArray($data['tool_result'])
+            : null;
+
+        $message = new self(
+            (string) ($data['role'] ?? Role::USER->value),
+            $content,
+            $toolCalls,
+            $toolResult
+        );
+
+        if (isset($data['raw_steps']) && is_array($data['raw_steps'])) {
+            $message->setRawSteps($data['raw_steps']);
+        }
+
+        return $message;
+    }
+
+    /**
      * Returns the message text content.
      *
      * For text-only messages, returns the full content. For multi-modal
@@ -274,6 +319,35 @@ class Message {
      */
     public static function system(string|array $content): self {
         return new self(Role::SYSTEM, $content);
+    }
+
+    /**
+     * Exports the message to a JSON-safe associative array.
+     *
+     * Multi-modal messages serialize their content parts under 'content_parts';
+     * text-only messages serialize a plain 'content' string.
+     *
+     * @return array<string, mixed> The serialized message.
+     */
+    public function toArray(): array {
+        $data = [
+            'role' => $this->role,
+            'is_multi_modal' => $this->isMultiModal,
+            'tool_calls' => array_map(fn (ToolCall $c): array => $c->toArray(), $this->toolCalls),
+            'tool_result' => $this->toolResult !== null ? $this->toolResult->toArray() : null,
+        ];
+
+        if ($this->isMultiModal) {
+            $data['content_parts'] = array_map(fn (ContentPart $p): array => $p->toArray(), $this->contentParts);
+        } else {
+            $data['content'] = $this->content;
+        }
+
+        if ($this->rawSteps !== null) {
+            $data['raw_steps'] = $this->rawSteps;
+        }
+
+        return $data;
     }
 
     /**

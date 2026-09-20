@@ -45,6 +45,21 @@ class Usage {
     }
 
     /**
+     * Reconstructs a Usage instance from its array representation.
+     *
+     * @param array<string, mixed> $data The serialized data with keys
+     *        'prompt_tokens' and 'completion_tokens'.
+     *
+     * @return self The reconstructed Usage instance.
+     */
+    public static function fromArray(array $data): self {
+        return new self(
+            (int) ($data['prompt_tokens'] ?? 0),
+            (int) ($data['completion_tokens'] ?? 0)
+        );
+    }
+
+    /**
      * Returns the number of tokens used by the AI-generated completion.
      *
      * @return int The completion token count.
@@ -69,5 +84,17 @@ class Usage {
      */
     public function getTotalTokens(): int {
         return $this->promptTokens + $this->completionTokens;
+    }
+
+    /**
+     * Exports the usage data to a JSON-safe associative array.
+     *
+     * @return array<string, mixed> The serialized usage data.
+     */
+    public function toArray(): array {
+        return [
+            'prompt_tokens' => $this->promptTokens,
+            'completion_tokens' => $this->completionTokens,
+        ];
     }
 }
