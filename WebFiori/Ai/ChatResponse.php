@@ -84,6 +84,26 @@ class ChatResponse {
     }
 
     /**
+     * Reconstructs a ChatResponse from its array representation.
+     *
+     * Note: cost is intentionally not restored — it is recomputed on demand
+     * (e.g. on a cache miss) rather than persisted.
+     *
+     * @param array<string, mixed> $data The serialized response data.
+     *
+     * @return self The reconstructed response.
+     */
+    public static function fromArray(array $data): self {
+        return new self(
+            Message::fromArray($data['message'] ?? []),
+            (string) ($data['model'] ?? ''),
+            isset($data['usage']) && is_array($data['usage']) ? Usage::fromArray($data['usage']) : null,
+            $data['finish_reason'] ?? null,
+            $data['request_id'] ?? null
+        );
+    }
+
+    /**
      * Returns the cost of this request.
      *
      * Only available when a PricingConfig is configured on the provider.
@@ -160,5 +180,23 @@ class ChatResponse {
      */
     public function setCost(?CostResult $cost): void {
         $this->cost = $cost;
+    }
+
+    /**
+     * Exports the response to a JSON-safe associative array.
+     *
+     * The composed cost is intentionally excluded — it is recomputed rather
+     * than persisted (see {@see getCost()}).
+     *
+     * @return array<string, mixed> The serialized response.
+     */
+    public function toArray(): array {
+        return [
+            'message' => $this->message->toArray(),
+            'model' => $this->model,
+            'usage' => $this->usage !== null ? $this->usage->toArray() : null,
+            'finish_reason' => $this->finishReason,
+            'request_id' => $this->requestId,
+        ];
     }
 }

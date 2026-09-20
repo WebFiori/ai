@@ -68,6 +68,29 @@ class ToolResult {
     }
 
     /**
+     * Reconstructs a ToolResult from its array representation.
+     *
+     * @param array<string, mixed> $data The serialized data with keys
+     *        'tool_call_id', 'content', 'name', and optionally 'parts'.
+     *
+     * @return self The reconstructed tool result.
+     */
+    public static function fromArray(array $data): self {
+        $parts = [];
+
+        foreach ($data['parts'] ?? [] as $part) {
+            $parts[] = ContentPart::fromArray($part);
+        }
+
+        return new self(
+            (string) ($data['tool_call_id'] ?? ''),
+            (string) ($data['content'] ?? ''),
+            (string) ($data['name'] ?? ''),
+            $parts
+        );
+    }
+
+    /**
      * Returns the content/output produced by the tool execution.
      *
      * @return string The tool execution result.
@@ -110,5 +133,19 @@ class ToolResult {
      */
     public function isMultimodal(): bool {
         return !empty($this->parts);
+    }
+
+    /**
+     * Exports the tool result to a JSON-safe associative array.
+     *
+     * @return array<string, mixed> The serialized tool result.
+     */
+    public function toArray(): array {
+        return [
+            'tool_call_id' => $this->toolCallId,
+            'content' => $this->content,
+            'name' => $this->name,
+            'parts' => array_map(fn (ContentPart $p): array => $p->toArray(), $this->parts),
+        ];
     }
 }
