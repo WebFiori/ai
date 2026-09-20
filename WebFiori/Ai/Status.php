@@ -19,6 +19,9 @@ namespace WebFiori\Ai;
  * @author Ibrahim
  */
 final class Status {
+    // Domain boundaries
+    public const BOUNDARY_ALLOWED = 'boundary_allowed';
+    public const BOUNDARY_REDIRECT = 'boundary_redirect';
     // Cache
     public const CACHE_HIT = 'cache_hit';
     public const CACHE_MISS = 'cache_miss';

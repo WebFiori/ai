@@ -58,6 +58,7 @@ use WebFiori\Ai\Temperature\TemperatureStrategyInterface;
 use WebFiori\Ai\Tool\AgentMemory;
 use WebFiori\Ai\Tool\AgentMessageStrategy;
 use WebFiori\Ai\Tool\AgentTool;
+use WebFiori\Ai\Tool\DomainBoundaries;
 use WebFiori\Ai\Tool\RememberStrategyInterface;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolInterface;
@@ -257,6 +258,23 @@ abstract class AbstractClient implements ProviderInterface {
 
         $tools = $options[ChatOption::TOOLS] ?? [];
         $requestId = $options[ChatOption::REQUEST_ID] ?? uniqid('req_', true);
+
+        // Domain-boundary guardrail: short-circuit off-topic requests before
+        // any HTTP call when a DomainBoundaries instance is supplied.
+        $boundaries = $options[ChatOption::DOMAIN_BOUNDARIES] ?? null;
+
+        if ($boundaries instanceof DomainBoundaries) {
+            $boundaryResponse = $this->applyDomainBoundaries(
+                $boundaries,
+                $messages,
+                $model,
+                $requestId
+            );
+
+            if ($boundaryResponse !== null) {
+                return $boundaryResponse;
+            }
+        }
 
         $this->statusEmitter->emit(Status::PREPARING, [
             'model' => $model,
@@ -1488,6 +1506,62 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Evaluates the domain boundary and, when the latest user message is out of
+     * scope, returns a synthetic ChatResponse without any HTTP call.
+     *
+     * Emits a status event and a boundary metric (blocked or allowed) so that
+     * guardrail activity is traceable through the standard observability stack.
+     * In shadow (log-only) mode the decision is reported but the request is
+     * allowed to proceed (returns null).
+     *
+     * @param DomainBoundaries $boundaries The configured boundary.
+     * @param Message[] $messages The conversation messages.
+     * @param string|null $model The resolved model name.
+     * @param string $requestId The request identifier.
+     *
+     * @return ChatResponse|null A synthetic redirect response, or null to proceed.
+     */
+    private function applyDomainBoundaries(
+        DomainBoundaries $boundaries,
+        array $messages,
+        ?string $model,
+        string $requestId
+    ): ?ChatResponse {
+        $question = $this->latestUserMessage($messages);
+
+        if ($question === null) {
+            return null;
+        }
+
+        $decision = $boundaries->evaluate($question);
+        $enforced = $decision->isBlocked() && !$decision->isShadow();
+
+        $traceData = array_merge(
+            $this->buildBaseMetricData($requestId, $this->getName(), $model),
+            $decision->toArray()
+        );
+        $this->emitMetric($decision->isBlocked() ? 'boundary.blocked' : 'boundary.allowed', $traceData);
+        $this->statusEmitter->emit(
+            $enforced ? Status::BOUNDARY_REDIRECT : Status::BOUNDARY_ALLOWED,
+            $decision->toArray()
+        );
+
+        if (!$enforced) {
+            return null;
+        }
+
+        $message = new Message(Role::ASSISTANT, (string) $decision->getRedirect());
+
+        return new ChatResponse(
+            $message,
+            $model ?? '',
+            new Usage(0, 0),
+            'domain_boundary',
+            $requestId
+        );
+    }
+
+    /**
      * Calculates the actual cost of a request from real token usage.
      *
      * @param string $model The model that generated the response.
@@ -1603,6 +1677,23 @@ abstract class AbstractClient implements ProviderInterface {
         foreach ($tools as $tool) {
             if ($tool->getName() === $name) {
                 return $tool;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Returns the content of the most recent user message, or null if none.
+     *
+     * @param Message[] $messages The conversation messages.
+     *
+     * @return string|null The latest user message content, or null.
+     */
+    private function latestUserMessage(array $messages): ?string {
+        for ($i = count($messages) - 1; $i >= 0; $i--) {
+            if ($messages[$i]->getRole() === Role::USER->value) {
+                return $messages[$i]->getContent();
             }
         }
 

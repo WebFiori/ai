@@ -38,6 +38,13 @@ class AgentProfile {
     private string|array|null $context;
 
     /**
+     * Optional domain-boundary guardrail for redirecting off-topic questions.
+     *
+     * @var DomainBoundaries|null
+     */
+    private ?DomainBoundaries $domainBoundaries;
+
+    /**
      * Few-shot examples, each with 'input' and 'output' keys.
      *
      * The 'output' is always stored as a string. When authored as an array of
@@ -110,6 +117,7 @@ class AgentProfile {
      *                                                                                        normalized to a newline-joined string.
      * @param array<string, mixed> $metadata Version info, not sent to model.
      * @param ToolInterface[] $tools Resolved tool instances.
+     * @param DomainBoundaries|null $domainBoundaries Optional domain-boundary guardrail.
      */
     public function __construct(
         string $identity,
@@ -121,6 +129,7 @@ class AgentProfile {
         array $examples = [],
         array $metadata = [],
         array $tools = [],
+        ?DomainBoundaries $domainBoundaries = null,
     ) {
         $this->identity = $identity;
         $this->skills = $skills;
@@ -128,6 +137,7 @@ class AgentProfile {
         $this->constraints = $constraints;
         $this->outputFormat = $outputFormat;
         $this->context = $context;
+        $this->domainBoundaries = $domainBoundaries;
         $this->examples = array_map(
             static function (array $example): array
             {
@@ -176,6 +186,9 @@ class AgentProfile {
             context: $data['context'] ?? null,
             examples: $data['examples'] ?? [],
             metadata: $data['metadata'] ?? [],
+            domainBoundaries: isset($data['domain_boundaries']) && is_array($data['domain_boundaries'])
+                ? DomainBoundaries::fromArray($data['domain_boundaries'])
+                : null,
         );
 
         if (isset($data['tools']) && is_array($data['tools'])) {
@@ -301,6 +314,15 @@ class AgentProfile {
      */
     public function getContext(): string|array|null {
         return $this->context;
+    }
+
+    /**
+     * Returns the domain-boundary guardrail, if configured.
+     *
+     * @return DomainBoundaries|null The boundary, or null if none is set.
+     */
+    public function getDomainBoundaries(): ?DomainBoundaries {
+        return $this->domainBoundaries;
     }
 
     /**
@@ -499,7 +521,7 @@ class AgentProfile {
         $toolNames = array_map(fn (ToolInterface $t): string => $t->getName(), $this->tools);
         $allToolNames = array_merge($toolNames, $this->toolRefs);
 
-        return [
+        $data = [
             'identity' => $this->identity,
             'skills' => $this->skills,
             'instructions' => $this->instructions,
@@ -510,6 +532,12 @@ class AgentProfile {
             'metadata' => $this->metadata,
             'tools' => $allToolNames,
         ];
+
+        if ($this->domainBoundaries !== null) {
+            $data['domain_boundaries'] = $this->domainBoundaries->toArray();
+        }
+
+        return $data;
     }
 
     /**
@@ -545,6 +573,7 @@ class AgentProfile {
             'examples' => 'merge',
             'tools' => 'merge',
             'metadata' => 'merge',
+            'domain_boundaries' => 'replace',
         ];
 
         // 'concat' is a deprecated alias for 'merge'. Normalize silently so the
