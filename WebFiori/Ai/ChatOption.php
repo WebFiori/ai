@@ -41,6 +41,15 @@ final class ChatOption {
      */
     public const DIMENSIONS = 'dimensions';
 
+    // ─── Guardrails ─────────────────────────────────────────────────────────
+
+    /**
+     * A DomainBoundaries instance used to short-circuit off-topic requests
+     * before the provider is called. When the latest user message is out of
+     * scope, chat() returns a synthetic ChatResponse without an HTTP call.
+     */
+    public const DOMAIN_BOUNDARIES = 'domain_boundaries';
+
     /**
      * The model to use specifically for embedding generation.
      */

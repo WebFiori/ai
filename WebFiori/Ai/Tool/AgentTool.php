@@ -14,6 +14,7 @@ use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\ProviderInterface;
 use WebFiori\Ai\Role;
+use WebFiori\Ai\Status;
 
 /**
  * A tool that delegates tasks to a sub-agent powered by an AI provider.
@@ -139,6 +140,17 @@ class AgentTool implements ToolInterface {
      */
     public function execute(array $arguments): string|ToolResponse {
         $task = $arguments['task'];
+
+        $boundaries = $this->profile->getDomainBoundaries();
+
+        if ($boundaries !== null) {
+            $decision = $boundaries->evaluate($task);
+            $this->emitBoundaryTrace($decision);
+
+            if ($decision->isBlocked() && !$decision->isShadow()) {
+                return $decision->getRedirect();
+            }
+        }
 
         $messages = [];
         $systemPrompt = $this->profile->render();
@@ -313,5 +325,36 @@ class AgentTool implements ToolInterface {
      */
     public function setRememberStrategy(?RememberStrategyInterface $strategy): void {
         $this->rememberStrategy = $strategy;
+    }
+
+    /**
+     * Emits status and metric events for a boundary decision.
+     *
+     * Routes through the provider's status emitter and metrics callback when
+     * available (all AbstractClient-based providers expose them), so guardrail
+     * activity is traceable through the same observability stack as chat calls.
+     * No-ops silently when the provider does not expose these hooks.
+     *
+     * @param BoundaryDecision $decision The decision to report.
+     */
+    private function emitBoundaryTrace(BoundaryDecision $decision): void {
+        $data = array_merge($decision->toArray(), ['agent' => $this->name]);
+
+        if (method_exists($this->provider, 'getStatusEmitter')) {
+            $emitter = $this->provider->getStatusEmitter();
+            $status = $decision->isBlocked() && !$decision->isShadow()
+                ? Status::BOUNDARY_REDIRECT
+                : Status::BOUNDARY_ALLOWED;
+            $emitter->emit($status, $data);
+        }
+
+        if (method_exists($this->provider, 'getMetricsCallback')) {
+            $callback = $this->provider->getMetricsCallback();
+
+            if ($callback !== null) {
+                $event = $decision->isBlocked() ? 'boundary.blocked' : 'boundary.allowed';
+                $callback($event, array_merge($data, ['timestamp' => (int) (microtime(true) * 1000)]));
+            }
+        }
     }
 }
