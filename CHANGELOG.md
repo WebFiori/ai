@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.2.0](https://github.com/WebFiori/ai/compare/v1.1.0...v1.2.0) (2026-09-20)
+
+
+### Features
+
+* **agents:** add domain boundary guardrails to AgentProfile ([f9117b3](https://github.com/WebFiori/ai/commit/f9117b3e5808fb3d9de2e3e511fc7b37449e167b))
+* **agents:** add domain boundary guardrails to AgentProfile ([392feba](https://github.com/WebFiori/ai/commit/392feba5db9c62d94f92c6365c56b9bd47eb41db)), closes [#160](https://github.com/WebFiori/ai/issues/160)
+* **cache:** add toArray/fromArray serialization to ChatResponse object graph ([46ab66f](https://github.com/WebFiori/ai/commit/46ab66f4d45c1a512bcb89ce6888d85b803489d5))
+* **cache:** add toArray/fromArray serialization to ChatResponse object graph ([1e49704](https://github.com/WebFiori/ai/commit/1e497043e3b5dea410ecafe27f8af6bd96fbc3bc)), closes [#143](https://github.com/WebFiori/ai/issues/143)
+
 ## [1.1.0](https://github.com/WebFiori/ai/compare/v1.0.0...v1.1.0) (2026-09-14)
 
 
