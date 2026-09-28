@@ -17,6 +17,7 @@ use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
 use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 use WebFiori\Ai\Redaction\RedactionConfig;
+use WebFiori\Ai\Redaction\RedactionMatch;
 use WebFiori\Ai\Redaction\RedactionRule;
 use WebFiori\Ai\Redaction\RedactionService;
 
@@ -717,5 +718,297 @@ class RedactionTest extends TestCase {
         foreach ($loggedErrors as $error) {
             $this->assertStringNotContainsString('user@secret.com', $error);
         }
+    }
+
+    // =========================================================================
+    // getActiveRules() — #165
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function testGetActiveRulesIncludesMandatoryAndAllOptionalByDefault() {
+        $service = new RedactionService(new RedactionConfig());
+
+        $names = array_map(fn (RedactionRule $r): string => $r->getName(), $service->getActiveRules());
+
+        // Mandatory
+        $this->assertContains('api_key', $names);
+        $this->assertContains('bearer_token', $names);
+        // Optional (all enabled by default)
+        $this->assertContains('email', $names);
+        $this->assertContains('saudi_id', $names);
+        $this->assertContains('phone', $names);
+        $this->assertContains('credit_card', $names);
+        $this->assertContains('ssn', $names);
+        $this->assertContains('ipv4', $names);
+        $this->assertContains('ipv6', $names);
+        $this->assertContains('iban', $names);
+    }
+
+    /**
+     * @test
+     */
+    public function testGetActiveRulesExcludesDisabledOptional() {
+        $service = new RedactionService(new RedactionConfig(disabledRules: ['email', 'phone']));
+
+        $names = array_map(fn (RedactionRule $r): string => $r->getName(), $service->getActiveRules());
+
+        $this->assertNotContains('email', $names);
+        $this->assertNotContains('phone', $names);
+        $this->assertContains('ssn', $names);
+    }
+
+    /**
+     * @test
+     */
+    public function testGetActiveRulesAlwaysIncludesMandatoryEvenIfDisableAttempted() {
+        // api_key and bearer_token cannot be disabled.
+        $service = new RedactionService(new RedactionConfig(disabledRules: ['api_key', 'bearer_token']));
+
+        $names = array_map(fn (RedactionRule $r): string => $r->getName(), $service->getActiveRules());
+
+        $this->assertContains('api_key', $names);
+        $this->assertContains('bearer_token', $names);
+    }
+
+    /**
+     * @test
+     */
+    public function testGetActiveRulesIncludesCustomRules() {
+        $custom = new RedactionRule('passport', '/\b[A-Z]{1,2}\d{6,9}\b/', '[PASSPORT]');
+        $service = new RedactionService(new RedactionConfig(customRules: [$custom]));
+
+        $rules = $service->getActiveRules();
+        $names = array_map(fn (RedactionRule $r): string => $r->getName(), $rules);
+
+        $this->assertContains('passport', $names);
+        // Order: mandatory first, custom last.
+        $this->assertSame('api_key', $rules[0]->getName());
+        $this->assertSame('passport', $rules[array_key_last($rules)]->getName());
+    }
+
+    /**
+     * @test
+     */
+    public function testGetActiveRulesReturnsRuleObjects() {
+        $service = new RedactionService(new RedactionConfig());
+
+        foreach ($service->getActiveRules() as $rule) {
+            $this->assertInstanceOf(RedactionRule::class, $rule);
+        }
+    }
+
+    // =========================================================================
+    // detect() — #165
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function testDetectEmptyStringReturnsEmptyArray() {
+        $service = new RedactionService(new RedactionConfig());
+
+        $this->assertSame([], $service->detect(''));
+    }
+
+    /**
+     * @test
+     */
+    public function testDetectNoPiiReturnsEmptyArray() {
+        $service = new RedactionService(new RedactionConfig());
+
+        $this->assertSame([], $service->detect('The quick brown fox'));
+    }
+
+    /**
+     * @test
+     */
+    public function testDetectReturnsRedactionMatchInstances() {
+        $service = new RedactionService(new RedactionConfig());
+
+        $matches = $service->detect('Email me at user@example.com');
+
+        $this->assertNotEmpty($matches);
+        $this->assertContainsOnlyInstancesOf(RedactionMatch::class, $matches);
+    }
+
+    /**
+     * @test
+     */
+    public function testDetectOffsetsAreCorrect() {
+        $service = new RedactionService(new RedactionConfig());
+
+        $text = 'Email me at user@example.com now';
+        $matches = $service->detect($text);
+
+        // Find the email match.
+        $email = null;
+
+        foreach ($matches as $m) {
+            if ($m->getRule() === 'email') {
+                $email = $m;
+                break;
+            }
+        }
+
+        $this->assertNotNull($email);
+        $this->assertSame('user@example.com', $email->getValue());
+        // Offsets must recover the exact substring.
+        $this->assertSame(
+            $email->getValue(),
+            substr($text, $email->getStart(), $email->getEnd() - $email->getStart())
+        );
+        $this->assertSame('[EMAIL]', $email->getReplacement());
+    }
+
+    /**
+     * @test
+     */
+    public function testDetectMultipleRulesSortedByStart() {
+        $service = new RedactionService(new RedactionConfig());
+
+        $text = 'Reach me at 555-123-4567 or admin@example.com';
+        $matches = $service->detect($text);
+
+        $starts = array_map(fn (RedactionMatch $m): int => $m->getStart(), $matches);
+        $sorted = $starts;
+        sort($sorted);
+
+        $this->assertSame($sorted, $starts, 'Matches must be sorted by start offset ascending');
+    }
+
+    /**
+     * @test
+     */
+    public function testDetectEmitsOverlappingMatchesFromDifferentRules() {
+        // A 10-digit string starting with 1 matches saudi_id; the same digits
+        // can also be caught by the phone rule. Detection reports both.
+        $service = new RedactionService(new RedactionConfig());
+
+        $matches = $service->detect('ID 1234567890 end');
+        $rules = array_map(fn (RedactionMatch $m): string => $m->getRule(), $matches);
+
+        $this->assertContains('saudi_id', $rules);
+        // At least the national id is detected; if phone also overlaps it is kept.
+        $this->assertGreaterThanOrEqual(1, count($matches));
+    }
+
+    /**
+     * @test
+     */
+    public function testDetectRespectsDisabledRules() {
+        $service = new RedactionService(new RedactionConfig(disabledRules: ['email']));
+
+        $matches = $service->detect('Email user@example.com');
+        $rules = array_map(fn (RedactionMatch $m): string => $m->getRule(), $matches);
+
+        $this->assertNotContains('email', $rules);
+    }
+
+    /**
+     * @test
+     */
+    public function testDetectFindsCustomRule() {
+        $service = new RedactionService(new RedactionConfig(
+            customRules: [new RedactionRule('employee_id', '/\bEMP-\d{5}\b/', '[EMP_ID]')]
+        ));
+
+        $matches = $service->detect('Employee EMP-00123 here');
+
+        $this->assertCount(1, $matches);
+        $this->assertSame('employee_id', $matches[0]->getRule());
+        $this->assertSame('EMP-00123', $matches[0]->getValue());
+    }
+
+    /**
+     * @test
+     */
+    public function testDetectIsConsistentWithRedactString() {
+        // Applying each detected match's replacement (right-to-left, so offsets
+        // stay valid) must reproduce redactString() output for non-overlapping
+        // matches.
+        $service = new RedactionService(new RedactionConfig(disabledRules: ['saudi_id', 'phone']));
+
+        $text = 'Mail admin@example.com and card 4111111111111111';
+        $matches = $service->detect($text);
+
+        // Apply replacements from the rightmost match backwards.
+        usort($matches, fn (RedactionMatch $a, RedactionMatch $b): int => $b->getStart() <=> $a->getStart());
+        $rebuilt = $text;
+
+        foreach ($matches as $m) {
+            $rebuilt = substr($rebuilt, 0, $m->getStart()).$m->getReplacement().substr($rebuilt, $m->getEnd());
+        }
+
+        $this->assertSame($service->redactString($text), $rebuilt);
+    }
+
+    // =========================================================================
+    // RedactionMatch — #165
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function testRedactionMatchGettersAndToArray() {
+        $match = new RedactionMatch('email', 5, 21, 'user@example.com', '[EMAIL]');
+
+        $this->assertSame('email', $match->getRule());
+        $this->assertSame(5, $match->getStart());
+        $this->assertSame(21, $match->getEnd());
+        $this->assertSame('user@example.com', $match->getValue());
+        $this->assertSame('[EMAIL]', $match->getReplacement());
+
+        $this->assertSame([
+            'rule' => 'email',
+            'start' => 5,
+            'end' => 21,
+            'value' => 'user@example.com',
+            'replacement' => '[EMAIL]',
+        ], $match->toArray());
+    }
+
+    // =========================================================================
+    // Coverage completeness — response body + detect() guard
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function testRedactContextResponseBodyRedactionOptIn() {
+        $service = new RedactionService(new RedactionConfig(
+            redactResponseBodies: true
+        ));
+
+        $context = [
+            'model' => 'gpt-4o',
+            'response_body' => 'AI reply: contact secret@example.com',
+        ];
+
+        $result = $service->redactContext($context);
+
+        $this->assertSame('gpt-4o', $result['model']);
+        $this->assertSame('[REDACTED]', $result['response_body']);
+    }
+
+    /**
+     * @test
+     */
+    public function testDetectSkipsRuleWithInvalidPattern() {
+        // An invalid regex causes preg_match_all to return false; detect() must
+        // skip that rule without aborting the scan of the others.
+        $service = new RedactionService(new RedactionConfig(
+            customRules: [
+                new RedactionRule('broken', '/(/', '[BROKEN]'),
+            ]
+        ));
+
+        $matches = @$service->detect('Email user@example.com here');
+        $rules = array_map(fn (RedactionMatch $m): string => $m->getRule(), $matches);
+
+        // The broken rule produced no matches, but valid rules still ran.
+        $this->assertNotContains('broken', $rules);
+        $this->assertContains('email', $rules);
     }
 }

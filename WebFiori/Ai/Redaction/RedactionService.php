@@ -83,6 +83,102 @@ class RedactionService {
     }
 
     /**
+     * Detects sensitive data in a string without redacting it.
+     *
+     * Runs every active rule (see {@see getActiveRules()}) against the text and
+     * returns a list of matches carrying the rule name, byte offsets, matched
+     * value, and the replacement token that would be applied. Unlike
+     * {@see redactString()}, this preserves match positions so consumers can
+     * build their own findings.
+     *
+     * Semantics:
+     * - Offsets are byte offsets; `start` is inclusive, `end` is exclusive.
+     * - All matches from all rules are reported, including overlapping matches
+     *   from different rules (detection does not suppress overlaps the way
+     *   single-pass redaction does).
+     * - Matches are sorted by start offset ascending; ties preserve active-rule
+     *   order.
+     *
+     * @param string $text The text to scan.
+     *
+     * @return RedactionMatch[] The detected matches, sorted by start offset.
+     */
+    public function detect(string $text): array {
+        if ($text === '') {
+            return [];
+        }
+
+        $matches = [];
+
+        foreach ($this->getActiveRules() as $order => $rule) {
+            $found = [];
+
+            if (preg_match_all($rule->getPattern(), $text, $found, PREG_OFFSET_CAPTURE | PREG_SET_ORDER) === false) {
+                continue;
+            }
+
+            foreach ($found as $set) {
+                // Group 0 is the full match: [value, byteOffset].
+                $value = $set[0][0];
+                $start = $set[0][1];
+
+                $matches[] = [
+                    'order' => $order,
+                    'match' => new RedactionMatch(
+                        $rule->getName(),
+                        $start,
+                        $start + strlen($value),
+                        $value,
+                        $rule->getReplacement()
+                    ),
+                ];
+            }
+        }
+
+        // Sort by start offset ascending; ties keep active-rule order (stable).
+        usort($matches, function (array $a, array $b): int
+        {
+            return [$a['match']->getStart(), $a['order']] <=> [$b['match']->getStart(), $b['order']];
+        });
+
+        return array_map(static fn (array $m): RedactionMatch => $m['match'], $matches);
+    }
+
+    /**
+     * Returns the currently active redaction rules.
+     *
+     * The active set is: mandatory rules (always) + optional built-in rules that
+     * are enabled by the configuration + custom rules, in that order. This is the
+     * exact set applied by {@see redactString()}, exposed so consumers can build
+     * offset-based detections (see {@see detect()}) without re-declaring the
+     * library's regex patterns.
+     *
+     * @return RedactionRule[] The active rules.
+     */
+    public function getActiveRules(): array {
+        $rules = [];
+
+        // Mandatory rules — always included.
+        foreach ($this->mandatoryRules as $rule) {
+            $rules[] = $rule;
+        }
+
+        // Optional rules — only if enabled.
+        foreach ($this->optionalRules as $rule) {
+            if ($this->config->isRuleEnabled($rule->getName())) {
+                $rules[] = $rule;
+            }
+        }
+
+        // Custom rules — always included.
+        foreach ($this->config->getCustomRules() as $rule) {
+            $rules[] = $rule;
+        }
+
+        return $rules;
+    }
+
+    /**
      * Redacts sensitive data from a log/metric context array.
      *
      * Recursively processes string values. Applies body redaction to
@@ -140,22 +236,8 @@ class RedactionService {
         $patterns = [];
         $replacements = [];
 
-        // Mandatory rules - always included
-        foreach ($this->mandatoryRules as $rule) {
-            $patterns[] = $rule->getPattern();
-            $replacements[] = $rule->getReplacement();
-        }
-
-        // Optional rules - only if enabled
-        foreach ($this->optionalRules as $rule) {
-            if ($this->config->isRuleEnabled($rule->getName())) {
-                $patterns[] = $rule->getPattern();
-                $replacements[] = $rule->getReplacement();
-            }
-        }
-
-        // Custom rules
-        foreach ($this->config->getCustomRules() as $rule) {
+        // Single source of truth: compile exactly the active rule set.
+        foreach ($this->getActiveRules() as $rule) {
             $patterns[] = $rule->getPattern();
             $replacements[] = $rule->getReplacement();
         }
