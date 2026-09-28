@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.3.0](https://github.com/WebFiori/ai/compare/v1.2.0...v1.3.0) (2026-09-28)
+
+
+### Features
+
+* **redaction:** expose active rules and offset-based detect() ([c7db6bc](https://github.com/WebFiori/ai/commit/c7db6bc547b9f2e42cddffc3bbc9dc61fb33355d))
+* **redaction:** expose active rules and offset-based detect() ([58e48be](https://github.com/WebFiori/ai/commit/58e48be4c75159aa6ded3aadec18777d9076609b)), closes [#165](https://github.com/WebFiori/ai/issues/165)
+* **tools:** per-tool success/failure status events + guarded execute() ([a71b63c](https://github.com/WebFiori/ai/commit/a71b63cf443e4877f95fdea12de210a1e6a8721c))
+* **tools:** report per-tool success/failure in status events; guard tool execute() ([8f44846](https://github.com/WebFiori/ai/commit/8f4484607766b04e910d69d13ebe93375d75af58)), closes [#164](https://github.com/WebFiori/ai/issues/164)
+
 ## [1.2.0](https://github.com/WebFiori/ai/compare/v1.1.0...v1.2.0) (2026-09-20)
 
 
