@@ -1606,7 +1606,7 @@ abstract class AbstractClient implements ProviderInterface {
      * @param bool $parallel Reserved for future parallel execution support.
      * @param Message[] $messages The current conversation messages for context injection.
      *
-     * @return array<string, array{name: string, output: string, duration_ms: int}> Results keyed by tool call ID.
+     * @return array<string, array{name: string, output: string, duration_ms: int, ok: bool}> Results keyed by tool call ID.
      */
     private function executeTools(array $tools, array $toolCalls, bool $parallel, array $messages = []): array {
         $results = [];
@@ -1614,14 +1614,17 @@ abstract class AbstractClient implements ProviderInterface {
 
         foreach ($toolCalls as $toolCall) {
             $tool = $this->findTool($tools, $toolCall->getName());
+            $toolCallId = $toolCall->getId();
 
             $this->statusEmitter->emit(Status::TOOL_CALLING, [
                 'tool' => $toolCall->getName(),
+                'tool_call_id' => $toolCallId,
                 'arguments' => $toolCall->getArguments(),
             ]);
 
             $this->statusEmitter->emit(Status::TOOL_EXECUTING, [
                 'tool' => $toolCall->getName(),
+                'tool_call_id' => $toolCallId,
             ]);
 
             // Inject conversation context for AgentTool with FULL_HISTORY strategy
@@ -1629,20 +1632,84 @@ abstract class AbstractClient implements ProviderInterface {
                 $tool->setConversationContext($messages);
             }
 
-            $start = microtime(true);
-            $output = $tool !== null ? $tool->execute($toolCall->getArguments()) : '';
-            $duration = (int) ((microtime(true) - $start) * 1000);
-
-            $this->statusEmitter->emit(Status::TOOL_COMPLETED, [
-                'tool' => $toolCall->getName(),
-                'duration_ms' => $duration,
-            ]);
-
-            // Capture ToolResponse parts for multimodal results
+            $ok = true;
+            $error = null;
+            $errorType = null;
+            $exceptionClass = null;
+            $output = '';
             $parts = [];
 
-            if ($output instanceof ToolResponse && $output->isMultimodal()) {
-                $parts = $output->getParts();
+            $start = microtime(true);
+
+            if ($tool === null) {
+                // Tool not registered — surface as a per-tool failure rather
+                // than a silent empty result.
+                $ok = false;
+                $errorType = Status::TOOL_ERROR_NOT_FOUND;
+                $error = 'Tool not found: '.$toolCall->getName();
+                $output = json_encode(['error' => $error]);
+            } else {
+                try {
+                    $output = $tool->execute($toolCall->getArguments());
+
+                    // Deterministic failure signal via ToolResponse::error().
+                    if ($output instanceof ToolResponse && $output->isError()) {
+                        $ok = false;
+                        $errorType = Status::TOOL_ERROR_RETURNED;
+                        $error = $output->getText();
+                    }
+
+                    // Capture ToolResponse parts for multimodal results.
+                    if ($output instanceof ToolResponse && $output->isMultimodal()) {
+                        $parts = $output->getParts();
+                    }
+                } catch (\Throwable $e) {
+                    // Guard execute() so one failing tool does not abort the
+                    // remaining tool calls in the batch.
+                    $ok = false;
+                    $errorType = Status::TOOL_ERROR_EXCEPTION;
+                    $error = $e->getMessage();
+                    $exceptionClass = get_class($e);
+                    $output = json_encode(['error' => $error]);
+
+                    $this->logDebug('Tool execution threw', [
+                        'tool' => $toolCall->getName(),
+                        'tool_call_id' => $toolCallId,
+                        'exception_class' => $exceptionClass,
+                        'error' => $error,
+                    ]);
+                }
+            }
+
+            $duration = (int) ((microtime(true) - $start) * 1000);
+
+            if ($ok) {
+                $this->statusEmitter->emit(Status::TOOL_COMPLETED, [
+                    'tool' => $toolCall->getName(),
+                    'tool_call_id' => $toolCallId,
+                    'duration_ms' => $duration,
+                    'ok' => true,
+                    'multimodal' => !empty($parts),
+                    'parts_count' => count($parts),
+                ]);
+            } else {
+                // Emit TOOL_FAILED for status-switching consumers; TOOL_COMPLETED
+                // is intentionally not emitted on failure. The `ok`/`error`/
+                // `error_type` fields are also provided for single-event consumers.
+                $context = [
+                    'tool' => $toolCall->getName(),
+                    'tool_call_id' => $toolCallId,
+                    'duration_ms' => $duration,
+                    'ok' => false,
+                    'error' => $error,
+                    'error_type' => $errorType,
+                ];
+
+                if ($exceptionClass !== null) {
+                    $context['exception_class'] = $exceptionClass;
+                }
+
+                $this->statusEmitter->emit(Status::TOOL_FAILED, $context);
             }
 
             $results[$toolCall->getId()] = [
@@ -1650,6 +1717,7 @@ abstract class AbstractClient implements ProviderInterface {
                 'output' => (string) $output,
                 'parts' => $parts,
                 'duration_ms' => $duration,
+                'ok' => $ok,
             ];
         }
 

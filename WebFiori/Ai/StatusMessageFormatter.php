@@ -56,6 +56,7 @@ class StatusMessageFormatter {
         Status::TOOL_CALLING => 'Using {tool} tool...',
         Status::TOOL_EXECUTING => 'Running {tool}...',
         Status::TOOL_COMPLETED => 'Finished {tool} in {duration_ms}ms.',
+        Status::TOOL_FAILED => '{tool} failed after {duration_ms}ms: {error}',
         Status::COMPLETED => 'Done in {duration_s} seconds.',
         Status::ERROR => 'Something went wrong: {error}',
     ];

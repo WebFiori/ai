@@ -90,6 +90,41 @@ class ToolResponseTest extends TestCase {
     }
 
     // =========================================================================
+    // Error result (#164)
+    // =========================================================================
+
+    public function testErrorFactory(): void {
+        $response = ToolResponse::error('Something broke.');
+
+        $this->assertTrue($response->isError());
+        $this->assertEquals('Something broke.', $response->getText());
+        $this->assertEmpty($response->getParts());
+        $this->assertFalse($response->isMultimodal());
+    }
+
+    public function testErrorFactoryWithParts(): void {
+        $img = ContentPart::imageBase64(base64_encode('data'), 'image/png');
+        $response = ToolResponse::error('Failed with diagram.', [$img]);
+
+        $this->assertTrue($response->isError());
+        $this->assertTrue($response->isMultimodal());
+        $this->assertCount(1, $response->getParts());
+    }
+
+    public function testErrorToStringReturnsMessage(): void {
+        $response = ToolResponse::error('boom');
+
+        $this->assertEquals('boom', (string) $response);
+    }
+
+    public function testNonErrorFactoriesDefaultToNotError(): void {
+        $this->assertFalse(ToolResponse::text('ok')->isError());
+        $this->assertFalse(ToolResponse::withImages('ok', [])->isError());
+        $this->assertFalse(ToolResponse::withParts('ok', [])->isError());
+        $this->assertFalse((new ToolResponse('ok'))->isError());
+    }
+
+    // =========================================================================
     // __toString
     // =========================================================================
 

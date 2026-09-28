@@ -34,7 +34,18 @@ final class Status {
     // Tool execution
     public const TOOL_CALLING = 'tool_calling';
     public const TOOL_COMPLETED = 'tool_completed';
+    // Allowed values for the `error_type` field on TOOL_FAILED (and on
+    // TOOL_COMPLETED when `ok` is false). Consumers should compare against
+    // these constants rather than hard-coding the raw strings:
+    //   TOOL_ERROR_NOT_FOUND  → the requested tool was not registered.
+    //   TOOL_ERROR_EXCEPTION  → the tool's execute() threw a Throwable.
+    //   TOOL_ERROR_RETURNED   → the tool returned ToolResponse::error().
+    public const TOOL_ERROR_EXCEPTION = 'exception';
+    public const TOOL_ERROR_NOT_FOUND = 'not_found';
+    public const TOOL_ERROR_RETURNED = 'tool_error';
     public const TOOL_EXECUTING = 'tool_executing';
+    public const TOOL_FAILED = 'tool_failed';
+
     public const TRUNCATING_CONTEXT = 'truncating_context';
     public const WAITING_RESPONSE = 'waiting_response';
 }
