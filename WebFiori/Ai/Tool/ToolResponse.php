@@ -43,6 +43,12 @@ use WebFiori\Ai\ContentPart;
  */
 class ToolResponse {
     /**
+     * Whether this response represents a tool execution failure.
+     *
+     * @var bool
+     */
+    private bool $isError;
+    /**
      * The content parts carrying multimodal content.
      *
      * @var ContentPart[]
@@ -62,10 +68,13 @@ class ToolResponse {
      * @param string $text The primary text content of the result.
      * @param ContentPart[] $parts Optional content parts (images, documents, etc.)
      *        for multimodal tool responses.
+     * @param bool $isError Whether this response represents a tool failure.
+     *        Defaults to false so existing usages remain successful results.
      */
-    public function __construct(string $text, array $parts = []) {
+    public function __construct(string $text, array $parts = [], bool $isError = false) {
         $this->text = $text;
         $this->parts = $parts;
+        $this->isError = $isError;
     }
 
     /**
@@ -78,6 +87,23 @@ class ToolResponse {
      */
     public function __toString(): string {
         return $this->text;
+    }
+
+    /**
+     * Creates a ToolResponse that represents a tool execution failure.
+     *
+     * Use this to signal failure deterministically so the status stream can
+     * report the tool as failed ({@see \WebFiori\Ai\Status::TOOL_FAILED}) with
+     * an `error_type` of `tool_error`. The message is still passed to the model
+     * as the tool output so the conversation can continue.
+     *
+     * @param string $message A short description of what went wrong.
+     * @param ContentPart[] $parts Optional content parts to accompany the error.
+     *
+     * @return self An error response.
+     */
+    public static function error(string $message, array $parts = []): self {
+        return new self($message, $parts, true);
     }
 
     /**
@@ -96,6 +122,20 @@ class ToolResponse {
      */
     public function getText(): string {
         return $this->text;
+    }
+
+    /**
+     * Returns whether this response represents a tool execution failure.
+     *
+     * Tools may return `ToolResponse::error()` to signal a failure
+     * deterministically, rather than relying on the older convention of
+     * returning an error string. When true, the status stream reports the
+     * tool as failed ({@see \WebFiori\Ai\Status::TOOL_FAILED}).
+     *
+     * @return bool True if this response is an error result.
+     */
+    public function isError(): bool {
+        return $this->isError;
     }
 
     /**
