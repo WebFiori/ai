@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/WebFiori/ai/compare/v1.3.0...v1.3.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **google:** serialize empty schema properties as {} not [] ([#170](https://github.com/WebFiori/ai/issues/170)) ([931036c](https://github.com/WebFiori/ai/commit/931036cf7fae2a8781a51dc2b339c522d4176932)), closes [#169](https://github.com/WebFiori/ai/issues/169)
+
 ## [1.3.0](https://github.com/WebFiori/ai/compare/v1.2.0...v1.3.0) (2026-09-28)
 
 
