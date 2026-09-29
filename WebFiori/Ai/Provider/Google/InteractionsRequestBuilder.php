@@ -158,7 +158,7 @@ class InteractionsRequestBuilder {
                 'type' => 'function',
                 'name' => $tool->getName(),
                 'description' => $tool->getDescription(),
-                'parameters' => $tool->getParameters(),
+                'parameters' => SchemaCoercer::coerce($tool->getParameters()),
             ];
         }
 
