@@ -247,7 +247,7 @@ class GoogleClient extends AbstractClient {
         //   'json_schema' => ['type' => 'object', ...] → JSON with schema validation
         if (isset($options[ChatOption::JSON_SCHEMA])) {
             $config['responseMimeType'] = 'application/json';
-            $config['responseSchema'] = $options[ChatOption::JSON_SCHEMA];
+            $config['responseSchema'] = SchemaCoercer::coerce($options[ChatOption::JSON_SCHEMA]);
         } elseif (!empty($options[ChatOption::JSON_MODE])) {
             $config['responseMimeType'] = 'application/json';
         }
@@ -906,7 +906,7 @@ class GoogleClient extends AbstractClient {
                 $declarations[] = [
                     'name' => $tool->getName(),
                     'description' => $tool->getDescription(),
-                    'parameters' => $tool->getParameters(),
+                    'parameters' => SchemaCoercer::coerce($tool->getParameters()),
                 ];
             }
 
