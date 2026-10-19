@@ -54,3 +54,5 @@ export GCP_ACCESS_TOKEN="ya29...."
 | 27 | [RAG Providers](27-rag-providers/) | Provider-agnostic RAG with local, Google, and Bedrock backends |
 | 28 | [Profile Inheritance](28-profile-inheritance/) | JSON-based profile inheritance via `extends` with configurable merge strategies |
 | 29 | [Context Usage](29-context-usage/) | Structured context window usage snapshot (used/max/remaining/percentage) for gauges and pre-send warnings |
+| 30 | [Domain Boundaries](30-domain-boundaries/) | Guardrails that short-circuit off-topic requests before any provider call |
+| 31 | [Mid-Loop Truncation](31-mid-loop-truncation/) | Keep context bounded during tool chains by re-applying the window strategy between tool iterations (pairing-safe) |
