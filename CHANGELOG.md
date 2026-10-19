@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/WebFiori/ai/compare/v1.3.1...v1.4.0) (2026-10-19)
+
+
+### Features
+
+* **context:** re-apply context window strategy between tool iterations ([#173](https://github.com/WebFiori/ai/issues/173)) ([0e229a7](https://github.com/WebFiori/ai/commit/0e229a7138c07851f255996228c3ba3686ae5fd2))
+
 ## [1.3.1](https://github.com/WebFiori/ai/compare/v1.3.0...v1.3.1) (2026-09-29)
 
 
