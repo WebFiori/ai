@@ -119,6 +119,27 @@ final class ChatOption {
      */
     public const TEMPERATURE = 'temperature';
 
+    /**
+     * A {@see Context\ToolLoopOverflowBehavior} controlling how
+     * mid-loop overflow is handled when
+     * {@see self::TRUNCATE_BETWEEN_TOOL_ITERATIONS} is enabled.
+     *
+     * Defaults to ToolLoopOverflowBehavior::DROP_OLDEST.
+     */
+    public const TOOL_LOOP_OVERFLOW_BEHAVIOR = 'tool_loop_overflow_behavior';
+
+    /**
+     * An optional {@see Provider\ProviderInterface} used to
+     * summarize dropped tool-call groups when
+     * {@see self::TOOL_LOOP_OVERFLOW_BEHAVIOR} is
+     * ToolLoopOverflowBehavior::SUMMARIZE. Prefer a cheap/fast model.
+     *
+     * When not provided, a configured SummarizingWindowStrategy's summarizer is
+     * reused; if neither is available, chat() fails fast with a configuration
+     * error.
+     */
+    public const TOOL_LOOP_SUMMARIZER = 'tool_loop_summarizer';
+
     // ─── Tool Calling ─────────────────────────────────────────────────────────
 
     /**
@@ -130,6 +151,16 @@ final class ChatOption {
      * Nucleus sampling: only consider tokens with cumulative probability <= top_p.
      */
     public const TOP_P = 'top_p';
+
+    /**
+     * When true, re-applies the configured context window strategy *between*
+     * tool-execution iterations (not just once before the loop), keeping the
+     * accumulating conversation within budget during long tool chains.
+     *
+     * Opt-in; defaults to false. No-op when no context strategy is configured.
+     * Truncation is tool-call-pair aware so outgoing requests stay valid.
+     */
+    public const TRUNCATE_BETWEEN_TOOL_ITERATIONS = 'truncate_between_tool_iterations';
 
     /**
      * Prevent instantiation.

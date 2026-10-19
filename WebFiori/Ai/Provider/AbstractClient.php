@@ -19,7 +19,10 @@ use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\Context\ContextWindowConfig;
 use WebFiori\Ai\Context\ContextWindowStrategyInterface;
+use WebFiori\Ai\Context\SummarizingWindowStrategy;
 use WebFiori\Ai\Context\TokenEstimator;
+use WebFiori\Ai\Context\ToolCallGrouping;
+use WebFiori\Ai\Context\ToolLoopOverflowBehavior;
 use WebFiori\Ai\ContextUsage;
 use WebFiori\Ai\CostEstimate;
 use WebFiori\Ai\CostResult;
@@ -259,6 +262,29 @@ abstract class AbstractClient implements ProviderInterface {
         $tools = $options[ChatOption::TOOLS] ?? [];
         $requestId = $options[ChatOption::REQUEST_ID] ?? uniqid('req_', true);
 
+        // Resolve mid-loop (between-tool-iterations) truncation configuration
+        // up front so misconfiguration fails fast, before any HTTP call.
+        $truncateBetweenIterations = ($options[ChatOption::TRUNCATE_BETWEEN_TOOL_ITERATIONS] ?? false) === true;
+        $overflowBehavior = $options[ChatOption::TOOL_LOOP_OVERFLOW_BEHAVIOR] ?? ToolLoopOverflowBehavior::DROP_OLDEST;
+        $loopSummarizer = null;
+
+        if ($truncateBetweenIterations && $this->contextStrategy !== null
+            && $overflowBehavior === ToolLoopOverflowBehavior::SUMMARIZE) {
+            $loopSummarizer = $options[ChatOption::TOOL_LOOP_SUMMARIZER] ?? null;
+
+            if ($loopSummarizer === null && $this->contextStrategy instanceof SummarizingWindowStrategy) {
+                $loopSummarizer = $this->contextStrategy->getSummarizer();
+            }
+
+            if (!$loopSummarizer instanceof ProviderInterface) {
+                throw new InvalidConfigException(
+                    'ChatOption::TOOL_LOOP_OVERFLOW_BEHAVIOR=SUMMARIZE requires a summarizer: '
+                    .'set ChatOption::TOOL_LOOP_SUMMARIZER to a ProviderInterface, '
+                    .'or configure a SummarizingWindowStrategy as the context strategy.'
+                );
+            }
+        }
+
         // Domain-boundary guardrail: short-circuit off-topic requests before
         // any HTTP call when a DomainBoundaries instance is supplied.
         $boundaries = $options[ChatOption::DOMAIN_BOUNDARIES] ?? null;
@@ -377,6 +403,30 @@ abstract class AbstractClient implements ProviderInterface {
                             [],
                             new ToolResult($toolCallId, $result['output'], $result['name'], $result['parts'])
                         );
+                    }
+
+                    // Re-apply the context window strategy *between* iterations
+                    // when opted in, keeping the accumulating conversation within
+                    // budget. Pairing-safe truncation removes whole tool-call
+                    // groups, so outgoing requests stay provider-valid.
+                    if ($truncateBetweenIterations && $this->contextStrategy !== null) {
+                        $beforeCount = count($messages);
+                        $messages = $this->truncateBetweenToolIterations(
+                            $messages,
+                            $tools,
+                            $overflowBehavior,
+                            $loopSummarizer
+                        );
+
+                        if (count($messages) !== $beforeCount) {
+                            // The message set changed: force a full rebuild of the
+                            // next request so the incremental slice is consistent
+                            // with the truncated conversation.
+                            $this->statusEmitter->emit(Status::TRUNCATING_CONTEXT, [
+                                'iteration' => $iteration,
+                            ]);
+                            $formattedCount = 0;
+                        }
                     }
 
                     // Build next request: pass all messages but hint provider about
@@ -1752,6 +1802,33 @@ abstract class AbstractClient implements ProviderInterface {
     }
 
     /**
+     * Returns whether the given messages fit within the configured context
+     * strategy's budget — i.e. the strategy would not truncate them.
+     *
+     * Reuses each strategy's own budget definition (via its truncate()) without
+     * requiring extra interface methods. A NoTruncationStrategy that throws is
+     * treated as "does not fit" so the caller can shed groups first.
+     *
+     * @param Message[] $messages The messages to test.
+     * @param ToolInterface[] $tools Tools that also consume tokens.
+     *
+     * @return bool True if the strategy leaves the messages unchanged.
+     */
+    private function fitsContextStrategy(array $messages, array $tools): bool {
+        if ($this->contextStrategy === null) {
+            return true;
+        }
+
+        try {
+            $after = $this->contextStrategy->truncate($messages, 0, $tools);
+        } catch (ContextOverflowException $e) {
+            return false;
+        }
+
+        return count($after) === count($messages);
+    }
+
+    /**
      * Returns the content of the most recent user message, or null if none.
      *
      * @param Message[] $messages The conversation messages.
@@ -1814,6 +1891,155 @@ abstract class AbstractClient implements ProviderInterface {
         array_unshift($messages, new Message(Role::SYSTEM, trim($memoryText)));
 
         return $messages;
+    }
+
+    /**
+     * Produces a compact textual summary of dropped tool-call groups using the
+     * provided summarizer. Failures degrade gracefully to an empty string so a
+     * summarization error never breaks the main turn.
+     *
+     * @param array<int, Message[]> $droppedUnits The dropped groups.
+     * @param ProviderInterface $summarizer The summarizer provider.
+     *
+     * @return string The summary text, or empty string on failure.
+     */
+    private function summarizeDroppedGroups(array $droppedUnits, ProviderInterface $summarizer): string {
+        $lines = [];
+
+        foreach ($droppedUnits as $unit) {
+            foreach ($unit as $message) {
+                $result = $message->getToolResult();
+
+                if ($result !== null) {
+                    $lines[] = $result->getName().': '.$result->getContent();
+                } elseif ($message->hasToolCalls()) {
+                    foreach ($message->getToolCalls() as $call) {
+                        $lines[] = 'called '.$call->getName();
+                    }
+                }
+            }
+        }
+
+        if ($lines === []) {
+            return '';
+        }
+
+        try {
+            $response = $summarizer->chat([
+                new Message(
+                    Role::USER,
+                    "Summarize the following tool call results concisely, preserving key "
+                    ."facts needed to continue the task:\n\n".implode("\n", $lines)
+                ),
+            ]);
+
+            return trim($response->getMessage()->getContent());
+        } catch (\Throwable $e) {
+            $this->logWarning('Mid-loop summarization failed; dropped groups omitted', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return '';
+        }
+    }
+
+    /**
+     * Applies pairing-safe context truncation between tool-execution iterations.
+     *
+     * Groups the conversation into atomic tool-call units
+     * (see {@see ToolCallGrouping}) and, if the configured context strategy
+     * would truncate the current conversation, removes whole oldest groups
+     * until the set fits — never leaving an orphaned tool_calls message or an
+     * orphaned tool result. The system message and the most recent tool-call
+     * group are preserved.
+     *
+     * For {@see ToolLoopOverflowBehavior::SUMMARIZE}, the content of dropped
+     * groups is condensed into a single injected assistant message (via the
+     * resolved summarizer) so the gist of earlier tool activity is retained
+     * while pairing stays intact.
+     *
+     * @param Message[] $messages The accumulated conversation.
+     * @param ToolInterface[] $tools Tools in play (count toward the budget).
+     * @param ToolLoopOverflowBehavior $behavior Drop vs. summarize.
+     * @param ProviderInterface|null $summarizer Resolved summarizer for SUMMARIZE.
+     *
+     * @return Message[] The possibly truncated conversation.
+     */
+    private function truncateBetweenToolIterations(
+        array $messages,
+        array $tools,
+        ToolLoopOverflowBehavior $behavior,
+        ?ProviderInterface $summarizer
+    ): array {
+        if ($this->contextStrategy === null || $this->fitsContextStrategy($messages, $tools)) {
+            return $messages;
+        }
+
+        $units = ToolCallGrouping::group($messages);
+
+        // Identify droppable groups: multi-message tool-call groups that are not
+        // the most recent one, and are not the system message. Drop oldest-first.
+        $lastGroupIndex = -1;
+
+        foreach ($units as $i => $unit) {
+            if (count($unit) > 1 || $unit[0]->hasToolCalls()) {
+                $lastGroupIndex = $i;
+            }
+        }
+
+        $droppedUnits = [];
+        $kept = $units;
+
+        foreach ($units as $i => $unit) {
+            if ($this->fitsContextStrategy(ToolCallGrouping::flatten($kept), $tools)) {
+                break;
+            }
+
+            if ($i === $lastGroupIndex) {
+                continue; // never drop the active (most recent) tool-call group
+            }
+
+            if ($unit[0]->getRole() === Role::SYSTEM->value) {
+                continue; // preserve system message
+            }
+
+            // Only drop tool-call groups here; plain messages are left to the
+            // strategy's own handling on the final rebuild.
+            if (count($unit) > 1 || $unit[0]->hasToolCalls()) {
+                $droppedUnits[] = $unit;
+                unset($kept[$i]);
+            }
+        }
+
+        $result = ToolCallGrouping::flatten($kept);
+
+        if ($behavior === ToolLoopOverflowBehavior::SUMMARIZE
+            && $summarizer !== null && $droppedUnits !== []) {
+            $summary = $this->summarizeDroppedGroups($droppedUnits, $summarizer);
+
+            if ($summary !== '') {
+                // Inject the summary immediately after the system message (if any)
+                // so recency ordering of the remaining turns is preserved.
+                $summaryMessage = new Message(
+                    Role::ASSISTANT,
+                    'Summary of earlier tool activity: '.$summary
+                );
+                $insertAt = (isset($result[0]) && $result[0]->getRole() === Role::SYSTEM->value) ? 1 : 0;
+                array_splice($result, $insertAt, 0, [$summaryMessage]);
+            }
+        }
+
+        $removed = count($messages) - count($result);
+
+        if ($removed > 0) {
+            $this->logWarning('Mid-loop context truncation applied', [
+                'behavior' => $behavior->name,
+                'removed_messages' => $removed,
+                'dropped_groups' => count($droppedUnits),
+            ]);
+        }
+
+        return $result;
     }
     use AuditTrait;
 
