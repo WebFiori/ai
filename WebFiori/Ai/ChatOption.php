@@ -34,6 +34,20 @@ final class ChatOption {
      */
     public const AUTO_EXECUTE_TOOLS = 'auto_execute_tools';
 
+    // ─── Cancellation ─────────────────────────────────────────────────────────
+
+    /**
+     * A CancellationToken used to abort an in-flight request.
+     *
+     * When present, the token is honored by the HTTP transport (socket
+     * teardown) and the auto-execute tool loop. Non-streaming calls throw
+     * OperationCancelledException on cancel; streaming calls invoke their
+     * `onCancel` callback with the partial response.
+     *
+     * @see \WebFiori\Ai\Cancellation\CancellationToken
+     */
+    public const CANCELLATION_TOKEN = 'cancellation_token';
+
     // ─── Embeddings ───────────────────────────────────────────────────────────
 
     /**
