@@ -15,6 +15,7 @@ use WebFiori\Ai\Cache\CacheConfig;
 use WebFiori\Ai\Cache\CachedResponse;
 use WebFiori\Ai\Cache\CacheInterface;
 use WebFiori\Ai\Cache\CacheKeyGenerator;
+use WebFiori\Ai\Cancellation\CancellationToken;
 use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\Context\ContextWindowConfig;
@@ -372,6 +373,7 @@ abstract class AbstractClient implements ProviderInterface {
             ]);
 
             $request = $this->buildChatRequest($messages, $options);
+            $request = $request->withCancellationToken($this->cancellationFrom($options));
             $httpResponse = $this->sendRequest($request);
             $this->handleErrorResponse($httpResponse);
             $response = $this->parseChatResponse($httpResponse);
@@ -1514,6 +1516,7 @@ abstract class AbstractClient implements ProviderInterface {
         };
 
         $request = $this->buildStreamChatRequest($messages, $options);
+        $request = $request->withCancellationToken($this->cancellationFrom($options));
         $this->doStreamChat($request, $wrappedOnToken, $wrappedOnComplete, $wrappedOnError);
     }
 
@@ -2093,7 +2096,8 @@ abstract class AbstractClient implements ProviderInterface {
         array $options
     ): HttpRequest {
         // Default: full rebuild using all messages
-        return $this->buildChatRequest($allMessages, $options);
+        return $this->buildChatRequest($allMessages, $options)
+            ->withCancellationToken($this->cancellationFrom($options));
     }
 
     /**
@@ -2173,6 +2177,23 @@ abstract class AbstractClient implements ProviderInterface {
      * @return ImageResponse The parsed image response.
      */
     abstract protected function parseImageResponse(HttpResponse $response): ImageResponse;
+
+    /**
+     * Extracts the cancellation token from a request options array, if present.
+     *
+     * Centralises the lookup so every provider's request builder threads the
+     * token onto its HttpRequest consistently (see ADR-0057).
+     *
+     * @param array<string, mixed> $options The chat/request options.
+     *
+     * @return CancellationToken|null The token under ChatOption::CANCELLATION_TOKEN,
+     *         or null if absent.
+     */
+    protected function cancellationFrom(array $options): ?CancellationToken {
+        $token = $options[ChatOption::CANCELLATION_TOKEN] ?? null;
+
+        return $token instanceof CancellationToken ? $token : null;
+    }
 
     /**
      * Sends an HTTP request using the configured HTTP client.

@@ -10,6 +10,8 @@
  */
 namespace WebFiori\Ai\Http;
 
+use WebFiori\Ai\Cancellation\CancellationToken;
+
 /**
  * Value object representing an outbound HTTP request to an AI provider API.
  *
@@ -22,6 +24,13 @@ class HttpRequest {
      * @var string|null
      */
     private ?string $body;
+
+    /**
+     * An optional cancellation token for aborting the request in flight.
+     *
+     * @var CancellationToken|null
+     */
+    private ?CancellationToken $cancellationToken;
 
     /**
      * Associative array of HTTP headers.
@@ -51,12 +60,21 @@ class HttpRequest {
      * @param string $url The full URL to send the request to.
      * @param array<string, string> $headers Associative array of header name => value.
      * @param string|null $body The request body (typically JSON-encoded).
+     * @param CancellationToken|null $cancellationToken Optional token for
+     *        aborting the request in flight.
      */
-    public function __construct(string $method, string $url, array $headers = [], ?string $body = null) {
+    public function __construct(
+        string $method,
+        string $url,
+        array $headers = [],
+        ?string $body = null,
+        ?CancellationToken $cancellationToken = null
+    ) {
         $this->method = strtoupper($method);
         $this->url = $url;
         $this->headers = $headers;
         $this->body = $body;
+        $this->cancellationToken = $cancellationToken;
     }
 
     /**
@@ -66,6 +84,30 @@ class HttpRequest {
      */
     public function getBody(): ?string {
         return $this->body;
+    }
+
+    /**
+     * Returns the cancellation token associated with this request, if any.
+     *
+     * @return CancellationToken|null The token, or null if the request is not
+     *         cancellable.
+     */
+    public function getCancellationToken(): ?CancellationToken {
+        return $this->cancellationToken;
+    }
+
+    /**
+     * Returns a copy of this request carrying the given cancellation token.
+     *
+     * The original request is left unchanged (immutable value object). Passing
+     * null returns a copy with no token.
+     *
+     * @param CancellationToken|null $token The token to attach, or null.
+     *
+     * @return self A new request instance with the token applied.
+     */
+    public function withCancellationToken(?CancellationToken $token): self {
+        return new self($this->method, $this->url, $this->headers, $this->body, $token);
     }
 
     /**

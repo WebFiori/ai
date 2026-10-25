@@ -11,6 +11,7 @@
 namespace WebFiori\Ai\Http;
 
 use WebFiori\Ai\Exception\HttpException;
+use WebFiori\Ai\Exception\OperationCancelledException;
 use WebFiori\Ai\Exception\StreamingException;
 
 /**
@@ -179,6 +180,7 @@ class CurlHttpClient implements HttpClientInterface {
     public function send(HttpRequest $request): HttpResponse {
         $ch = $this->getOrCreateHandle($request);
         $responseHeaders = [];
+        $token = $request->getCancellationToken();
 
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $headerLine) use (&$responseHeaders)
@@ -192,6 +194,17 @@ class CurlHttpClient implements HttpClientInterface {
             return strlen($headerLine);
         });
 
+        if ($token !== null) {
+            // Abort the blocking transfer (and tear down the socket) as soon as
+            // the token is cancelled. A non-zero return aborts, surfacing as
+            // CURLE_ABORTED_BY_CALLBACK (errno 42) below.
+            curl_setopt($ch, CURLOPT_NOPROGRESS, false);
+            curl_setopt($ch, CURLOPT_PROGRESSFUNCTION, function ($ch, $dlTotal, $dlNow, $ulTotal, $ulNow) use ($token)
+            {
+                return $token->isCancelled() ? 1 : 0;
+            });
+        }
+
         $body = curl_exec($ch);
 
         if ($body === false) {
@@ -203,6 +216,10 @@ class CurlHttpClient implements HttpClientInterface {
             } else {
                 // Connection may be broken, reset it
                 $this->closeConnection();
+            }
+
+            if ($errorCode === CURLE_ABORTED_BY_CALLBACK && $token !== null && $token->isCancelled()) {
+                throw new OperationCancelledException();
             }
 
             throw new HttpException(
