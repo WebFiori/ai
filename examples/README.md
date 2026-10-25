@@ -56,3 +56,4 @@ export GCP_ACCESS_TOKEN="ya29...."
 | 29 | [Context Usage](29-context-usage/) | Structured context window usage snapshot (used/max/remaining/percentage) for gauges and pre-send warnings |
 | 30 | [Domain Boundaries](30-domain-boundaries/) | Guardrails that short-circuit off-topic requests before any provider call |
 | 31 | [Mid-Loop Truncation](31-mid-loop-truncation/) | Keep context bounded during tool chains by re-applying the window strategy between tool iterations (pairing-safe) |
+| 32 | [SQL Server Vector Store](32-sqlserver-vector-store/) | Store and query embedding vectors in Microsoft SQL Server via `SqlServerVectorStore` (synthetic vectors, no API key) |

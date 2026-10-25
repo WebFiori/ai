@@ -1,0 +1,84 @@
+<?php
+namespace WebFiori\Tests\Ai\Embedding;
+
+use InvalidArgumentException;
+use PHPUnit\Framework\TestCase;
+use WebFiori\Ai\Embedding\SqlServerOption;
+use WebFiori\Ai\Embedding\SqlServerVectorStore;
+
+/**
+ * Unit tests for SqlServerVectorStore behavior that does not require a live
+ * database connection (constructor validation, schema SQL generation, and the
+ * SqlServerOption constants). These always run.
+ */
+class SqlServerVectorStoreUnitTest extends TestCase {
+    public function testConstructorThrowsOnEmptyServerName(): void {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Server name cannot be empty');
+
+        new SqlServerVectorStore('');
+    }
+
+    public function testGetSchemaSqlAllowsSchemaQualifiedName(): void {
+        $sql = SqlServerVectorStore::getSchemaSql('dbo.vectors');
+        $this->assertStringContainsString('CREATE TABLE dbo.vectors', $sql);
+    }
+
+    public function testGetSchemaSqlContainsTableAndColumns(): void {
+        $sql = SqlServerVectorStore::getSchemaSql('my_vectors');
+
+        $this->assertStringContainsString('CREATE TABLE my_vectors', $sql);
+        $this->assertStringContainsString('id         NVARCHAR(255) NOT NULL PRIMARY KEY', $sql);
+        $this->assertStringContainsString('vector     NVARCHAR(MAX) NOT NULL', $sql);
+        $this->assertStringContainsString('metadata   NVARCHAR(MAX) NOT NULL', $sql);
+        $this->assertStringContainsString('created_at BIGINT        NOT NULL', $sql);
+        $this->assertStringContainsString('CREATE INDEX idx_my_vectors_created_at', $sql);
+        // Idempotent guard.
+        $this->assertStringContainsString("IF OBJECT_ID(N'my_vectors', N'U') IS NULL", $sql);
+    }
+
+    public function testGetSchemaSqlDefaultsToVectorsTable(): void {
+        $this->assertStringContainsString('CREATE TABLE vectors', SqlServerVectorStore::getSchemaSql());
+    }
+
+    public function testGetSchemaSqlRejectsInvalidTableNames(): void {
+        $badNames = [
+            'bad name',
+            'vectors; DROP TABLE x',
+            "vec'tors",
+            '1vectors',
+            'my-vectors',
+            '',
+        ];
+
+        foreach ($badNames as $badName) {
+            $threw = false;
+
+            try {
+                SqlServerVectorStore::getSchemaSql($badName);
+            } catch (InvalidArgumentException $e) {
+                $threw = true;
+            }
+
+            $this->assertTrue($threw, 'Expected InvalidArgumentException for table name: '.var_export($badName, true));
+        }
+    }
+
+    public function testOptionClassCannotBeInstantiated(): void {
+        $reflection = new \ReflectionClass(SqlServerOption::class);
+        $this->assertFalse($reflection->getConstructor()->isPublic());
+    }
+
+    public function testOptionConstantValues(): void {
+        $this->assertSame('connection_info', SqlServerOption::CONNECTION_INFO);
+        $this->assertSame('table', SqlServerOption::TABLE);
+        $this->assertSame('auto_create', SqlServerOption::AUTO_CREATE);
+        // CONN_* values must equal the exact sqlsrv driver strings.
+        $this->assertSame('Database', SqlServerOption::CONN_DATABASE);
+        $this->assertSame('UID', SqlServerOption::CONN_UID);
+        $this->assertSame('PWD', SqlServerOption::CONN_PWD);
+        $this->assertSame('Encrypt', SqlServerOption::CONN_ENCRYPT);
+        $this->assertSame('TrustServerCertificate', SqlServerOption::CONN_TRUST_SERVER_CERTIFICATE);
+        $this->assertSame('LoginTimeout', SqlServerOption::CONN_LOGIN_TIMEOUT);
+    }
+}
