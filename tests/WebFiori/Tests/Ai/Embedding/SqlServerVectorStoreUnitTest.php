@@ -12,19 +12,6 @@ use WebFiori\Ai\Embedding\SqlServerVectorStore;
  * SqlServerOption constants). These always run.
  */
 class SqlServerVectorStoreUnitTest extends TestCase {
-    /**
-     * @return array<string, array{0: string}>
-     */
-    public static function invalidTableNames(): array {
-        return [
-            'space' => ['bad name'],
-            'semicolon' => ['vectors; DROP TABLE x'],
-            'quote' => ["vec'tors"],
-            'leading num' => ['1vectors'],
-            'dash' => ['my-vectors'],
-            'empty' => [''],
-        ];
-    }
     public function testConstructorThrowsOnEmptyServerName(): void {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Server name cannot be empty');
@@ -54,12 +41,27 @@ class SqlServerVectorStoreUnitTest extends TestCase {
         $this->assertStringContainsString('CREATE TABLE vectors', SqlServerVectorStore::getSchemaSql());
     }
 
-    /**
-     * @dataProvider invalidTableNames
-     */
-    public function testGetSchemaSqlRejectsInvalidTableNames(string $badName): void {
-        $this->expectException(InvalidArgumentException::class);
-        SqlServerVectorStore::getSchemaSql($badName);
+    public function testGetSchemaSqlRejectsInvalidTableNames(): void {
+        $badNames = [
+            'bad name',
+            'vectors; DROP TABLE x',
+            "vec'tors",
+            '1vectors',
+            'my-vectors',
+            '',
+        ];
+
+        foreach ($badNames as $badName) {
+            $threw = false;
+
+            try {
+                SqlServerVectorStore::getSchemaSql($badName);
+            } catch (InvalidArgumentException $e) {
+                $threw = true;
+            }
+
+            $this->assertTrue($threw, 'Expected InvalidArgumentException for table name: '.var_export($badName, true));
+        }
     }
 
     public function testOptionClassCannotBeInstantiated(): void {
