@@ -253,10 +253,16 @@ class CurlHttpClient implements HttpClientInterface {
     public function sendStreaming(HttpRequest $request, callable $onChunk): void {
         $ch = $this->createCurlHandle($request);
         $streamError = null;
+        $token = $request->getCancellationToken();
 
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
-        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($onChunk, &$streamError)
+        curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $data) use ($onChunk, &$streamError, $token)
         {
+            // Abort promptly if the request was cancelled (existing abort rail).
+            if ($token !== null && $token->isCancelled()) {
+                return 0;
+            }
+
             try {
                 $onChunk($data);
             } catch (\Throwable $e) {
@@ -268,7 +274,25 @@ class CurlHttpClient implements HttpClientInterface {
             return strlen($data);
         });
 
+        if ($token !== null) {
+            // Fire cancellation even before the first byte (during initial
+            // latency), when the write callback has not yet run.
+            curl_setopt($ch, CURLOPT_NOPROGRESS, false);
+            curl_setopt($ch, CURLOPT_PROGRESSFUNCTION, function ($ch, $dlTotal, $dlNow, $ulTotal, $ulNow) use ($token)
+            {
+                return $token->isCancelled() ? 1 : 0;
+            });
+        }
+
         $result = curl_exec($ch);
+
+        // Cancel-check first: a cancel may also have set $streamError or a
+        // non-zero errno, but it must be reported as a cancellation.
+        if ($token !== null && $token->isCancelled()) {
+            unset($ch);
+
+            throw new OperationCancelledException();
+        }
 
         if ($streamError !== null) {
             unset($ch);

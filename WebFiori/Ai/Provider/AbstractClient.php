@@ -32,6 +32,7 @@ use WebFiori\Ai\Exception\AuthenticationException;
 use WebFiori\Ai\Exception\ContextOverflowException;
 use WebFiori\Ai\Exception\HttpException;
 use WebFiori\Ai\Exception\InvalidConfigException;
+use WebFiori\Ai\Exception\OperationCancelledException;
 use WebFiori\Ai\Exception\ProviderException;
 use WebFiori\Ai\Exception\RateLimitException;
 use WebFiori\Ai\Exception\StreamingException;
@@ -1442,10 +1443,13 @@ abstract class AbstractClient implements ProviderInterface {
 
         $this->emitMetric('stream.started', $this->buildBaseMetricData($requestId, $this->getName(), $model));
 
-        // Wrap onToken to count tokens
-        $wrappedOnToken = function (string $token) use ($onToken, &$tokenCount): void
+        // Wrap onToken to count tokens and accumulate partial text (used to
+        // build the partial ChatResponse if the stream is cancelled).
+        $accumulatedText = '';
+        $wrappedOnToken = function (string $token) use ($onToken, &$tokenCount, &$accumulatedText): void
         {
             $tokenCount++;
+            $accumulatedText .= $token;
             $onToken($token);
         };
 
@@ -1517,7 +1521,31 @@ abstract class AbstractClient implements ProviderInterface {
 
         $request = $this->buildStreamChatRequest($messages, $options);
         $request = $request->withCancellationToken($this->cancellationFrom($options));
-        $this->doStreamChat($request, $wrappedOnToken, $wrappedOnComplete, $wrappedOnError);
+
+        try {
+            $this->doStreamChat($request, $wrappedOnToken, $wrappedOnComplete, $wrappedOnError);
+        } catch (OperationCancelledException $e) {
+            // On cancellation, surface the accumulated partial response via the
+            // ON_CANCEL callback instead of onComplete/onError.
+            $partial = new ChatResponse(
+                new Message('assistant', $accumulatedText),
+                $model ?? '',
+                new Usage(0, $tokenCount),
+                'cancelled',
+                $requestId
+            );
+
+            $this->emitMetric('stream.cancelled', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                ['tokens' => $tokenCount]
+            ));
+
+            $onCancel = $options[ChatOption::ON_CANCEL] ?? null;
+
+            if (is_callable($onCancel)) {
+                $onCancel($partial);
+            }
+        }
     }
 
     /**
