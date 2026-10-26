@@ -10,6 +10,8 @@
  */
 namespace WebFiori\Ai\Http;
 
+use WebFiori\Ai\Exception\OperationCancelledException;
+
 /**
  * A fake HTTP client for use in unit and integration tests.
  *
@@ -138,6 +140,14 @@ class FakeHttpClient implements HttpClientInterface {
     public function send(HttpRequest $request): HttpResponse {
         $this->requests[] = $request;
 
+        // Mirror CurlHttpClient::send(): a cancelled token aborts the transfer
+        // and surfaces as OperationCancelledException.
+        $token = $request->getCancellationToken();
+
+        if ($token !== null && $token->isCancelled()) {
+            throw new OperationCancelledException();
+        }
+
         if (empty($this->responseQueue)) {
             throw new \RuntimeException(
                 'FakeHttpClient: No responses queued. Call addResponse() before sending requests.'
@@ -172,9 +182,22 @@ class FakeHttpClient implements HttpClientInterface {
         }
 
         $chunks = array_shift($this->streamingQueue);
+        $token = $request->getCancellationToken();
 
         foreach ($chunks as $chunk) {
+            // Mirror CurlHttpClient: abort before emitting further chunks once
+            // the request has been cancelled.
+            if ($token !== null && $token->isCancelled()) {
+                throw new OperationCancelledException();
+            }
+
             $onChunk($chunk);
+        }
+
+        // A cancel that lands after the last chunk (or before any) must still
+        // surface as a cancellation rather than a normal completion.
+        if ($token !== null && $token->isCancelled()) {
+            throw new OperationCancelledException();
         }
     }
 }

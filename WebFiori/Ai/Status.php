@@ -25,6 +25,7 @@ final class Status {
     // Cache
     public const CACHE_HIT = 'cache_hit';
     public const CACHE_MISS = 'cache_miss';
+    public const CANCELLED = 'cancelled';
     public const COMPLETED = 'completed';
     public const ERROR = 'error';
     // Request lifecycle

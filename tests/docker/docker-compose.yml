@@ -1,0 +1,30 @@
+# Local SQL Server instance for SqlServerVectorStore integration tests.
+#
+# Usage:
+#   docker compose -f tests/docker/docker-compose.yml up -d
+#
+# Then point the test suite at it (the integration test skips when these are
+# not set or the server is unreachable):
+#   export MSSQL_SERVER="tcp:localhost,1433"
+#   export MSSQL_UID="sa"
+#   export MSSQL_PWD="Str0ng!Passw0rd"
+#   export MSSQL_DATABASE="master"
+#
+# Requires the PHP `sqlsrv` extension and Microsoft ODBC Driver (17 or 18) on
+# the host running the tests. See examples/32-sqlserver-vector-store/README.md.
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: webfiori-ai-mssql-test
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Str0ng!Passw0rd"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s

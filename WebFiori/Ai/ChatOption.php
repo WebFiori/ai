@@ -34,6 +34,30 @@ final class ChatOption {
      */
     public const AUTO_EXECUTE_TOOLS = 'auto_execute_tools';
 
+    // ─── Cancellation ─────────────────────────────────────────────────────────
+
+    /**
+     * A CancellationToken used to abort an in-flight request.
+     *
+     * When present, the token is honored by the HTTP transport (socket
+     * teardown) and the auto-execute tool loop. Non-streaming calls throw
+     * OperationCancelledException on cancel; streaming calls invoke their
+     * `onCancel` callback with the partial response.
+     *
+     * @see \WebFiori\Ai\Cancellation\CancellationToken
+     */
+    public const CANCELLATION_TOKEN = 'cancellation_token';
+
+    /**
+     * A callable invoked when a streaming request is cancelled.
+     *
+     * Receives the accumulated partial ChatResponse (text so far, token count,
+     * model; tool calls best-effort). Only used by streamChat(): on cancel this
+     * is called instead of onComplete, and cancellation is not surfaced through
+     * onError. Signature: function(\WebFiori\Ai\ChatResponse $partial): void
+     */
+    public const ON_CANCEL = 'on_cancel';
+
     // ─── Embeddings ───────────────────────────────────────────────────────────
 
     /**

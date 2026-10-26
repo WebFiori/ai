@@ -15,6 +15,7 @@ use WebFiori\Ai\Cache\CacheConfig;
 use WebFiori\Ai\Cache\CachedResponse;
 use WebFiori\Ai\Cache\CacheInterface;
 use WebFiori\Ai\Cache\CacheKeyGenerator;
+use WebFiori\Ai\Cancellation\CancellationToken;
 use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\ChatResponse;
 use WebFiori\Ai\Context\ContextWindowConfig;
@@ -31,6 +32,7 @@ use WebFiori\Ai\Exception\AuthenticationException;
 use WebFiori\Ai\Exception\ContextOverflowException;
 use WebFiori\Ai\Exception\HttpException;
 use WebFiori\Ai\Exception\InvalidConfigException;
+use WebFiori\Ai\Exception\OperationCancelledException;
 use WebFiori\Ai\Exception\ProviderException;
 use WebFiori\Ai\Exception\RateLimitException;
 use WebFiori\Ai\Exception\StreamingException;
@@ -372,6 +374,7 @@ abstract class AbstractClient implements ProviderInterface {
             ]);
 
             $request = $this->buildChatRequest($messages, $options);
+            $request = $request->withCancellationToken($this->cancellationFrom($options));
             $httpResponse = $this->sendRequest($request);
             $this->handleErrorResponse($httpResponse);
             $response = $this->parseChatResponse($httpResponse);
@@ -382,13 +385,19 @@ abstract class AbstractClient implements ProviderInterface {
                 $iteration = 0;
                 $parallelTools = $options[ChatOption::PARALLEL_TOOL_EXECUTION] ?? true;
                 $formattedCount = count($messages); // Track how many messages are already formatted
+                $cancellationToken = $this->cancellationFrom($options);
 
                 while ($response->hasToolCalls() && $iteration < $maxIterations) {
+                    // Abort promptly if cancelled between iterations (e.g. during
+                    // a long multi-tool turn), rather than only at the next HTTP
+                    // boundary.
+                    $cancellationToken?->throwIfCancelled();
+
                     $iteration++;
                     $messages[] = $response->getMessage();
 
                     $toolCalls = $response->getMessage()->getToolCalls();
-                    $toolResults = $this->executeTools($tools, $toolCalls, $parallelTools, $messages);
+                    $toolResults = $this->executeTools($tools, $toolCalls, $parallelTools, $messages, $cancellationToken);
 
                     foreach ($toolResults as $toolCallId => $result) {
                         $this->logDebug('Tool executed', [
@@ -432,6 +441,11 @@ abstract class AbstractClient implements ProviderInterface {
                     // Build next request: pass all messages but hint provider about
                     // how many were already formatted so it can optimize
                     $newMessages = array_slice($messages, $formattedCount);
+
+                    // A cancel that landed during tool execution must stop the
+                    // loop here, before the next provider round-trip is issued.
+                    $cancellationToken?->throwIfCancelled();
+
                     $request = $this->buildIncrementalChatRequest($request, $messages, $newMessages, $options);
                     $formattedCount = count($messages);
 
@@ -549,6 +563,31 @@ abstract class AbstractClient implements ProviderInterface {
             }
 
             return $response;
+        } catch (OperationCancelledException $e) {
+            // A deliberate cancellation — record it as a cancellation (not a
+            // failure) and rethrow so the caller receives OperationCancelledException.
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->emitMetric('request.cancelled', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                ['latency_ms' => $durationMs]
+            ));
+
+            $this->emitAudit(array_merge(
+                $this->buildBaseAuditEntry($requestId, 'chat', $this->getName(), $model, $options['audit_context'] ?? []),
+                [
+                    'status' => 'cancelled',
+                    'duration_ms' => $durationMs,
+                    'tokens' => ['prompt' => null, 'completion' => null, 'total' => null],
+                    'error' => null,
+                ]
+            ));
+
+            $this->statusEmitter->emit(Status::CANCELLED, [
+                'latency_ms' => $durationMs,
+            ]);
+
+            throw $e;
         } catch (\Throwable $e) {
             $durationMs = (int) ((microtime(true) - $startTime) * 1000);
 
@@ -1440,10 +1479,13 @@ abstract class AbstractClient implements ProviderInterface {
 
         $this->emitMetric('stream.started', $this->buildBaseMetricData($requestId, $this->getName(), $model));
 
-        // Wrap onToken to count tokens
-        $wrappedOnToken = function (string $token) use ($onToken, &$tokenCount): void
+        // Wrap onToken to count tokens and accumulate partial text (used to
+        // build the partial ChatResponse if the stream is cancelled).
+        $accumulatedText = '';
+        $wrappedOnToken = function (string $token) use ($onToken, &$tokenCount, &$accumulatedText): void
         {
             $tokenCount++;
+            $accumulatedText .= $token;
             $onToken($token);
         };
 
@@ -1514,7 +1556,32 @@ abstract class AbstractClient implements ProviderInterface {
         };
 
         $request = $this->buildStreamChatRequest($messages, $options);
-        $this->doStreamChat($request, $wrappedOnToken, $wrappedOnComplete, $wrappedOnError);
+        $request = $request->withCancellationToken($this->cancellationFrom($options));
+
+        try {
+            $this->doStreamChat($request, $wrappedOnToken, $wrappedOnComplete, $wrappedOnError);
+        } catch (OperationCancelledException $e) {
+            // On cancellation, surface the accumulated partial response via the
+            // ON_CANCEL callback instead of onComplete/onError.
+            $partial = new ChatResponse(
+                new Message('assistant', $accumulatedText),
+                $model ?? '',
+                new Usage(0, $tokenCount),
+                'cancelled',
+                $requestId
+            );
+
+            $this->emitMetric('stream.cancelled', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                ['tokens' => $tokenCount]
+            ));
+
+            $onCancel = $options[ChatOption::ON_CANCEL] ?? null;
+
+            if (is_callable($onCancel)) {
+                $onCancel($partial);
+            }
+        }
     }
 
     /**
@@ -1658,11 +1725,17 @@ abstract class AbstractClient implements ProviderInterface {
      *
      * @return array<string, array{name: string, output: string, duration_ms: int, ok: bool}> Results keyed by tool call ID.
      */
-    private function executeTools(array $tools, array $toolCalls, bool $parallel, array $messages = []): array {
+    private function executeTools(array $tools, array $toolCalls, bool $parallel, array $messages = [], ?CancellationToken $cancellationToken = null): array {
         $results = [];
         $overallStart = microtime(true);
 
         foreach ($toolCalls as $toolCall) {
+            // Check before each tool so a cancel during a long multi-tool turn
+            // stops before the next tool runs. Placed before the per-tool
+            // try/catch below so the cancellation propagates instead of being
+            // captured as a tool failure.
+            $cancellationToken?->throwIfCancelled();
+
             $tool = $this->findTool($tools, $toolCall->getName());
             $toolCallId = $toolCall->getId();
 
@@ -2093,7 +2166,8 @@ abstract class AbstractClient implements ProviderInterface {
         array $options
     ): HttpRequest {
         // Default: full rebuild using all messages
-        return $this->buildChatRequest($allMessages, $options);
+        return $this->buildChatRequest($allMessages, $options)
+            ->withCancellationToken($this->cancellationFrom($options));
     }
 
     /**
@@ -2173,6 +2247,23 @@ abstract class AbstractClient implements ProviderInterface {
      * @return ImageResponse The parsed image response.
      */
     abstract protected function parseImageResponse(HttpResponse $response): ImageResponse;
+
+    /**
+     * Extracts the cancellation token from a request options array, if present.
+     *
+     * Centralises the lookup so every provider's request builder threads the
+     * token onto its HttpRequest consistently (see ADR-0057).
+     *
+     * @param array<string, mixed> $options The chat/request options.
+     *
+     * @return CancellationToken|null The token under ChatOption::CANCELLATION_TOKEN,
+     *         or null if absent.
+     */
+    protected function cancellationFrom(array $options): ?CancellationToken {
+        $token = $options[ChatOption::CANCELLATION_TOKEN] ?? null;
+
+        return $token instanceof CancellationToken ? $token : null;
+    }
 
     /**
      * Sends an HTTP request using the configured HTTP client.
