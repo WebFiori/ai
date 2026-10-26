@@ -385,13 +385,19 @@ abstract class AbstractClient implements ProviderInterface {
                 $iteration = 0;
                 $parallelTools = $options[ChatOption::PARALLEL_TOOL_EXECUTION] ?? true;
                 $formattedCount = count($messages); // Track how many messages are already formatted
+                $cancellationToken = $this->cancellationFrom($options);
 
                 while ($response->hasToolCalls() && $iteration < $maxIterations) {
+                    // Abort promptly if cancelled between iterations (e.g. during
+                    // a long multi-tool turn), rather than only at the next HTTP
+                    // boundary.
+                    $cancellationToken?->throwIfCancelled();
+
                     $iteration++;
                     $messages[] = $response->getMessage();
 
                     $toolCalls = $response->getMessage()->getToolCalls();
-                    $toolResults = $this->executeTools($tools, $toolCalls, $parallelTools, $messages);
+                    $toolResults = $this->executeTools($tools, $toolCalls, $parallelTools, $messages, $cancellationToken);
 
                     foreach ($toolResults as $toolCallId => $result) {
                         $this->logDebug('Tool executed', [
@@ -435,6 +441,11 @@ abstract class AbstractClient implements ProviderInterface {
                     // Build next request: pass all messages but hint provider about
                     // how many were already formatted so it can optimize
                     $newMessages = array_slice($messages, $formattedCount);
+
+                    // A cancel that landed during tool execution must stop the
+                    // loop here, before the next provider round-trip is issued.
+                    $cancellationToken?->throwIfCancelled();
+
                     $request = $this->buildIncrementalChatRequest($request, $messages, $newMessages, $options);
                     $formattedCount = count($messages);
 
@@ -552,6 +563,31 @@ abstract class AbstractClient implements ProviderInterface {
             }
 
             return $response;
+        } catch (OperationCancelledException $e) {
+            // A deliberate cancellation — record it as a cancellation (not a
+            // failure) and rethrow so the caller receives OperationCancelledException.
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->emitMetric('request.cancelled', array_merge(
+                $this->buildBaseMetricData($requestId, $this->getName(), $model),
+                ['latency_ms' => $durationMs]
+            ));
+
+            $this->emitAudit(array_merge(
+                $this->buildBaseAuditEntry($requestId, 'chat', $this->getName(), $model, $options['audit_context'] ?? []),
+                [
+                    'status' => 'cancelled',
+                    'duration_ms' => $durationMs,
+                    'tokens' => ['prompt' => null, 'completion' => null, 'total' => null],
+                    'error' => null,
+                ]
+            ));
+
+            $this->statusEmitter->emit(Status::CANCELLED, [
+                'latency_ms' => $durationMs,
+            ]);
+
+            throw $e;
         } catch (\Throwable $e) {
             $durationMs = (int) ((microtime(true) - $startTime) * 1000);
 
@@ -1689,11 +1725,17 @@ abstract class AbstractClient implements ProviderInterface {
      *
      * @return array<string, array{name: string, output: string, duration_ms: int, ok: bool}> Results keyed by tool call ID.
      */
-    private function executeTools(array $tools, array $toolCalls, bool $parallel, array $messages = []): array {
+    private function executeTools(array $tools, array $toolCalls, bool $parallel, array $messages = [], ?CancellationToken $cancellationToken = null): array {
         $results = [];
         $overallStart = microtime(true);
 
         foreach ($toolCalls as $toolCall) {
+            // Check before each tool so a cancel during a long multi-tool turn
+            // stops before the next tool runs. Placed before the per-tool
+            // try/catch below so the cancellation propagates instead of being
+            // captured as a tool failure.
+            $cancellationToken?->throwIfCancelled();
+
             $tool = $this->findTool($tools, $toolCall->getName());
             $toolCallId = $toolCall->getId();
 
