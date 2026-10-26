@@ -140,6 +140,14 @@ class FakeHttpClient implements HttpClientInterface {
     public function send(HttpRequest $request): HttpResponse {
         $this->requests[] = $request;
 
+        // Mirror CurlHttpClient::send(): a cancelled token aborts the transfer
+        // and surfaces as OperationCancelledException.
+        $token = $request->getCancellationToken();
+
+        if ($token !== null && $token->isCancelled()) {
+            throw new OperationCancelledException();
+        }
+
         if (empty($this->responseQueue)) {
             throw new \RuntimeException(
                 'FakeHttpClient: No responses queued. Call addResponse() before sending requests.'
