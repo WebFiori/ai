@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/WebFiori/ai/compare/v1.4.0...v1.5.0) (2026-10-26)
+
+
+### Features
+
+* v1.5.0 Request Cancellation (CancellationToken) [epic [#176](https://github.com/WebFiori/ai/issues/176)] ([#183](https://github.com/WebFiori/ai/issues/183)) ([d9a4757](https://github.com/WebFiori/ai/commit/d9a4757605a646a74ff3292919e215a211b7dd1c))
+
 ## [1.4.0](https://github.com/WebFiori/ai/compare/v1.3.1...v1.4.0) (2026-10-19)
 
 
