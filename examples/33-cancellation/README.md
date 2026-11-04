@@ -35,6 +35,45 @@ Expected: each of the three outcomes prints a `✅` line and the script ends wit
 | File | Description |
 |------|-------------|
 | `verify.php` | Offline, self-checking demo of all three cancellation outcomes |
+| `poller.php` | Offline demo of the external stop signal via the `CancellationTokenSource` poller |
+
+## External stop signal (another request pressing "stop")
+
+`cancel()` only takes effect in the process that is blocked on the request. A
+real stop button lives in a **different** request, which writes a flag to a
+shared store (cache, database, file). Give the source a **poller** that reads
+that store, and every checkpoint (the cURL progress callback, the tool loop, the
+retry backoff) observes the stop with no extra wiring:
+
+```php
+use WebFiori\Ai\Cancellation\CancellationTokenSource;
+use WebFiori\Ai\ChatOption;
+
+$source = new CancellationTokenSource(
+    poller: fn (): bool => $store->isStopRequested($turnId),
+    pollIntervalMs: 500,
+    logCallback: $logger, // fn(string $level, string $message, array $context)
+);
+
+$client->chat($messages, [
+    ChatOption::CANCELLATION_TOKEN => $source->getToken(),
+]);
+```
+
+Notes:
+
+- The poller must be **cheap** — it can run inside the cURL progress callback.
+- A **throwing** poller is treated as "not cancelled" and logged once per
+  failure streak via `logCallback`, so a broken store never silently disables
+  the stop button.
+- Key the flag **per turn** so a stale flag doesn't cancel the next request.
+- If you poll a flag **file**, call `clearstatcache(true, $path)` first.
+
+Run it:
+
+```bash
+php examples/33-cancellation/poller.php
+```
 
 ## Wiring `cancel()` to a real "stop" signal
 
@@ -95,7 +134,10 @@ try {
 
 ## Guarantee
 
-Cancellation is **best-effort, near-immediate** (~sub-second): the request is
-aborted and the socket torn down within a few hundred milliseconds of
-`cancel()`, bounded by cURL's progress-callback cadence. It is a real teardown
-that stops provider work and cost — not a literally-instantaneous kill.
+Cancellation is a **real teardown**: the HTTP request to the provider is aborted
+and the socket closed, so the model stops working and token cost stops accruing.
+A request carrying a token runs on a `curl_multi` loop that re-checks the token
+about every 100 ms, so cancellation takes effect within roughly 100 ms of
+`cancel()` (or, with a poller, roughly the poll interval plus ~100 ms). It is not
+a literally-instantaneous kill. Requests without a token keep the plain blocking
+transfer path, unchanged.
