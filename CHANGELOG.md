@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/WebFiori/ai/compare/v1.5.0...v1.6.0) (2026-11-04)
+
+
+### Features
+
+* request cancellation — external stop signal, propagation, curl_multi transport ([#187](https://github.com/WebFiori/ai/issues/187)) ([7428922](https://github.com/WebFiori/ai/commit/74289220f2865985f2e23bfc650b1fb951ba3768))
+
 ## [1.5.0](https://github.com/WebFiori/ai/compare/v1.4.0...v1.5.0) (2026-10-26)
 
 
