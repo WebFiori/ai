@@ -10,6 +10,7 @@
  */
 namespace WebFiori\Ai\Http;
 
+use WebFiori\Ai\Cancellation\CancellationToken;
 use WebFiori\Ai\Exception\HttpException;
 use WebFiori\Ai\Exception\OperationCancelledException;
 use WebFiori\Ai\Exception\StreamingException;
@@ -26,6 +27,18 @@ use WebFiori\Ai\Exception\StreamingException;
  * @author Ibrahim
  */
 class CurlHttpClient implements HttpClientInterface {
+    /**
+     * How long a cancellable transfer waits for socket activity before
+     * control returns to PHP to re-check the cancellation token, in seconds.
+     */
+    private const MULTI_SELECT_SECONDS = 0.1;
+
+    /**
+     * Persistent multi handle for cancellable transfers with connection reuse.
+     *
+     * @var \CurlMultiHandle|null
+     */
+    private ?\CurlMultiHandle $persistentMulti = null;
     /**
      * Connection timeout in seconds.
      *
@@ -100,6 +113,7 @@ class CurlHttpClient implements HttpClientInterface {
             // curl_close() is a deprecated no-op since PHP 8.0 (CurlHandle is a
             // GC-managed object). Dropping the reference frees the handle.
             $this->persistentHandle = null;
+            $this->persistentMulti = null;
             $this->lastHost = null;
         }
     }
@@ -205,12 +219,9 @@ class CurlHttpClient implements HttpClientInterface {
             });
         }
 
-        $body = curl_exec($ch);
+        $body = $this->perform($ch, $token, $errorCode, $errorMessage);
 
         if ($body === false) {
-            $errorCode = curl_errno($ch);
-            $errorMessage = curl_error($ch);
-
             if (!$this->reuseConnection) {
                 unset($ch);
             } else {
@@ -284,7 +295,7 @@ class CurlHttpClient implements HttpClientInterface {
             });
         }
 
-        $result = curl_exec($ch);
+        $result = $this->perform($ch, $token, $errorCode, $errorMessage);
 
         // Cancel-check first: a cancel may also have set $streamError or a
         // non-zero errno, but it must be reported as a cancellation.
@@ -305,8 +316,6 @@ class CurlHttpClient implements HttpClientInterface {
         }
 
         if ($result === false) {
-            $errorCode = curl_errno($ch);
-            $errorMessage = curl_error($ch);
             unset($ch);
 
             throw new HttpException(
@@ -316,6 +325,101 @@ class CurlHttpClient implements HttpClientInterface {
         }
 
         unset($ch);
+    }
+
+    /**
+     * Runs a configured handle to completion.
+     *
+     * Without a cancellation token this is a plain blocking `curl_exec()`.
+     * With a token the transfer runs on a multi handle and control returns to
+     * PHP about every {@see CurlHttpClient::MULTI_SELECT_SECONDS} seconds, so
+     * the token is checked at a predictable cadence instead of only when
+     * libcurl calls the progress callback (about once per second while idle).
+     * If the token is cancelled the transfer is removed from the multi handle
+     * (closing the connection) and OperationCancelledException is thrown.
+     *
+     * @param \CurlHandle $ch The configured handle.
+     * @param CancellationToken|null $token The request's cancellation token.
+     * @param int|null $errorCode Receives the cURL error number (0 on success).
+     * @param string|null $errorMessage Receives the cURL error message.
+     *
+     * @return string|bool The body (or true when RETURNTRANSFER is off) on
+     *         success, false on a transport error.
+     *
+     * @throws OperationCancelledException If the token is cancelled during the transfer.
+     */
+    private function perform(\CurlHandle $ch, ?CancellationToken $token, ?int &$errorCode, ?string &$errorMessage): string|bool {
+        $errorCode = 0;
+        $errorMessage = '';
+
+        if ($token === null) {
+            $result = curl_exec($ch);
+
+            if ($result === false) {
+                $errorCode = curl_errno($ch);
+                $errorMessage = curl_error($ch);
+            }
+
+            return $result;
+        }
+
+        $mh = $this->getMultiHandle();
+        curl_multi_add_handle($mh, $ch);
+
+        try {
+            $running = 1;
+            $status = CURLM_OK;
+
+            do {
+                do {
+                    $status = curl_multi_exec($mh, $running);
+                } while ($status === CURLM_CALL_MULTI_PERFORM);
+
+                if ($running <= 0 || $status !== CURLM_OK) {
+                    break;
+                }
+
+                if ($token->isCancelled()) {
+                    // The aborted connection is unusable: drop persistent state.
+                    if ($this->reuseConnection) {
+                        $this->closeConnection();
+                    }
+
+                    throw new OperationCancelledException();
+                }
+
+                if (curl_multi_select($mh, self::MULTI_SELECT_SECONDS) === -1) {
+                    // select() can fail or return immediately on some platforms.
+                    usleep(1000);
+                }
+            } while (true);
+
+            $transferResult = CURLE_OK;
+
+            if ($status !== CURLM_OK) {
+                $transferResult = CURLE_FAILED_INIT;
+                $errorMessage = curl_multi_strerror($status);
+            }
+
+            while (($message = curl_multi_info_read($mh)) !== false) {
+                if ($message['handle'] === $ch) {
+                    $transferResult = $message['result'];
+                }
+            }
+
+            if ($transferResult !== CURLE_OK) {
+                $errorCode = $transferResult;
+                $detail = curl_error($ch);
+                $errorMessage = $detail !== '' ? $detail : ($errorMessage !== '' ? $errorMessage : curl_strerror($transferResult));
+
+                return false;
+            }
+
+            // RETURNTRANSFER on: the buffered body; off (streaming): true.
+            return curl_multi_getcontent($ch) ?? true;
+        } finally {
+            curl_multi_remove_handle($mh, $ch);
+        }
     }
 
     /**
@@ -422,6 +526,27 @@ class CurlHttpClient implements HttpClientInterface {
         }
 
         return $ch;
+    }
+
+    /**
+     * Returns the multi handle used for cancellable transfers.
+     *
+     * With connection reuse enabled a single multi handle is kept so its
+     * connection cache survives across requests; otherwise a fresh one is
+     * created per transfer.
+     *
+     * @return \CurlMultiHandle The multi handle.
+     */
+    private function getMultiHandle(): \CurlMultiHandle {
+        if (!$this->reuseConnection) {
+            return curl_multi_init();
+        }
+
+        if ($this->persistentMulti === null) {
+            $this->persistentMulti = curl_multi_init();
+        }
+
+        return $this->persistentMulti;
     }
 
     /**
