@@ -37,6 +37,77 @@ final class CancellationState {
      * @var array<int, callable>
      */
     private array $listeners = [];
+    /**
+     * Optional external stop-signal poller.
+     *
+     * @var callable|null
+     */
+    private $poller;
+    /**
+     * Minimum time between two poller invocations, in milliseconds.
+     *
+     * @var int
+     */
+    private int $pollIntervalMs;
+    /**
+     * Time source returning the current time in milliseconds (monotonic).
+     *
+     * @var callable
+     */
+    private $clock;
+    /**
+     * Optional log callback: function(string $level, string $message, array $context).
+     *
+     * @var callable|null
+     */
+    private $logCallback;
+    /**
+     * Clock reading of the last poller invocation, or null if never polled.
+     *
+     * @var float|null
+     */
+    private ?float $lastPollMs = null;
+    /**
+     * Whether the poller is currently running (guards against re-entrancy).
+     *
+     * @var bool
+     */
+    private bool $polling = false;
+    /**
+     * Whether the last poller invocation failed (used to log once per failure streak).
+     *
+     * @var bool
+     */
+    private bool $pollerFailing = false;
+
+    /**
+     * Creates the shared state.
+     *
+     * @param callable|null $poller Optional callable returning true when an
+     *        external stop has been requested.
+     * @param int $pollIntervalMs Minimum time between poller calls, in milliseconds.
+     * @param callable|null $clock Optional time source returning the current
+     *        time in milliseconds. Defaults to a monotonic clock.
+     * @param callable|null $logCallback Optional log callback used to report
+     *        poller failures.
+     *
+     * @throws \InvalidArgumentException If the poll interval is negative.
+     */
+    public function __construct(
+        ?callable $poller = null,
+        int $pollIntervalMs = 500,
+        ?callable $clock = null,
+        ?callable $logCallback = null
+    ) {
+        if ($pollIntervalMs < 0) {
+            throw new \InvalidArgumentException('The poll interval must not be negative.');
+        }
+
+        $this->poller = $poller;
+        $this->pollIntervalMs = $pollIntervalMs;
+        $this->clock = $clock ?? static fn (): float => hrtime(true) / 1e6;
+        $this->logCallback = $logCallback;
+    }
 
     /**
      * Requests cancellation and invokes all registered listeners once.
@@ -63,9 +134,19 @@ final class CancellationState {
     /**
      * Returns whether cancellation has been requested.
      *
+     * If a poller is configured and the poll interval has elapsed since the
+     * last poll, the poller is consulted first. A poller that returns true
+     * cancels the state through the normal path (listeners fire once). A
+     * poller that throws is treated as "not cancelled" and the failure is
+     * logged once per failure streak.
+     *
      * @return bool True if cancelled.
      */
     public function isCancelled(): bool {
+        if (!$this->cancelled && $this->poller !== null) {
+            $this->poll();
+        }
+
         return $this->cancelled;
     }
 
@@ -82,6 +163,64 @@ final class CancellationState {
         }
 
         $this->listeners[] = $listener;
+    }
+
+    /**
+     * Consults the poller if the throttle interval has elapsed.
+     */
+    private function poll(): void {
+        if ($this->polling) {
+            return;
+        }
+
+        $now = (float) ($this->clock)();
+
+        if ($this->lastPollMs !== null && ($now - $this->lastPollMs) < $this->pollIntervalMs) {
+            return;
+        }
+
+        $this->lastPollMs = $now;
+        $this->polling = true;
+
+        try {
+            $stop = (bool) ($this->poller)();
+            $this->pollerFailing = false;
+        } catch (\Throwable $e) {
+            $stop = false;
+            $this->reportPollerFailure($e);
+        } finally {
+            $this->polling = false;
+        }
+
+        if ($stop) {
+            $this->cancel();
+        }
+    }
+
+    /**
+     * Logs a poller failure, once per failure streak.
+     *
+     * @param \Throwable $e The exception thrown by the poller.
+     */
+    private function reportPollerFailure(\Throwable $e): void {
+        if ($this->pollerFailing) {
+            return;
+        }
+
+        $this->pollerFailing = true;
+
+        if ($this->logCallback === null) {
+            return;
+        }
+
+        try {
+            ($this->logCallback)('warning', 'Cancellation poller failed; treating as not cancelled', [
+                'exception_class' => get_class($e),
+                'error' => $e->getMessage(),
+            ]);
+        } catch (\Throwable $ignored) {
+            // A failing log callback must not break cancellation checks.
+        }
     }
 
     /**
