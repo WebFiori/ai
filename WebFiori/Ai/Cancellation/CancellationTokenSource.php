@@ -48,9 +48,36 @@ final class CancellationTokenSource {
 
     /**
      * Creates a new, not-yet-cancelled cancellation source.
+     *
+     * With no arguments the source is cancelled only by {@see CancellationTokenSource::cancel()}.
+     * Supplying a poller lets the token observe an external stop signal (for
+     * example a flag written by a different HTTP request): the poller is
+     * consulted from {@see CancellationToken::isCancelled()}, at most once per
+     * interval, and a `true` result cancels the source.
+     *
+     * The poller should be cheap, because it can run inside the cURL progress
+     * callback. An exception thrown by the poller is treated as "not
+     * cancelled" and reported once per failure streak through the log callback.
+     * The poller only runs when a checkpoint calls `isCancelled()`; while a
+     * request is idle libcurl invokes its progress callback about once per
+     * second, so intervals below that add no responsiveness.
+     *
+     * @param callable|null $poller Returns true when an external stop was requested.
+     * @param int $pollIntervalMs Minimum time between poller calls, in milliseconds.
+     * @param callable|null $clock Optional time source returning the current
+     *        time in milliseconds (defaults to a monotonic clock); mainly for tests.
+     * @param callable|null $logCallback Optional log callback
+     *        `function(string $level, string $message, array $context)` for poller failures.
+     *
+     * @throws \InvalidArgumentException If the poll interval is negative.
      */
-    public function __construct() {
-        $this->state = new CancellationState();
+    public function __construct(
+        ?callable $poller = null,
+        int $pollIntervalMs = 500,
+        ?callable $clock = null,
+        ?callable $logCallback = null
+    ) {
+        $this->state = new CancellationState($poller, $pollIntervalMs, $clock, $logCallback);
         $this->token = new CancellationToken($this->state);
     }
 

@@ -33,6 +33,7 @@ $suites = [
     'modelgarden' => 'live/08-model-garden.php',
     'anthropic' => 'live/09-anthropic-chat.php',
     'modelrouter' => 'live/10-model-router.php',
+    'cancellation' => 'live/16-cancellation.php',
 ];
 
 $rootDir = __DIR__.'/..';

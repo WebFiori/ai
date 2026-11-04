@@ -1773,6 +1773,12 @@ abstract class AbstractClient implements ProviderInterface {
                 $output = json_encode(['error' => $error]);
             } else {
                 try {
+                    // Propagate the outer run's token so cancelling it also
+                    // aborts the nested agent run.
+                    if ($tool instanceof AgentTool) {
+                        $tool->setCancellationToken($cancellationToken);
+                    }
+
                     $output = $tool->execute($toolCall->getArguments());
 
                     // Deterministic failure signal via ToolResponse::error().
@@ -1787,6 +1793,12 @@ abstract class AbstractClient implements ProviderInterface {
                         $parts = $output->getParts();
                     }
                 } catch (\Throwable $e) {
+                    // A cancelled run must stop, not be recorded as a tool
+                    // failure. Conditional on the outer token being cancelled:
+                    // a tool may deliberately throw OperationCancelledException
+                    // from its own deadline token and let the model continue.
+                    $cancellationToken?->throwIfCancelled();
+
                     // Guard execute() so one failing tool does not abort the
                     // remaining tool calls in the batch.
                     $ok = false;
@@ -1801,6 +1813,12 @@ abstract class AbstractClient implements ProviderInterface {
                         'exception_class' => $exceptionClass,
                         'error' => $error,
                     ]);
+                } finally {
+                    // Per-run state: never leave a (possibly cancelled) token
+                    // on a long-lived AgentTool.
+                    if ($tool instanceof AgentTool) {
+                        $tool->setCancellationToken(null);
+                    }
                 }
             }
 
