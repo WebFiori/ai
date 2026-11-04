@@ -10,7 +10,9 @@
  */
 namespace WebFiori\Ai\Http;
 
+use WebFiori\Ai\Cancellation\CancellationToken;
 use WebFiori\Ai\Exception\HttpException;
+use WebFiori\Ai\Exception\OperationCancelledException;
 use WebFiori\Ai\RetryConfig;
 
 /**
@@ -32,6 +34,11 @@ use WebFiori\Ai\RetryConfig;
  * @author Ibrahim
  */
 class RetryableHttpClient implements HttpClientInterface {
+    /**
+     * Length of one backoff wait slice, in microseconds, when a cancellation
+     * token is present.
+     */
+    private const SLEEP_SLICE_US = 50000;
     /**
      * The inner HTTP client being decorated.
      *
@@ -116,8 +123,13 @@ class RetryableHttpClient implements HttpClientInterface {
 
                 $delayMs = $this->resolveDelay($response, $attempt);
                 $this->logRetry($attempt, $this->retryConfig->getMaxRetries(), $response->getStatusCode(), $delayMs);
-                $this->sleep($delayMs);
+                $this->sleep($delayMs, $request->getCancellationToken());
             } catch (\Throwable $e) {
+                // A cancellation is never retried, whatever the retry config says.
+                if ($e instanceof OperationCancelledException) {
+                    throw $e;
+                }
+
                 $lastException = $e;
 
                 if (!$this->retryConfig->isRetryableException($e)) {
@@ -130,7 +142,7 @@ class RetryableHttpClient implements HttpClientInterface {
 
                 $delayMs = $this->retryConfig->calculateDelayMs($attempt);
                 $this->logRetryException($attempt, $this->retryConfig->getMaxRetries(), $e, $delayMs);
-                $this->sleep($delayMs);
+                $this->sleep($delayMs, $request->getCancellationToken());
             }
         }
 
@@ -220,11 +232,30 @@ class RetryableHttpClient implements HttpClientInterface {
     /**
      * Sleeps for the given number of milliseconds.
      *
+     * With a cancellation token the wait is split into short slices and the
+     * token is checked before each one, so a cancel during the backoff stops
+     * the retry promptly instead of after the full delay.
+     *
      * @param int $milliseconds The duration to sleep.
+     * @param CancellationToken|null $token Optional token of the request.
+     *
+     * @throws OperationCancelledException If the token is cancelled before or during the wait.
      */
-    private function sleep(int $milliseconds): void {
-        if ($milliseconds > 0) {
-            usleep($milliseconds * 1000);
+    private function sleep(int $milliseconds, ?CancellationToken $token = null): void {
+        if ($token === null) {
+            if ($milliseconds > 0) {
+                usleep($milliseconds * 1000);
+            }
+
+            return;
+        }
+
+        $token->throwIfCancelled();
+        $deadline = hrtime(true) + $milliseconds * 1000000;
+
+        while (($remainingNs = $deadline - hrtime(true)) > 0) {
+            usleep((int) min(self::SLEEP_SLICE_US, max(1, intdiv($remainingNs, 1000))));
+            $token->throwIfCancelled();
         }
     }
 }

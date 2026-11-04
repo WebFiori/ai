@@ -10,6 +10,7 @@
  */
 namespace WebFiori\Ai\Tool;
 
+use WebFiori\Ai\Cancellation\CancellationToken;
 use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\Message;
 use WebFiori\Ai\Provider\ProviderInterface;
@@ -33,6 +34,12 @@ class AgentTool implements ToolInterface {
      * @var Message[]
      */
     private array $conversationContext;
+    /**
+     * Cancellation token of the outer run, injected per run by the tool loop.
+     *
+     * @var CancellationToken|null
+     */
+    private ?CancellationToken $cancellationToken = null;
 
     /**
      * A description of what this agent tool does.
@@ -180,6 +187,12 @@ class AgentTool implements ToolInterface {
         $options = $this->options;
         $profileTools = $this->profile->getTools();
 
+        // The outer run's token wins over one set in the constructor options,
+        // so cancelling the outer run reaches the nested chat() call.
+        if ($this->cancellationToken !== null) {
+            $options[ChatOption::CANCELLATION_TOKEN] = $this->cancellationToken;
+        }
+
         if (!empty($profileTools)) {
             $options[ChatOption::TOOLS] = $profileTools;
             $options[ChatOption::AUTO_EXECUTE_TOOLS] = true;
@@ -298,6 +311,19 @@ class AgentTool implements ToolInterface {
      */
     public function getRememberStrategy(): ?RememberStrategyInterface {
         return $this->rememberStrategy;
+    }
+
+    /**
+     * Sets the cancellation token of the outer run for the next execution.
+     *
+     * The tool loop sets this before each execution and clears it afterwards,
+     * so the nested agent run is aborted when the outer run is cancelled. When
+     * set, it takes precedence over a token supplied in the constructor options.
+     *
+     * @param CancellationToken|null $token The outer run's token, or null to clear.
+     */
+    public function setCancellationToken(?CancellationToken $token): void {
+        $this->cancellationToken = $token;
     }
 
     /**
