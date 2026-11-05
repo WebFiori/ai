@@ -104,6 +104,26 @@ final class ChatOption {
     public const MAX_TOKENS = 'max_tokens';
 
     /**
+     * When the auto-execute tool loop exits because it hit
+     * {@see ChatOption::MAX_TOOL_ITERATIONS} while the model is still requesting
+     * tool calls, issue one final request with tools removed so the model must
+     * answer in text instead of returning unanswered tool calls.
+     *
+     * Boolean; defaults to false (no synthesis pass). See ADR-0059.
+     */
+    public const FINAL_SYNTHESIS_ON_MAX_ITERATIONS = 'final_synthesis_on_max_iterations';
+
+    /**
+     * Optional instruction injected on the final synthesis request triggered by
+     * {@see ChatOption::FINAL_SYNTHESIS_ON_MAX_ITERATIONS}. When null (default),
+     * no prompt is injected — tools are simply removed and the conversation
+     * resent. Has no effect unless the synthesis pass is enabled.
+     *
+     * Nullable string; defaults to null. See ADR-0059.
+     */
+    public const FINAL_SYNTHESIS_PROMPT = 'final_synthesis_prompt';
+
+    /**
      * Maximum number of tool call/response iterations before stopping.
      */
     public const MAX_TOOL_ITERATIONS = 'max_tool_iterations';

@@ -31,6 +31,9 @@ final class Status {
     // Request lifecycle
     public const PREPARING = 'preparing';
     public const SENDING_REQUEST = 'sending_request';
+    // Emitted before the final tools-off synthesis request issued when the tool
+    // loop exits on its iteration cap with pending tool calls (ADR-0059).
+    public const FINAL_SYNTHESIS = 'final_synthesis';
 
     // Tool execution
     public const TOOL_CALLING = 'tool_calling';
