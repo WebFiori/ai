@@ -1707,9 +1707,16 @@ abstract class AbstractClient implements ProviderInterface {
                 return;
             }
 
-            // Tool-call turn. Stop if we've exhausted the iteration budget; the
-            // final-synthesis pass (if enabled) is layered on in a later change.
+            // Tool-call turn. If the iteration budget is exhausted, optionally
+            // run a final tools-off synthesis turn (ADR-0059 streaming half) so
+            // the model answers in text; its tokens DO stream to the caller.
             if ($iteration >= $maxIterations) {
+                if ($options[ChatOption::FINAL_SYNTHESIS_ON_MAX_ITERATIONS] ?? false) {
+                    $this->streamFinalSynthesis($messages, $options, $model, $cancellationToken, $onToken, $onComplete, $onError);
+
+                    return;
+                }
+
                 $onComplete($turnResponse);
 
                 return;
@@ -1737,6 +1744,49 @@ abstract class AbstractClient implements ProviderInterface {
                 );
             }
         }
+    }
+
+    /**
+     * Runs the streaming final synthesis pass (ADR-0059 streaming half).
+     *
+     * Issues one tools-off streaming turn so the model produces a text answer
+     * after the streaming tool loop exhausted its iteration budget. Unlike the
+     * intermediate tool-call turns, this turn's tokens ARE streamed to the
+     * caller's $onToken, and its response is passed to $onComplete. Emits a
+     * FINAL_SYNTHESIS status event.
+     *
+     * @param Message[] $messages The conversation up to the last completed tool round.
+     * @param array<string, mixed> $options The original streaming options.
+     * @param string|null $model The resolved model id.
+     * @param CancellationToken|null $cancellationToken The request's token, if any.
+     * @param callable $onToken Per-token callback (already wrapped).
+     * @param callable $onComplete Completion callback (already wrapped).
+     * @param callable $onError Error callback (already wrapped).
+     */
+    private function streamFinalSynthesis(
+        array $messages,
+        array $options,
+        ?string $model,
+        ?CancellationToken $cancellationToken,
+        callable $onToken,
+        callable $onComplete,
+        callable $onError
+    ): void {
+        $cancellationToken?->throwIfCancelled();
+
+        $synthMessages = $this->synthesisMessages($messages, $options);
+        $synthOptions = $this->synthesisOptions($options);
+
+        $this->statusEmitter->emit(Status::FINAL_SYNTHESIS, ['model' => $model]);
+        $this->logInfo('Final synthesis pass (streaming tool loop hit iteration cap)', [
+            'provider' => $this->getName(),
+            'model' => $model,
+        ]);
+
+        $request = $this->buildStreamChatRequest($synthMessages, $synthOptions)
+            ->withCancellationToken($cancellationToken);
+
+        $this->doStreamChat($request, $onToken, $onComplete, $onError);
     }
 
     /**

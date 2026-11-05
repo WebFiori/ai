@@ -62,6 +62,87 @@ class StreamingToolLoopTest extends TestCase {
         $this->assertCount(2, $client->getRequests());
     }
 
+    public function testStreamingFinalSynthesisOnIterationCap(): void {
+        // maxIterations=1: turn 1 tool call (executed), turn 2 still a tool call
+        // → cap hit with pending tool calls → synthesis streams a text answer.
+        $client = new FakeHttpClient();
+        $client->addStreamingChunks($this->toolUseTurn());
+        $client->addStreamingChunks($this->toolUseTurn());
+        $client->addStreamingChunks($this->textTurn('Synthesized answer from streaming.'));
+
+        $provider = $this->provider($client);
+
+        $tool = new Tool(
+            'get_weather',
+            'Gets weather',
+            ['type' => 'object', 'properties' => ['location' => ['type' => 'string']]],
+            fn (array $args): string => json_encode(['temp' => 24])
+        );
+
+        $streamed = '';
+        $completed = null;
+        $provider->streamChat(
+            [new Message('user', 'weather?')],
+            function (string $token) use (&$streamed): void {
+                $streamed .= $token;
+            },
+            function ($response) use (&$completed): void {
+                $completed = $response;
+            },
+            null,
+            [
+                ChatOption::TOOLS => [$tool],
+                ChatOption::AUTO_EXECUTE_TOOLS => true,
+                ChatOption::MAX_TOOL_ITERATIONS => 1,
+                ChatOption::FINAL_SYNTHESIS_ON_MAX_ITERATIONS => true,
+            ]
+        );
+
+        // The synthesis turn's tokens are streamed to the caller.
+        $this->assertSame('Synthesized answer from streaming.', $streamed);
+        $this->assertNotNull($completed);
+        $this->assertFalse($completed->hasToolCalls());
+        // initial + 1 loop round + synthesis = 3 streamed requests.
+        $this->assertCount(3, $client->getRequests());
+    }
+
+    public function testNoStreamingSynthesisWhenOptionDisabled(): void {
+        $client = new FakeHttpClient();
+        $client->addStreamingChunks($this->toolUseTurn());
+        $client->addStreamingChunks($this->toolUseTurn());
+
+        $provider = $this->provider($client);
+
+        $tool = new Tool(
+            'get_weather',
+            'Gets weather',
+            ['type' => 'object', 'properties' => ['location' => ['type' => 'string']]],
+            fn (array $args): string => json_encode(['temp' => 24])
+        );
+
+        $completed = null;
+        $provider->streamChat(
+            [new Message('user', 'weather?')],
+            function (): void {
+            },
+            function ($response) use (&$completed): void {
+                $completed = $response;
+            },
+            null,
+            [
+                ChatOption::TOOLS => [$tool],
+                ChatOption::AUTO_EXECUTE_TOOLS => true,
+                ChatOption::MAX_TOOL_ITERATIONS => 1,
+                // synthesis disabled (default)
+            ]
+        );
+
+        // No synthesis request: initial + 1 loop round = 2; final response still
+        // carries tool calls (current cap behavior).
+        $this->assertCount(2, $client->getRequests());
+        $this->assertTrue($completed->hasToolCalls());
+    }
+
     public function testStreamWithoutToolsIsSingleTurn(): void {
         $client = new FakeHttpClient();
         $client->addStreamingChunks($this->textTurn('Hello there.'));
