@@ -458,6 +458,19 @@ abstract class AbstractClient implements ProviderInterface {
                     $this->handleErrorResponse($httpResponse);
                     $response = $this->parseChatResponse($httpResponse);
                 }
+
+                // Final synthesis pass (ADR-0059): the loop exited while the
+                // model still wanted tools and the iteration cap was hit. The
+                // dangling tool-call message in $response was never appended to
+                // $messages, so $messages already ends at the last completed
+                // tool round (Option A). Issue one tools-off request so the
+                // model answers in text instead of returning tool calls.
+                if (($options[ChatOption::FINAL_SYNTHESIS_ON_MAX_ITERATIONS] ?? false)
+                    && $iteration >= $maxIterations
+                    && $response->hasToolCalls()
+                ) {
+                    $response = $this->runFinalSynthesis($messages, $options, $model, $requestId, $cancellationToken);
+                }
             }
 
             $durationMs = (int) ((microtime(true) - $startTime) * 1000);
@@ -2265,6 +2278,88 @@ abstract class AbstractClient implements ProviderInterface {
      * @return ImageResponse The parsed image response.
      */
     abstract protected function parseImageResponse(HttpResponse $response): ImageResponse;
+
+    /**
+     * Builds the options array for the final synthesis request (ADR-0059).
+     *
+     * Removes tools and disables auto-execution so the model must answer in
+     * text. All other options (model, cancellation token, etc.) are preserved.
+     *
+     * @param array<string, mixed> $options The original chat options.
+     *
+     * @return array<string, mixed> Options with tools removed.
+     */
+    private function synthesisOptions(array $options): array {
+        unset(
+            $options[ChatOption::TOOLS],
+            $options[ChatOption::AUTO_EXECUTE_TOOLS],
+            $options[ChatOption::FINAL_SYNTHESIS_ON_MAX_ITERATIONS]
+        );
+
+        return $options;
+    }
+
+    /**
+     * Appends the optional synthesis prompt (ADR-0059) to the message list.
+     *
+     * When ChatOption::FINAL_SYNTHESIS_PROMPT is a non-empty string it is added
+     * as a trailing user message instructing the model to answer; otherwise the
+     * messages are returned unchanged.
+     *
+     * @param Message[] $messages The conversation up to the last completed tool round.
+     * @param array<string, mixed> $options The original chat options.
+     *
+     * @return Message[] The messages, possibly with a synthesis prompt appended.
+     */
+    private function synthesisMessages(array $messages, array $options): array {
+        $prompt = $options[ChatOption::FINAL_SYNTHESIS_PROMPT] ?? null;
+
+        if (is_string($prompt) && $prompt !== '') {
+            $messages[] = new Message(Role::USER, $prompt);
+        }
+
+        return $messages;
+    }
+
+    /**
+     * Runs the non-streaming final synthesis pass (ADR-0059).
+     *
+     * Issues one request with tools removed so the model produces a text answer
+     * after the tool loop exhausted its iteration budget. Observability: emits a
+     * FINAL_SYNTHESIS status, a log line, and a metric.
+     *
+     * @param Message[] $messages The conversation up to the last completed tool round.
+     * @param array<string, mixed> $options The original chat options.
+     * @param string $model The resolved model id (for observability).
+     * @param string $requestId The current request id (for observability).
+     * @param CancellationToken|null $cancellationToken The request's token, if any.
+     *
+     * @return ChatResponse The synthesized text response.
+     */
+    private function runFinalSynthesis(array $messages, array $options, string $model, string $requestId, ?CancellationToken $cancellationToken): ChatResponse {
+        $cancellationToken?->throwIfCancelled();
+
+        $synthMessages = $this->synthesisMessages($messages, $options);
+        $synthOptions = $this->synthesisOptions($options);
+
+        $this->statusEmitter->emit(Status::FINAL_SYNTHESIS, ['model' => $model]);
+        $this->logInfo('Final synthesis pass (tool loop hit iteration cap)', [
+            'provider' => $this->getName(),
+            'model' => $model,
+        ]);
+        $this->emitMetric('request.final_synthesis', $this->buildBaseMetricData(
+            $requestId,
+            $this->getName(),
+            $model
+        ));
+
+        $request = $this->buildChatRequest($synthMessages, $synthOptions)
+            ->withCancellationToken($cancellationToken);
+        $httpResponse = $this->sendRequest($request);
+        $this->handleErrorResponse($httpResponse);
+
+        return $this->parseChatResponse($httpResponse);
+    }
 
     /**
      * Extracts the cancellation token from a request options array, if present.
