@@ -1572,7 +1572,19 @@ abstract class AbstractClient implements ProviderInterface {
         $request = $request->withCancellationToken($this->cancellationFrom($options));
 
         try {
-            $this->doStreamChat($request, $wrappedOnToken, $wrappedOnComplete, $wrappedOnError);
+            if (($options[ChatOption::AUTO_EXECUTE_TOOLS] ?? false) && count($tools) > 0) {
+                $this->streamToolLoop(
+                    $messages,
+                    $options,
+                    $model,
+                    $tools,
+                    $wrappedOnToken,
+                    $wrappedOnComplete,
+                    $wrappedOnError
+                );
+            } else {
+                $this->doStreamChat($request, $wrappedOnToken, $wrappedOnComplete, $wrappedOnError);
+            }
         } catch (OperationCancelledException $e) {
             // On cancellation, surface the accumulated partial response via the
             // ON_CANCEL callback instead of onComplete/onError.
@@ -1595,6 +1607,186 @@ abstract class AbstractClient implements ProviderInterface {
                 $onCancel($partial);
             }
         }
+    }
+
+    /**
+     * Drives the streaming auto-execute tool loop (ADR-0060).
+     *
+     * Streams one turn at a time. When a turn ends with tool calls, the tools
+     * are executed (via the shared {@see AbstractClient::executeTools()}),
+     * their results appended to the conversation, and the next turn streamed —
+     * bounded by {@see ChatOption::MAX_TOOL_ITERATIONS}. The loop ends when a
+     * turn produces no tool calls (the final answer) or the cap is reached.
+     *
+     * Each streamed turn's tokens are buffered; a tool-call turn's tokens are
+     * discarded (precursor text, not the answer), and only the final
+     * (tool-call-free) turn's tokens are flushed to $onToken, in order. Only
+     * the final turn's response is passed to $onComplete.
+     *
+     * @param Message[] $messages The conversation so far (already context-trimmed).
+     * @param array<string, mixed> $options The streaming options.
+     * @param string|null $model The resolved model id.
+     * @param ToolInterface[] $tools The registered tools.
+     * @param callable $onToken Per-token callback (already wrapped).
+     * @param callable $onComplete Completion callback (already wrapped).
+     * @param callable $onError Error callback (already wrapped).
+     */
+    private function streamToolLoop(
+        array $messages,
+        array $options,
+        ?string $model,
+        array $tools,
+        callable $onToken,
+        callable $onComplete,
+        callable $onError
+    ): void {
+        if (!$this->supportsStreamingToolCalls()) {
+            // The provider's streaming path cannot surface tool calls, so an
+            // auto-execute streaming loop would silently never progress. Fail
+            // loudly instead (ADR-0060).
+            throw new UnsupportedFeatureException(
+                'streaming_tool_calls',
+                $this->getName(),
+                sprintf(
+                    "The '%s' provider's streaming path cannot surface tool calls; "
+                    .'use non-streaming chat() for auto-executed tools, or a streaming-capable provider/model.',
+                    $this->getName()
+                )
+            );
+        }
+
+        $maxIterations = $options[ChatOption::MAX_TOOL_ITERATIONS] ?? 10;
+        $parallelTools = $options[ChatOption::PARALLEL_TOOL_EXECUTION] ?? true;
+        $cancellationToken = $this->cancellationFrom($options);
+        $iteration = 0;
+
+        while (true) {
+            $cancellationToken?->throwIfCancelled();
+
+            // Capture this turn's final response without forwarding it to the
+            // outer onComplete yet (the loop decides whether this is the final
+            // turn or a tool-call turn to continue from). Tokens are buffered
+            // per turn: a turn that ends in tool calls is a precursor, not the
+            // answer, so its tokens are discarded; only the final (tool-call-
+            // free) turn's tokens are flushed to the caller's onToken. The
+            // provider still emits text deltas during a tool-call turn (e.g.
+            // "let me check…"), and we cannot know mid-stream whether tool
+            // calls will follow, so the decision is made at turn end.
+            $turnResponse = null;
+            $bufferedTokens = [];
+            $request = $this->buildStreamChatRequest($messages, $options)
+                ->withCancellationToken($cancellationToken);
+
+            $this->statusEmitter->emit(Status::SENDING_REQUEST, [
+                'model' => $model,
+                'iteration' => $iteration,
+            ]);
+
+            $this->doStreamChat(
+                $request,
+                function (string $token) use (&$bufferedTokens): void {
+                    $bufferedTokens[] = $token;
+                },
+                function ($response) use (&$turnResponse): void {
+                    $turnResponse = $response;
+                },
+                $onError
+            );
+
+            $isFinalTurn = !$turnResponse instanceof ChatResponse || !$turnResponse->hasToolCalls();
+
+            // Flush the final answer's tokens (in order) to the caller. A
+            // tool-call turn's buffered tokens are intentionally dropped.
+            if ($isFinalTurn) {
+                foreach ($bufferedTokens as $token) {
+                    $onToken($token);
+                }
+
+                $onComplete($turnResponse);
+
+                return;
+            }
+
+            // Tool-call turn. If the iteration budget is exhausted, optionally
+            // run a final tools-off synthesis turn (ADR-0059 streaming half) so
+            // the model answers in text; its tokens DO stream to the caller.
+            if ($iteration >= $maxIterations) {
+                if ($options[ChatOption::FINAL_SYNTHESIS_ON_MAX_ITERATIONS] ?? false) {
+                    $this->streamFinalSynthesis($messages, $options, $model, $cancellationToken, $onToken, $onComplete, $onError);
+
+                    return;
+                }
+
+                $onComplete($turnResponse);
+
+                return;
+            }
+
+            $cancellationToken?->throwIfCancelled();
+
+            $iteration++;
+            $messages[] = $turnResponse->getMessage();
+
+            $toolResults = $this->executeTools(
+                $tools,
+                $turnResponse->getMessage()->getToolCalls(),
+                $parallelTools,
+                $messages,
+                $cancellationToken
+            );
+
+            foreach ($toolResults as $toolCallId => $result) {
+                $messages[] = new Message(
+                    Role::TOOL,
+                    '',
+                    [],
+                    new ToolResult($toolCallId, $result['output'], $result['name'], $result['parts'])
+                );
+            }
+        }
+    }
+
+    /**
+     * Runs the streaming final synthesis pass (ADR-0059 streaming half).
+     *
+     * Issues one tools-off streaming turn so the model produces a text answer
+     * after the streaming tool loop exhausted its iteration budget. Unlike the
+     * intermediate tool-call turns, this turn's tokens ARE streamed to the
+     * caller's $onToken, and its response is passed to $onComplete. Emits a
+     * FINAL_SYNTHESIS status event.
+     *
+     * @param Message[] $messages The conversation up to the last completed tool round.
+     * @param array<string, mixed> $options The original streaming options.
+     * @param string|null $model The resolved model id.
+     * @param CancellationToken|null $cancellationToken The request's token, if any.
+     * @param callable $onToken Per-token callback (already wrapped).
+     * @param callable $onComplete Completion callback (already wrapped).
+     * @param callable $onError Error callback (already wrapped).
+     */
+    private function streamFinalSynthesis(
+        array $messages,
+        array $options,
+        ?string $model,
+        ?CancellationToken $cancellationToken,
+        callable $onToken,
+        callable $onComplete,
+        callable $onError
+    ): void {
+        $cancellationToken?->throwIfCancelled();
+
+        $synthMessages = $this->synthesisMessages($messages, $options);
+        $synthOptions = $this->synthesisOptions($options);
+
+        $this->statusEmitter->emit(Status::FINAL_SYNTHESIS, ['model' => $model]);
+        $this->logInfo('Final synthesis pass (streaming tool loop hit iteration cap)', [
+            'provider' => $this->getName(),
+            'model' => $model,
+        ]);
+
+        $request = $this->buildStreamChatRequest($synthMessages, $synthOptions)
+            ->withCancellationToken($cancellationToken);
+
+        $this->doStreamChat($request, $onToken, $onComplete, $onError);
     }
 
     /**
@@ -2278,6 +2470,20 @@ abstract class AbstractClient implements ProviderInterface {
      * @return ImageResponse The parsed image response.
      */
     abstract protected function parseImageResponse(HttpResponse $response): ImageResponse;
+
+    /**
+     * Whether this provider can surface tool calls from a streamed response.
+     *
+     * Providers whose streaming handler parses tool calls (Anthropic, Google,
+     * OpenAI, Bedrock Converse) return true; those that cannot (e.g. the Bedrock
+     * Invoke strategy) override this to false so the streaming auto-execute tool
+     * loop fails loudly instead of silently never progressing (ADR-0060).
+     *
+     * @return bool True if streamed tool calls are supported.
+     */
+    protected function supportsStreamingToolCalls(): bool {
+        return true;
+    }
 
     /**
      * Builds the options array for the final synthesis request (ADR-0059).

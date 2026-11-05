@@ -127,4 +127,13 @@ class ResponsesStrategy implements InvocationStrategyInterface {
             'The Bedrock Responses API (ApiMethod::RESPONSES) is not yet implemented.'
         );
     }
+
+    /**
+     * {@inheritdoc}
+     *
+     * Streaming delegates to doStreamChat which reports the real (not-implemented) error.
+     */
+    public function supportsStreamingToolCalls(): bool {
+        return true;
+    }
 }

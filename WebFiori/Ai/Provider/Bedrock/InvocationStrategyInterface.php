@@ -92,4 +92,11 @@ interface InvocationStrategyInterface {
      * @return ChatResponse The parsed chat response.
      */
     public function parseChatResponse(HttpResponse $response, string $modelId): ChatResponse;
+
+    /**
+     * Whether this strategy can surface tool calls from a streamed response.
+     *
+     * @return bool True if streamed tool calls are supported.
+     */
+    public function supportsStreamingToolCalls(): bool;
 }

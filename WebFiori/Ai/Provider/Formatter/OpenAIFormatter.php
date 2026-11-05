@@ -177,9 +177,13 @@ class OpenAIFormatter implements ProviderFormatterInterface {
         $accumulatedContent = '';
         $model = '';
         $finishReason = null;
+        // Streamed tool calls arrive as deltas keyed by index: the first delta
+        // for an index carries id + function.name, later deltas append
+        // function.arguments fragments. Accumulate by index (ADR-0060).
+        $toolCallFragments = [];
 
         $parser = new SseParser(
-            function (string $data) use ($onToken, &$accumulatedContent, &$model, &$finishReason)
+            function (string $data) use ($onToken, &$accumulatedContent, &$model, &$finishReason, &$toolCallFragments)
             {
                 $json = json_decode($data, true);
 
@@ -205,11 +209,43 @@ class OpenAIFormatter implements ProviderFormatterInterface {
                     $accumulatedContent .= $token;
                     $onToken($token);
                 }
+
+                foreach ($delta['tool_calls'] ?? [] as $i => $tc) {
+                    $index = $tc['index'] ?? $i;
+
+                    if (!isset($toolCallFragments[$index])) {
+                        $toolCallFragments[$index] = ['id' => '', 'name' => '', 'arguments' => ''];
+                    }
+
+                    if (isset($tc['id'])) {
+                        $toolCallFragments[$index]['id'] = $tc['id'];
+                    }
+
+                    if (isset($tc['function']['name'])) {
+                        $toolCallFragments[$index]['name'] = $tc['function']['name'];
+                    }
+
+                    if (isset($tc['function']['arguments'])) {
+                        $toolCallFragments[$index]['arguments'] .= $tc['function']['arguments'];
+                    }
+                }
             },
-            function () use ($onComplete, &$accumulatedContent, &$model, &$finishReason)
+            function () use ($onComplete, &$accumulatedContent, &$model, &$finishReason, &$toolCallFragments)
             {
                 if ($onComplete !== null) {
-                    $message = new Message(Role::ASSISTANT, $accumulatedContent);
+                    $toolCalls = [];
+
+                    ksort($toolCallFragments);
+
+                    foreach ($toolCallFragments as $fragment) {
+                        $toolCalls[] = new ToolCall(
+                            $fragment['id'],
+                            $fragment['name'],
+                            json_decode($fragment['arguments'] !== '' ? $fragment['arguments'] : '{}', true) ?? []
+                        );
+                    }
+
+                    $message = new Message(Role::ASSISTANT, $accumulatedContent, $toolCalls);
                     $response = new ChatResponse($message, $model, null, $finishReason);
                     $onComplete($response);
                 }

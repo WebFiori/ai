@@ -58,3 +58,4 @@ export GCP_ACCESS_TOKEN="ya29...."
 | 31 | [Mid-Loop Truncation](31-mid-loop-truncation/) | Keep context bounded during tool chains by re-applying the window strategy between tool iterations (pairing-safe) |
 | 32 | [SQL Server Vector Store](32-sqlserver-vector-store/) | Store and query embedding vectors in Microsoft SQL Server via `SqlServerVectorStore` (synthetic vectors, no API key) |
 | 33 | [Request Cancellation](33-cancellation/) | Abort in-flight requests with a `CancellationToken` — non-streaming, streaming (partial via `onCancel`), and tool-loop |
+| 34 | [Streaming Tool Loop](34-streaming-tool-loop/) | Stream a response while the model calls tools; only the final answer streams, with optional synthesis on the iteration cap |
