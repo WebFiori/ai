@@ -302,9 +302,10 @@ class GoogleClient extends AbstractClient {
         $model = $this->getConfig('model', 'gemini-2.5-flash');
         $finishReason = null;
         $usage = null;
+        $toolCalls = [];
 
         $parser = new SseParser(
-            function (string $data) use ($onToken, &$accumulatedContent, &$finishReason, &$usage)
+            function (string $data) use ($onToken, &$accumulatedContent, &$finishReason, &$usage, &$toolCalls)
             {
                 $json = json_decode($data, true);
 
@@ -326,10 +327,22 @@ class GoogleClient extends AbstractClient {
                         $token = $part['text'];
                         $accumulatedContent .= $token;
                         $onToken($token);
+                    } elseif (isset($part['functionCall'])) {
+                        // generateContent streams function calls as a
+                        // functionCall part (ADR-0060). Mirror the non-streaming
+                        // parser: preserve the raw part for faithful replay.
+                        $toolCall = new ToolCall(
+                            uniqid('call_'),
+                            $part['functionCall']['name'] ?? '',
+                            $part['functionCall']['args'] ?? []
+                        );
+                        $toolCall->setRawPart($part);
+                        $toolCalls[] = $toolCall;
+                        $finishReason = 'tool_calls';
                     }
                 }
 
-                if (isset($candidate['finishReason'])) {
+                if (isset($candidate['finishReason']) && empty($toolCalls)) {
                     $finishReason = $this->mapFinishReason($candidate['finishReason']);
                 }
 
@@ -349,7 +362,7 @@ class GoogleClient extends AbstractClient {
             });
 
             if ($onComplete !== null) {
-                $message = new Message(Role::ASSISTANT, $accumulatedContent);
+                $message = new Message(Role::ASSISTANT, $accumulatedContent, $toolCalls);
                 $response = new ChatResponse($message, $model, $usage, $finishReason);
                 $onComplete($response);
             }

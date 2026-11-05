@@ -653,4 +653,13 @@ class InvokeStrategy implements InvocationStrategyInterface {
                 break;
         }
     }
+
+    /**
+     * {@inheritdoc}
+     *
+     * Invoke streaming does not surface tool calls.
+     */
+    public function supportsStreamingToolCalls(): bool {
+        return false;
+    }
 }

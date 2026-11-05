@@ -343,6 +343,16 @@ class BedrockClient extends AbstractClient {
     }
 
     /**
+     * {@inheritdoc}
+     *
+     * Delegates to the active invocation strategy (ADR-0060): Converse surfaces
+     * streamed tool calls; Invoke does not.
+     */
+    protected function supportsStreamingToolCalls(): bool {
+        return $this->strategy->supportsStreamingToolCalls();
+    }
+
+    /**
      * Inspects an HTTP response and throws the appropriate exception for errors.
      *
      * @param HttpResponse $response The HTTP response to check.

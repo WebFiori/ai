@@ -107,11 +107,20 @@ function claudeOnVertexClient(): GoogleClient {
 }
 
 function bedrockClient(): BedrockClient {
+    $apiKey = getenv('BEDROCK_API_KEY');
     $accessKey = getenv('AWS_ACCESS_KEY_ID');
     $secretKey = getenv('AWS_SECRET_ACCESS_KEY');
 
+    if ($apiKey) {
+        return new BedrockClient(new BedrockClientConfig(
+            region: BEDROCK_REGION,
+            model: BEDROCK_MODEL,
+            apiKey: $apiKey,
+        ));
+    }
+
     if (!$accessKey || !$secretKey) {
-        throw new RuntimeException('AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY not set. Run: source keys/env.sh');
+        throw new RuntimeException('Set BEDROCK_API_KEY or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY. Run: source keys/env.sh');
     }
 
     return new BedrockClient(new BedrockClientConfig(

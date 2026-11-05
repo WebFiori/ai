@@ -138,7 +138,10 @@ class ConverseStrategy implements InvocationStrategyInterface {
                         break;
 
                     case 'contentBlockStart':
-                        $block = $json['contentBlockStart']['start'] ?? [];
+                        // The event body carries `start` at the top level; the
+                        // `:event-type` header already identifies it as
+                        // contentBlockStart (matches the live Converse stream).
+                        $block = $json['start'] ?? [];
 
                         if (isset($block['toolUse'])) {
                             $currentToolCall = [
@@ -591,5 +594,14 @@ class ConverseStrategy implements InvocationStrategyInterface {
             'image/webp' => 'webp',
             default => 'jpeg',
         };
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * Converse streaming parses toolUse blocks.
+     */
+    public function supportsStreamingToolCalls(): bool {
+        return true;
     }
 }
