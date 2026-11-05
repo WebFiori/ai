@@ -78,4 +78,16 @@ streamToolCheck('Anthropic — streaming tool loop', fn () => anthropicClient())
 // Google generateContent (gemini-2.x) — parser added in this feature.
 streamToolCheck('Gemini 2.x — streaming tool loop (generateContent)', fn () => gemini2Client());
 
+// NOTE: Gemini 3.x (Interactions API) streaming tool calling is tracked
+// separately — its streaming path does not surface function calls live (the
+// loop and non-streaming path work). See the follow-up issue.
+
+// AWS Bedrock Converse — surfaces toolUse blocks natively. Skipped when AWS
+// credentials are not configured in this environment.
+if (getenv('AWS_ACCESS_KEY_ID') && getenv('AWS_SECRET_ACCESS_KEY')) {
+    streamToolCheck('Bedrock Converse — streaming tool loop', fn () => bedrockClient());
+} else {
+    echo "  \033[33m⚠  SKIP\033[0m  Bedrock — streaming tool loop (AWS credentials not configured)\n";
+}
+
 echo "\n";
