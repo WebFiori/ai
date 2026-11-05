@@ -1572,7 +1572,19 @@ abstract class AbstractClient implements ProviderInterface {
         $request = $request->withCancellationToken($this->cancellationFrom($options));
 
         try {
-            $this->doStreamChat($request, $wrappedOnToken, $wrappedOnComplete, $wrappedOnError);
+            if (($options[ChatOption::AUTO_EXECUTE_TOOLS] ?? false) && count($tools) > 0) {
+                $this->streamToolLoop(
+                    $messages,
+                    $options,
+                    $model,
+                    $tools,
+                    $wrappedOnToken,
+                    $wrappedOnComplete,
+                    $wrappedOnError
+                );
+            } else {
+                $this->doStreamChat($request, $wrappedOnToken, $wrappedOnComplete, $wrappedOnError);
+            }
         } catch (OperationCancelledException $e) {
             // On cancellation, surface the accumulated partial response via the
             // ON_CANCEL callback instead of onComplete/onError.
@@ -1593,6 +1605,106 @@ abstract class AbstractClient implements ProviderInterface {
 
             if (is_callable($onCancel)) {
                 $onCancel($partial);
+            }
+        }
+    }
+
+    /**
+     * Drives the streaming auto-execute tool loop (ADR-0060).
+     *
+     * Streams one turn at a time. When a turn ends with tool calls, the tools
+     * are executed (via the shared {@see AbstractClient::executeTools()}),
+     * their results appended to the conversation, and the next turn streamed —
+     * bounded by {@see ChatOption::MAX_TOOL_ITERATIONS}. The loop ends when a
+     * turn produces no tool calls (the final answer) or the cap is reached.
+     *
+     * Each streamed turn's tokens are currently forwarded to $onToken as they
+     * arrive; suppression of intermediate (tool-call) turns is layered on in a
+     * subsequent change. Only the final turn's response is passed to
+     * $onComplete.
+     *
+     * @param Message[] $messages The conversation so far (already context-trimmed).
+     * @param array<string, mixed> $options The streaming options.
+     * @param string|null $model The resolved model id.
+     * @param ToolInterface[] $tools The registered tools.
+     * @param callable $onToken Per-token callback (already wrapped).
+     * @param callable $onComplete Completion callback (already wrapped).
+     * @param callable $onError Error callback (already wrapped).
+     */
+    private function streamToolLoop(
+        array $messages,
+        array $options,
+        ?string $model,
+        array $tools,
+        callable $onToken,
+        callable $onComplete,
+        callable $onError
+    ): void {
+        $maxIterations = $options[ChatOption::MAX_TOOL_ITERATIONS] ?? 10;
+        $parallelTools = $options[ChatOption::PARALLEL_TOOL_EXECUTION] ?? true;
+        $cancellationToken = $this->cancellationFrom($options);
+        $iteration = 0;
+
+        while (true) {
+            $cancellationToken?->throwIfCancelled();
+
+            // Capture this turn's final response without forwarding it to the
+            // outer onComplete yet (the loop decides whether this is the final
+            // turn or a tool-call turn to continue from).
+            $turnResponse = null;
+            $request = $this->buildStreamChatRequest($messages, $options)
+                ->withCancellationToken($cancellationToken);
+
+            $this->statusEmitter->emit(Status::SENDING_REQUEST, [
+                'model' => $model,
+                'iteration' => $iteration,
+            ]);
+
+            $this->doStreamChat(
+                $request,
+                $onToken,
+                function ($response) use (&$turnResponse): void {
+                    $turnResponse = $response;
+                },
+                $onError
+            );
+
+            // No response captured (provider surfaced nothing) or no tool calls:
+            // this turn is the final answer.
+            if (!$turnResponse instanceof ChatResponse || !$turnResponse->hasToolCalls()) {
+                $onComplete($turnResponse);
+
+                return;
+            }
+
+            // Tool-call turn. Stop if we've exhausted the iteration budget; the
+            // final-synthesis pass (if enabled) is layered on in a later change.
+            if ($iteration >= $maxIterations) {
+                $onComplete($turnResponse);
+
+                return;
+            }
+
+            $cancellationToken?->throwIfCancelled();
+
+            $iteration++;
+            $messages[] = $turnResponse->getMessage();
+
+            $toolResults = $this->executeTools(
+                $tools,
+                $turnResponse->getMessage()->getToolCalls(),
+                $parallelTools,
+                $messages,
+                $cancellationToken
+            );
+
+            foreach ($toolResults as $toolCallId => $result) {
+                $messages[] = new Message(
+                    Role::TOOL,
+                    '',
+                    [],
+                    new ToolResult($toolCallId, $result['output'], $result['name'], $result['parts'])
+                );
             }
         }
     }
