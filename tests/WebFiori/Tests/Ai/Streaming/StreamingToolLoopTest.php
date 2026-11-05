@@ -82,6 +82,42 @@ class StreamingToolLoopTest extends TestCase {
         $this->assertCount(1, $client->getRequests(), 'no tools → single streamed turn, unchanged');
     }
 
+    public function testIntermediateTurnTokensAreSuppressed(): void {
+        $client = new FakeHttpClient();
+        // Turn 1: precursor text ("Let me check…") + a tool_use block.
+        $client->addStreamingChunks($this->toolUseTurn('Let me check the weather. '));
+        // Turn 2: the final answer.
+        $client->addStreamingChunks($this->textTurn('It is sunny in Paris.'));
+
+        $provider = $this->provider($client);
+
+        $tool = new Tool(
+            'get_weather',
+            'Gets weather',
+            ['type' => 'object', 'properties' => ['location' => ['type' => 'string']]],
+            fn (array $args): string => json_encode(['temp' => 24])
+        );
+
+        $streamed = '';
+        $provider->streamChat(
+            [new Message('user', 'weather in Paris?')],
+            function (string $token) use (&$streamed): void {
+                $streamed .= $token;
+            },
+            null,
+            null,
+            [
+                ChatOption::TOOLS => [$tool],
+                ChatOption::AUTO_EXECUTE_TOOLS => true,
+            ]
+        );
+
+        // The precursor text from the tool-call turn must not reach the caller;
+        // only the final answer's tokens are streamed.
+        $this->assertStringNotContainsString('Let me check', $streamed);
+        $this->assertSame('It is sunny in Paris.', $streamed);
+    }
+
     private function provider(FakeHttpClient $client): AnthropicClient {
         $provider = new AnthropicClient(new AnthropicClientConfig(
             apiKey: 'test-api-key',
@@ -95,16 +131,25 @@ class StreamingToolLoopTest extends TestCase {
     /**
      * @return string[]
      */
-    private function toolUseTurn(): array {
-        return [
+    private function toolUseTurn(string $precursorText = ''): array {
+        $chunks = [
             'data: '.json_encode(['type' => 'message_start', 'message' => ['id' => 'msg_1', 'model' => 'claude-sonnet-4-20250514', 'usage' => ['input_tokens' => 20]]])."\n\n",
-            'data: '.json_encode(['type' => 'content_block_start', 'index' => 0, 'content_block' => ['type' => 'tool_use', 'id' => 'toolu_01', 'name' => 'get_weather']])."\n\n",
-            'data: '.json_encode(['type' => 'content_block_delta', 'delta' => ['type' => 'input_json_delta', 'partial_json' => '{"location"']])."\n\n",
-            'data: '.json_encode(['type' => 'content_block_delta', 'delta' => ['type' => 'input_json_delta', 'partial_json' => ':"Paris"}']])."\n\n",
-            'data: '.json_encode(['type' => 'content_block_stop', 'index' => 0])."\n\n",
+        ];
+
+        if ($precursorText !== '') {
+            $chunks[] = 'data: '.json_encode(['type' => 'content_block_start', 'index' => 0, 'content_block' => ['type' => 'text', 'text' => '']])."\n\n";
+            $chunks[] = 'data: '.json_encode(['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => $precursorText]])."\n\n";
+            $chunks[] = 'data: '.json_encode(['type' => 'content_block_stop', 'index' => 0])."\n\n";
+        }
+
+        return array_merge($chunks, [
+            'data: '.json_encode(['type' => 'content_block_start', 'index' => 1, 'content_block' => ['type' => 'tool_use', 'id' => 'toolu_01', 'name' => 'get_weather']])."\n\n",
+            'data: '.json_encode(['type' => 'content_block_delta', 'index' => 1, 'delta' => ['type' => 'input_json_delta', 'partial_json' => '{"location"']])."\n\n",
+            'data: '.json_encode(['type' => 'content_block_delta', 'index' => 1, 'delta' => ['type' => 'input_json_delta', 'partial_json' => ':"Paris"}']])."\n\n",
+            'data: '.json_encode(['type' => 'content_block_stop', 'index' => 1])."\n\n",
             'data: '.json_encode(['type' => 'message_delta', 'delta' => ['stop_reason' => 'tool_use'], 'usage' => ['output_tokens' => 10]])."\n\n",
             'data: '.json_encode(['type' => 'message_stop'])."\n\n",
-        ];
+        ]);
     }
 
     /**

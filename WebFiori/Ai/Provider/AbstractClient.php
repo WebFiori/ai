@@ -1618,10 +1618,10 @@ abstract class AbstractClient implements ProviderInterface {
      * bounded by {@see ChatOption::MAX_TOOL_ITERATIONS}. The loop ends when a
      * turn produces no tool calls (the final answer) or the cap is reached.
      *
-     * Each streamed turn's tokens are currently forwarded to $onToken as they
-     * arrive; suppression of intermediate (tool-call) turns is layered on in a
-     * subsequent change. Only the final turn's response is passed to
-     * $onComplete.
+     * Each streamed turn's tokens are buffered; a tool-call turn's tokens are
+     * discarded (precursor text, not the answer), and only the final
+     * (tool-call-free) turn's tokens are flushed to $onToken, in order. Only
+     * the final turn's response is passed to $onComplete.
      *
      * @param Message[] $messages The conversation so far (already context-trimmed).
      * @param array<string, mixed> $options The streaming options.
@@ -1650,8 +1650,15 @@ abstract class AbstractClient implements ProviderInterface {
 
             // Capture this turn's final response without forwarding it to the
             // outer onComplete yet (the loop decides whether this is the final
-            // turn or a tool-call turn to continue from).
+            // turn or a tool-call turn to continue from). Tokens are buffered
+            // per turn: a turn that ends in tool calls is a precursor, not the
+            // answer, so its tokens are discarded; only the final (tool-call-
+            // free) turn's tokens are flushed to the caller's onToken. The
+            // provider still emits text deltas during a tool-call turn (e.g.
+            // "let me check…"), and we cannot know mid-stream whether tool
+            // calls will follow, so the decision is made at turn end.
             $turnResponse = null;
+            $bufferedTokens = [];
             $request = $this->buildStreamChatRequest($messages, $options)
                 ->withCancellationToken($cancellationToken);
 
@@ -1662,16 +1669,24 @@ abstract class AbstractClient implements ProviderInterface {
 
             $this->doStreamChat(
                 $request,
-                $onToken,
+                function (string $token) use (&$bufferedTokens): void {
+                    $bufferedTokens[] = $token;
+                },
                 function ($response) use (&$turnResponse): void {
                     $turnResponse = $response;
                 },
                 $onError
             );
 
-            // No response captured (provider surfaced nothing) or no tool calls:
-            // this turn is the final answer.
-            if (!$turnResponse instanceof ChatResponse || !$turnResponse->hasToolCalls()) {
+            $isFinalTurn = !$turnResponse instanceof ChatResponse || !$turnResponse->hasToolCalls();
+
+            // Flush the final answer's tokens (in order) to the caller. A
+            // tool-call turn's buffered tokens are intentionally dropped.
+            if ($isFinalTurn) {
+                foreach ($bufferedTokens as $token) {
+                    $onToken($token);
+                }
+
                 $onComplete($turnResponse);
 
                 return;
