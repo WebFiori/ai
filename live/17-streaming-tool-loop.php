@@ -82,12 +82,12 @@ streamToolCheck('Gemini 2.x — streaming tool loop (generateContent)', fn () =>
 // separately — its streaming path does not surface function calls live (the
 // loop and non-streaming path work). See the follow-up issue.
 
-// AWS Bedrock Converse — surfaces toolUse blocks natively. Skipped when AWS
-// credentials are not configured in this environment.
-if (getenv('AWS_ACCESS_KEY_ID') && getenv('AWS_SECRET_ACCESS_KEY')) {
+// AWS Bedrock Converse — surfaces toolUse blocks natively. Skipped when no
+// Bedrock credentials are configured in this environment.
+if (getenv('BEDROCK_API_KEY') || (getenv('AWS_ACCESS_KEY_ID') && getenv('AWS_SECRET_ACCESS_KEY'))) {
     streamToolCheck('Bedrock Converse — streaming tool loop', fn () => bedrockClient());
 } else {
-    echo "  \033[33m⚠  SKIP\033[0m  Bedrock — streaming tool loop (AWS credentials not configured)\n";
+    echo "  \033[33m⚠  SKIP\033[0m  Bedrock — streaming tool loop (no Bedrock credentials configured)\n";
 }
 
 echo "\n";

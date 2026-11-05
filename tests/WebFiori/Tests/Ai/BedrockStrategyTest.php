@@ -301,7 +301,7 @@ class BedrockStrategyTest extends TestCase {
         // Build event stream binary messages for Converse streaming
         $chunks = [
             $this->buildEventStreamMessage('messageStart', ['role' => 'assistant']),
-            $this->buildEventStreamMessage('contentBlockStart', ['contentBlockStart' => ['start' => []]]),
+            $this->buildEventStreamMessage('contentBlockStart', ['start' => []]),
             $this->buildEventStreamMessage('contentBlockDelta', ['delta' => ['text' => 'Hello']]),
             $this->buildEventStreamMessage('contentBlockDelta', ['delta' => ['text' => ' world']]),
             $this->buildEventStreamMessage('contentBlockStop', []),
@@ -340,7 +340,7 @@ class BedrockStrategyTest extends TestCase {
         $chunks = [
             $this->buildEventStreamMessage('messageStart', ['role' => 'assistant']),
             $this->buildEventStreamMessage('contentBlockStart', [
-                'contentBlockStart' => ['start' => ['toolUse' => ['toolUseId' => 'tc_1', 'name' => 'get_weather']]],
+                'start' => ['toolUse' => ['toolUseId' => 'tc_1', 'name' => 'get_weather']],
             ]),
             $this->buildEventStreamMessage('contentBlockDelta', [
                 'delta' => ['toolUse' => ['input' => '{"location"']],
@@ -389,7 +389,7 @@ class BedrockStrategyTest extends TestCase {
         $client->addStreamingChunks([
             $this->buildEventStreamMessage('messageStart', ['role' => 'assistant']),
             $this->buildEventStreamMessage('contentBlockStart', [
-                'contentBlockStart' => ['start' => ['toolUse' => ['toolUseId' => 'tc_1', 'name' => 'get_weather']]],
+                'start' => ['toolUse' => ['toolUseId' => 'tc_1', 'name' => 'get_weather']],
             ]),
             $this->buildEventStreamMessage('contentBlockDelta', ['delta' => ['toolUse' => ['input' => '{"location":"London"}']]]),
             $this->buildEventStreamMessage('contentBlockStop', []),
@@ -399,7 +399,7 @@ class BedrockStrategyTest extends TestCase {
         // Turn 2: final text answer.
         $client->addStreamingChunks([
             $this->buildEventStreamMessage('messageStart', ['role' => 'assistant']),
-            $this->buildEventStreamMessage('contentBlockStart', ['contentBlockStart' => ['start' => []]]),
+            $this->buildEventStreamMessage('contentBlockStart', ['start' => []]),
             $this->buildEventStreamMessage('contentBlockDelta', ['delta' => ['text' => 'London is rainy.']]),
             $this->buildEventStreamMessage('contentBlockStop', []),
             $this->buildEventStreamMessage('messageStop', ['stopReason' => 'end_turn']),
