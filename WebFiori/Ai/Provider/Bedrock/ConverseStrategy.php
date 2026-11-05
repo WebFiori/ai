@@ -592,4 +592,13 @@ class ConverseStrategy implements InvocationStrategyInterface {
             default => 'jpeg',
         };
     }
+
+    /**
+     * {@inheritdoc}
+     *
+     * Converse streaming parses toolUse blocks.
+     */
+    public function supportsStreamingToolCalls(): bool {
+        return true;
+    }
 }

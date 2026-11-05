@@ -1640,6 +1640,21 @@ abstract class AbstractClient implements ProviderInterface {
         callable $onComplete,
         callable $onError
     ): void {
+        if (!$this->supportsStreamingToolCalls()) {
+            // The provider's streaming path cannot surface tool calls, so an
+            // auto-execute streaming loop would silently never progress. Fail
+            // loudly instead (ADR-0060).
+            throw new UnsupportedFeatureException(
+                'streaming_tool_calls',
+                $this->getName(),
+                sprintf(
+                    "The '%s' provider's streaming path cannot surface tool calls; "
+                    .'use non-streaming chat() for auto-executed tools, or a streaming-capable provider/model.',
+                    $this->getName()
+                )
+            );
+        }
+
         $maxIterations = $options[ChatOption::MAX_TOOL_ITERATIONS] ?? 10;
         $parallelTools = $options[ChatOption::PARALLEL_TOOL_EXECUTION] ?? true;
         $cancellationToken = $this->cancellationFrom($options);
@@ -2405,6 +2420,20 @@ abstract class AbstractClient implements ProviderInterface {
      * @return ImageResponse The parsed image response.
      */
     abstract protected function parseImageResponse(HttpResponse $response): ImageResponse;
+
+    /**
+     * Whether this provider can surface tool calls from a streamed response.
+     *
+     * Providers whose streaming handler parses tool calls (Anthropic, Google,
+     * OpenAI, Bedrock Converse) return true; those that cannot (e.g. the Bedrock
+     * Invoke strategy) override this to false so the streaming auto-execute tool
+     * loop fails loudly instead of silently never progressing (ADR-0060).
+     *
+     * @return bool True if streamed tool calls are supported.
+     */
+    protected function supportsStreamingToolCalls(): bool {
+        return true;
+    }
 
     /**
      * Builds the options array for the final synthesis request (ADR-0059).
