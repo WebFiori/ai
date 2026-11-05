@@ -379,6 +379,71 @@ class BedrockStrategyTest extends TestCase {
 
     /**
      * @test
+     *
+     * Streaming auto-execute tool loop over Bedrock Converse (ADR-0060):
+     * turn 1 streams a toolUse, the tool runs, turn 2 streams the answer.
+     */
+    public function testConverseStreamingToolLoop() {
+        $client = new FakeHttpClient();
+        // Turn 1: tool use.
+        $client->addStreamingChunks([
+            $this->buildEventStreamMessage('messageStart', ['role' => 'assistant']),
+            $this->buildEventStreamMessage('contentBlockStart', [
+                'contentBlockStart' => ['start' => ['toolUse' => ['toolUseId' => 'tc_1', 'name' => 'get_weather']]],
+            ]),
+            $this->buildEventStreamMessage('contentBlockDelta', ['delta' => ['toolUse' => ['input' => '{"location":"London"}']]]),
+            $this->buildEventStreamMessage('contentBlockStop', []),
+            $this->buildEventStreamMessage('messageStop', ['stopReason' => 'tool_use']),
+            $this->buildEventStreamMessage('metadata', ['usage' => ['inputTokens' => 10, 'outputTokens' => 5]]),
+        ]);
+        // Turn 2: final text answer.
+        $client->addStreamingChunks([
+            $this->buildEventStreamMessage('messageStart', ['role' => 'assistant']),
+            $this->buildEventStreamMessage('contentBlockStart', ['contentBlockStart' => ['start' => []]]),
+            $this->buildEventStreamMessage('contentBlockDelta', ['delta' => ['text' => 'London is rainy.']]),
+            $this->buildEventStreamMessage('contentBlockStop', []),
+            $this->buildEventStreamMessage('messageStop', ['stopReason' => 'end_turn']),
+            $this->buildEventStreamMessage('metadata', ['usage' => ['inputTokens' => 12, 'outputTokens' => 4]]),
+        ]);
+
+        $provider = $this->createConverseProvider();
+        $provider->setHttpClient($client);
+
+        $toolRan = false;
+        $tool = new Tool(
+            'get_weather',
+            'Gets weather',
+            ['type' => 'object', 'properties' => ['location' => ['type' => 'string']]],
+            function (array $args) use (&$toolRan): string {
+                $toolRan = true;
+
+                return json_encode(['sky' => 'rainy']);
+            }
+        );
+
+        $streamed = '';
+        $completed = null;
+        $provider->streamChat(
+            [new Message('user', 'weather in London?')],
+            function (string $token) use (&$streamed) {
+                $streamed .= $token;
+            },
+            function ($response) use (&$completed) {
+                $completed = $response;
+            },
+            null,
+            [ChatOption::TOOLS => [$tool], ChatOption::AUTO_EXECUTE_TOOLS => true]
+        );
+
+        $this->assertTrue($toolRan, 'tool should execute between streamed turns');
+        $this->assertNotNull($completed);
+        $this->assertFalse($completed->hasToolCalls());
+        $this->assertEquals('London is rainy.', $streamed);
+        $this->assertCount(2, $client->getRequests());
+    }
+
+    /**
+     * @test
      */
     public function testConverseStreamEndpoint() {
         $client = new FakeHttpClient();

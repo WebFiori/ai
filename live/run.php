@@ -34,6 +34,7 @@ $suites = [
     'anthropic' => 'live/09-anthropic-chat.php',
     'modelrouter' => 'live/10-model-router.php',
     'cancellation' => 'live/16-cancellation.php',
+    'streamtools' => 'live/17-streaming-tool-loop.php',
 ];
 
 $rootDir = __DIR__.'/..';
