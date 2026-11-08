@@ -13,6 +13,7 @@ define('GCP_PROJECT', getenv('GCP_PROJECT_ID') ?: 'webfiori');
 define('GCP_LOCATION', getenv('GCP_LOCATION') ?: 'us-central1');
 define('GEMINI_2_MODEL', getenv('GEMINI_2_MODEL') ?: 'gemini-2.5-flash');
 define('GEMINI_3_MODEL', getenv('GEMINI_3_MODEL') ?: 'gemini-3.5-flash');
+define('GEMINI_4_MODEL', getenv('GEMINI_4_MODEL') ?: 'gemini-4-flash');
 define('BEDROCK_REGION', getenv('AWS_REGION') ?: 'us-east-1');
 // Note: Update this to a model currently active on the account.
 // The test key may be restricted to specific model versions.
@@ -61,6 +62,8 @@ use WebFiori\Ai\Provider\Google\GoogleApi;
 use WebFiori\Ai\Provider\Google\GoogleApiVersion;
 use WebFiori\Ai\Provider\Google\GoogleClient;
 use WebFiori\Ai\Provider\Google\GoogleClientConfig;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClient;
+use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
 
 function gemini2Client(): GoogleClient {
     return new GoogleClient(new GoogleClientConfig(
@@ -78,6 +81,28 @@ function gemini3Client(): GoogleClient {
         credentials: KEY_PATH,
         api: GoogleApi::GEMINI, // gemini-3.5-flash is on Gemini API, not Vertex yet
         apiVersion: GoogleApiVersion::INTERACTIONS,
+    ));
+}
+
+function gemini4Client(): GoogleClient {
+    return new GoogleClient(new GoogleClientConfig(
+        model: GEMINI_4_MODEL,
+        credentials: KEY_PATH,
+        api: GoogleApi::GEMINI,
+        apiVersion: GoogleApiVersion::INTERACTIONS,
+    ));
+}
+
+function openaiClient(): OpenAIClient {
+    $apiKey = getenv('OPENAI_API_KEY');
+
+    if (!$apiKey) {
+        throw new RuntimeException('OPENAI_API_KEY not set. Run: source keys/env.sh');
+    }
+
+    return new OpenAIClient(new OpenAIClientConfig(
+        apiKey: $apiKey,
+        model: getenv('OPENAI_MODEL') ?: 'gpt-4o',
     ));
 }
 

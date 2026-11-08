@@ -44,8 +44,15 @@ function weatherTool(bool &$ranFlag): Tool {
  * @param callable():object $clientFactory Returns a provider client.
  */
 function streamToolCheck(string $label, callable $clientFactory): void {
-    run($label, function () use ($clientFactory) {
+    try {
         $client = $clientFactory();
+    } catch (Throwable $e) {
+        echo "  \033[33m⚠  SKIP\033[0m  {$label} — ".substr($e->getMessage(), 0, 80)."\n";
+
+        return;
+    }
+
+    try {
         $toolRan = false;
         $tool = weatherTool($toolRan);
 
@@ -68,19 +75,46 @@ function streamToolCheck(string $label, callable $clientFactory): void {
         assert($completed !== null, 'onComplete should fire');
         assert(!$completed->hasToolCalls(), 'final response must be a text answer, not tool calls');
         assert(trim($streamed) !== '', 'the final answer should have streamed tokens');
+        pass($label);
         echo '    → streamed answer: '.substr(trim($streamed), 0, 80)."\n";
-    });
+    } catch (AssertionError $e) {
+        fail($label, $e->getMessage());
+    } catch (Throwable $e) {
+        // A model that is not available on this account/endpoint is a skip,
+        // not a failure of the streaming tool loop.
+        $msg = $e->getMessage();
+
+        if (stripos($msg, 'not found') !== false || stripos($msg, 'not available') !== false
+            || stripos($msg, 'does not exist') !== false || stripos($msg, 'unsupported') !== false
+            || stripos($msg, '404') !== false) {
+            echo "  \033[33m⚠  SKIP\033[0m  {$label} — model unavailable: ".substr($msg, 0, 70)."\n";
+
+            return;
+        }
+
+        fail($label, get_class($e).': '.substr($msg, 0, 100));
+    }
 }
 
 // Anthropic (surfaces streamed tool_use natively).
 streamToolCheck('Anthropic — streaming tool loop', fn () => anthropicClient());
 
+// OpenAI — tool_calls deltas parsed in this feature.
+streamToolCheck('OpenAI — streaming tool loop', fn () => openaiClient());
+
 // Google generateContent (gemini-2.x) — parser added in this feature.
 streamToolCheck('Gemini 2.x — streaming tool loop (generateContent)', fn () => gemini2Client());
 
-// NOTE: Gemini 3.x (Interactions API) streaming tool calling is tracked
-// separately — its streaming path does not surface function calls live (the
-// loop and non-streaming path work). See the follow-up issue.
+// Google Interactions API (gemini-3.x) — function_call steps + arguments_delta.
+streamToolCheck('Gemini 3.x — streaming tool loop (Interactions)', fn () => gemini3Client());
+
+// Google Interactions API (gemini-4.x) — only runs when GEMINI_4_MODEL is set
+// to a model that exists on the account (no such model is public yet).
+if (getenv('GEMINI_4_MODEL')) {
+    streamToolCheck('Gemini 4.x — streaming tool loop (Interactions)', fn () => gemini4Client());
+} else {
+    echo "  \033[33m⚠  SKIP\033[0m  Gemini 4.x — streaming tool loop (set GEMINI_4_MODEL to a released model to enable)\n";
+}
 
 // AWS Bedrock Converse — surfaces toolUse blocks natively. Skipped when no
 // Bedrock credentials are configured in this environment.
