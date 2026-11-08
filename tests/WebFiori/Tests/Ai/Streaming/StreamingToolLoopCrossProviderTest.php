@@ -24,6 +24,70 @@ use WebFiori\Ai\Tool\Tool;
 class StreamingToolLoopCrossProviderTest extends TestCase {
     public function testGoogleInteractionsStreamingToolLoop(): void {
         $client = new FakeHttpClient();
+        // Turn 1: real Interactions wire format — a function_call step whose
+        // id/name arrive on step.start and arguments stream as arguments_delta.
+        $client->addStreamingChunks([
+            "event: step.start\ndata: {\"index\":0,\"step\":{\"id\":\"call_1\",\"type\":\"function_call\",\"name\":\"get_weather\",\"arguments\":{}},\"event_type\":\"step.start\"}\n\n",
+            "event: step.delta\ndata: {\"index\":0,\"delta\":{\"arguments\":\"{\\\"city\\\":\\\"London\\\"}\",\"type\":\"arguments_delta\"},\"event_type\":\"step.delta\"}\n\n",
+            "event: step.stop\ndata: {\"index\":0,\"event_type\":\"step.stop\"}\n\n",
+            "event: interaction.completed\ndata: {\"interaction\":{\"id\":\"int_1\",\"model\":\"gemini-3.5-flash\",\"usage\":{\"total_input_tokens\":10,\"total_output_tokens\":5}},\"event_type\":\"interaction.completed\"}\n\n",
+            "event: done\ndata: [DONE]\n\n",
+        ]);
+        // Turn 2: the final text answer.
+        $client->addStreamingChunks([
+            "event: step.start\ndata: {\"index\":0,\"step\":{\"type\":\"model_output\"},\"event_type\":\"step.start\"}\n\n",
+            "event: step.delta\ndata: {\"index\":0,\"delta\":{\"text\":\"London is rainy.\",\"type\":\"text\"},\"event_type\":\"step.delta\"}\n\n",
+            "event: step.stop\ndata: {\"index\":0,\"event_type\":\"step.stop\"}\n\n",
+            "event: interaction.completed\ndata: {\"interaction\":{\"id\":\"int_2\",\"model\":\"gemini-3.5-flash\",\"usage\":{\"total_input_tokens\":12,\"total_output_tokens\":4}},\"event_type\":\"interaction.completed\"}\n\n",
+            "event: done\ndata: [DONE]\n\n",
+        ]);
+
+        $provider = new GoogleClient(new GoogleClientConfig(model: 'gemini-3.5-flash', apiKey: 'test-key'));
+        $provider->setHttpClient($client);
+
+        $toolArgs = null;
+        $tool = new Tool(
+            'get_weather',
+            'Gets weather',
+            ['type' => 'object', 'properties' => ['location' => ['type' => 'string']]],
+            function (array $args) use (&$toolArgs): string {
+                $toolArgs = $args;
+
+                return json_encode(['sky' => 'rainy']);
+            }
+        );
+
+        $streamed = '';
+        $completed = null;
+        $provider->streamChat(
+            [new Message('user', 'weather in London?')],
+            function (string $token) use (&$streamed): void {
+                $streamed .= $token;
+            },
+            function ($response) use (&$completed): void {
+                $completed = $response;
+            },
+            null,
+            [ChatOption::TOOLS => [$tool], ChatOption::AUTO_EXECUTE_TOOLS => true]
+        );
+
+        // Tool executed with arguments assembled from the arguments_delta.
+        $this->assertSame(['city' => 'London'], $toolArgs);
+        $this->assertNotNull($completed);
+        $this->assertFalse($completed->hasToolCalls());
+        $this->assertSame('London is rainy.', $streamed);
+        $this->assertCount(2, $client->getRequests());
+
+        // The follow-up (2nd) request must replay the assistant's function_call
+        // step, so its input contains a function_call (not just the result).
+        $secondBody = json_decode($client->getRequests()[1]->getBody(), true);
+        $encoded = json_encode($secondBody['input'] ?? []);
+        $this->assertStringContainsString('function_call', $encoded, 'the follow-up turn must replay the model function_call step');
+        $this->assertStringContainsString('function_result', $encoded, 'and the tool result');
+    }
+
+    public function testGoogleInteractionsStreamingToolLoopLegacyDeltaShape(): void {
+        $client = new FakeHttpClient();
         // Turn 1: a function_call step (Interactions API).
         $client->addStreamingChunks([
             "event: step.start\ndata: {\"step\":{\"type\":\"model_output\"}}\n\n",

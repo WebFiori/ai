@@ -392,12 +392,16 @@ class GoogleClient extends AbstractClient {
         $usage = null;
         $finishReason = 'stop';
         $currentStepType = null;
+        $currentToolCall = null;
+        $currentStep = null;
         $buffer = '';
 
         $processEvent = function (string $eventType, string $data) use (
             $onToken,
             &$accumulatedContent,
             &$toolCalls,
+            &$currentToolCall,
+            &$currentStep,
             &$allSteps,
             &$model,
             &$interactionId,
@@ -413,11 +417,25 @@ class GoogleClient extends AbstractClient {
 
             switch ($eventType) {
                 case 'step.start':
-                    $currentStepType = $json['step']['type'] ?? null;
+                    $step = $json['step'] ?? [];
+                    $currentStepType = $step['type'] ?? null;
 
-                    // Start tracking this step for rawSteps
-                    if ($currentStepType !== null) {
-                        $allSteps[] = ['type' => $currentStepType];
+                    // Accumulate the FULL step so it can be replayed verbatim in
+                    // stateless follow-up turns (setRawSteps), matching the
+                    // non-streaming parser. Storing only the type produces an
+                    // invalid function_call step on replay (the follow-up request
+                    // would omit the model's tool call and the API rejects it).
+                    $currentStep = $step;
+
+                    if ($currentStepType === 'function_call') {
+                        // id/name arrive on step.start; arguments then stream as
+                        // `arguments_delta` and the call is finalized on step.stop.
+                        $initialArgs = $step['arguments'] ?? '';
+                        $currentToolCall = [
+                            'id' => $step['id'] ?? uniqid('call_'),
+                            'name' => $step['name'] ?? '',
+                            'arguments' => is_string($initialArgs) ? $initialArgs : (empty($initialArgs) ? '' : json_encode($initialArgs)),
+                        ];
                     }
 
                     break;
@@ -433,15 +451,63 @@ class GoogleClient extends AbstractClient {
                             $accumulatedContent .= $token;
                             $onToken($token);
                         }
+
+                        // Accumulate text into the raw model_output step for replay.
+                        if (is_array($currentStep)) {
+                            $currentStep['content'][] = ['type' => 'text', 'text' => $delta['text']];
+                        }
+                    } elseif ($deltaType === 'thought_signature' && isset($delta['signature'])) {
+                        // Preserve the thought signature on the raw step; required
+                        // for faithful stateless replay of the thinking step.
+                        if (is_array($currentStep)) {
+                            $currentStep['signature'] = $delta['signature'];
+                        }
+                    } elseif ($deltaType === 'arguments_delta' && $currentToolCall !== null) {
+                        // Arguments stream as a JSON-string fragment.
+                        $currentToolCall['arguments'] .= (string) ($delta['arguments'] ?? '');
                     } elseif ($deltaType === 'function_call') {
+                        // Legacy/compact shape: a full function_call on one delta.
+                        $args = $delta['arguments'] ?? [];
                         $toolCall = new ToolCall(
                             $delta['id'] ?? uniqid('call_'),
                             $delta['name'] ?? '',
-                            $delta['arguments'] ?? []
+                            is_array($args) ? $args : ((array) (json_decode((string) $args, true) ?? []))
                         );
                         $toolCall->setRawPart($delta);
                         $toolCalls[] = $toolCall;
                         $finishReason = 'tool_calls';
+                    }
+
+                    break;
+
+                case 'step.stop':
+                    // Finalize a function_call step accumulated across
+                    // step.start + arguments_delta events.
+                    if ($currentToolCall !== null) {
+                        $args = $currentToolCall['arguments'];
+                        $decoded = is_string($args) && $args !== '' ? (json_decode($args, true) ?? []) : [];
+                        $decoded = is_array($decoded) ? $decoded : [];
+
+                        $toolCall = new ToolCall(
+                            $currentToolCall['id'],
+                            $currentToolCall['name'],
+                            $decoded
+                        );
+                        $toolCalls[] = $toolCall;
+                        $finishReason = 'tool_calls';
+
+                        // Replay the function_call step with its assembled args.
+                        if (is_array($currentStep)) {
+                            $currentStep['arguments'] = $decoded;
+                        }
+
+                        $currentToolCall = null;
+                    }
+
+                    // Push the completed raw step for stateless replay.
+                    if (is_array($currentStep)) {
+                        $allSteps[] = $currentStep;
+                        $currentStep = null;
                     }
 
                     break;
