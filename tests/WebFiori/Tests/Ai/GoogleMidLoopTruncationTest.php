@@ -44,6 +44,24 @@ use WebFiori\Ai\Tool\Tool;
 class GoogleMidLoopTruncationTest extends TestCase {
     private const QUESTION = 'Audit the documents please.';
 
+    /**
+     * The request being extended already carries the caller's token, and the
+     * extended request must keep it so the transfer stays cancellable.
+     */
+    public function testIncrementalAppendKeepsTheCancellationToken(): void {
+        foreach ([GoogleApiVersion::GENERATE_CONTENT, GoogleApiVersion::INTERACTIONS] as $version) {
+            $client = $this->createClient($version);
+            $token = (new CancellationTokenSource())->getToken();
+            $all = [new Message(Role::SYSTEM, 'system'), new Message(Role::USER, 'question')];
+            $previous = $this->build($client, $all)->withCancellationToken($token);
+
+            $new = [new Message(Role::ASSISTANT, 'answer-1')];
+            $next = $this->incremental($client, $previous, array_merge($all, $new), $new);
+
+            $this->assertSame($token, $next->getCancellationToken(), "Token lost for {$version->name}");
+        }
+    }
+
     // =========================================================================
     // The incremental builder only appends. The tool loop never asks it to
     // handle a truncated conversation: it builds those requests from scratch.
@@ -154,6 +172,34 @@ class GoogleMidLoopTruncationTest extends TestCase {
         );
     }
 
+    public function testToolLoopWithoutTruncationKeepsTheCancellationTokenOnEveryRequest(): void {
+        foreach ([GoogleApiVersion::GENERATE_CONTENT, GoogleApiVersion::INTERACTIONS] as $version) {
+            $client = $this->createClient($version);
+            $http = new FakeHttpClient();
+
+            for ($i = 1; $i <= 3; $i++) {
+                $http->addResponse($version === GoogleApiVersion::INTERACTIONS
+                    ? $this->interactionsResponse([['type' => 'function_call', 'id' => "call_{$i}", 'name' => 'read_document', 'arguments' => ['n' => $i]]])
+                    : $this->generateContentResponse(['functionCall' => ['name' => 'read_document', 'args' => ['n' => $i]]]));
+            }
+            $http->addResponse($version === GoogleApiVersion::INTERACTIONS
+                ? $this->interactionsResponse([['type' => 'text', 'text' => 'done']])
+                : $this->generateContentResponse(['text' => 'done']));
+
+            $this->runLoop($client, $http, $truncations, false);
+
+            $this->assertSame([], $truncations, 'Precondition: this loop must not truncate');
+            $this->assertCount(4, $http->getRequests());
+
+            foreach ($http->getRequests() as $i => $request) {
+                $this->assertNotNull(
+                    $request->getCancellationToken(),
+                    "Request #{$i} lost its cancellation token ({$version->name})"
+                );
+            }
+        }
+    }
+
     /**
      * @param Message[] $messages
      */
@@ -252,10 +298,10 @@ class GoogleMidLoopTruncationTest extends TestCase {
      *
      * @param array<int, array<string, mixed>>|null $truncations Receives the context of each mid-loop truncation event.
      */
-    private function runLoop(GoogleClient $client, FakeHttpClient $http, ?array &$truncations): void {
+    private function runLoop(GoogleClient $client, FakeHttpClient $http, ?array &$truncations, bool $truncate = true): void {
         $truncations = [];
         $client->setHttpClient($http);
-        $client->setContextWindowStrategy(new SlidingWindowStrategy(maxTokens: 2500, reserveForCompletion: 200));
+        $client->setContextWindowStrategy(new SlidingWindowStrategy(maxTokens: $truncate ? 2500 : 1000000, reserveForCompletion: 200));
         $client->setStatusEmitter(new CallbackStatusEmitter(function (string $status, array $context) use (&$truncations): void
         {
             if ($status === Status::TRUNCATING_CONTEXT && isset($context['iteration'])) {
@@ -277,7 +323,7 @@ class GoogleMidLoopTruncationTest extends TestCase {
             [
                 ChatOption::TOOLS => [$tool],
                 ChatOption::AUTO_EXECUTE_TOOLS => true,
-                ChatOption::TRUNCATE_BETWEEN_TOOL_ITERATIONS => true,
+                ChatOption::TRUNCATE_BETWEEN_TOOL_ITERATIONS => $truncate,
                 ChatOption::CANCELLATION_TOKEN => $token,
             ]
         );

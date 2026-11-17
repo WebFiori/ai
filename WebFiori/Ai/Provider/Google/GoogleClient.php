@@ -1597,6 +1597,7 @@ class GoogleClient extends AbstractClient {
      * @param array<string, mixed> $options Additional options.
      *
      * @return HttpRequest The updated HTTP request with new messages appended.
+     *         It carries the cancellation token of the previous request.
      */
     protected function buildIncrementalChatRequest(
         HttpRequest $previousRequest,
@@ -1615,12 +1616,12 @@ class GoogleClient extends AbstractClient {
                 $body['input'] = array_merge($body['input'], $newInput);
             }
 
-            return new HttpRequest(
+            return (new HttpRequest(
                 $previousRequest->getMethod(),
                 $previousRequest->getUrl(),
                 $previousRequest->getHeaders(),
                 json_encode($body)
-            );
+            ))->withCancellationToken($previousRequest->getCancellationToken());
         }
 
         // generateContent API: merge into contents[]
@@ -1630,12 +1631,12 @@ class GoogleClient extends AbstractClient {
             $body['contents'] = array_merge($body['contents'] ?? [], $formattedNew);
         }
 
-        return new HttpRequest(
+        return (new HttpRequest(
             $previousRequest->getMethod(),
             $previousRequest->getUrl(),
             $previousRequest->getHeaders(),
             json_encode($body)
-        );
+        ))->withCancellationToken($previousRequest->getCancellationToken());
     }
 
     /**
