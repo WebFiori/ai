@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.7.0](https://github.com/WebFiori/ai/compare/v1.6.0...v1.7.0) (2026-11-08)
+
+
+### Features
+
+* **streaming:** auto-execute tool loop for streamChat() (ADR-0060) ([#193](https://github.com/WebFiori/ai/issues/193)) ([a1c59d4](https://github.com/WebFiori/ai/commit/a1c59d4734ad4eed52fb51946f4279a5eb9dd591))
+* **tools:** final synthesis pass when the tool loop hits its iteration cap ([#191](https://github.com/WebFiori/ai/issues/191)) ([7c502b8](https://github.com/WebFiori/ai/commit/7c502b8de5c588d6aa6cb25673decf3804b714cc))
+
+
+### Bug Fixes
+
+* **google:** Interactions API streaming surfaces tool calls (gemini-3.x) ([#195](https://github.com/WebFiori/ai/issues/195)) ([00b7fe3](https://github.com/WebFiori/ai/commit/00b7fe37404c821e39dacd5873d32b1d277a31ec))
+
 ## [1.6.0](https://github.com/WebFiori/ai/compare/v1.5.0...v1.6.0) (2026-11-04)
 
 
