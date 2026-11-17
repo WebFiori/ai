@@ -165,6 +165,29 @@ class AnthropicFormatter implements ProviderFormatterInterface {
     }
 
     /**
+     * Builds a Usage from an Anthropic usage object.
+     *
+     * Anthropic's `input_tokens` counts only the tokens that were neither read
+     * from nor written to the cache, so the prompt total is the sum of
+     * `input_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens`.
+     *
+     * @param array<string, mixed> $usage The `usage` object from the response.
+     *
+     * @return Usage The usage with the total prompt count and cache counts.
+     */
+    public static function buildUsage(array $usage): Usage {
+        $cacheRead = (int) ($usage['cache_read_input_tokens'] ?? 0);
+        $cacheWrite = (int) ($usage['cache_creation_input_tokens'] ?? 0);
+
+        return new Usage(
+            (int) ($usage['input_tokens'] ?? 0) + $cacheRead + $cacheWrite,
+            (int) ($usage['output_tokens'] ?? 0),
+            $cacheRead,
+            $cacheWrite
+        );
+    }
+
+    /**
      * Executes a streaming chat request using SSE parsing.
      *
      * This is not part of ProviderFormatterInterface since streaming requires
@@ -186,7 +209,10 @@ class AnthropicFormatter implements ProviderFormatterInterface {
         $accumulatedContent = '';
         $model = $this->config->model;
         $finishReason = null;
+        // Anthropic reports cache reads and writes separately from input_tokens.
         $inputTokens = 0;
+        $cacheReadTokens = 0;
+        $cacheWriteTokens = 0;
         $outputTokens = 0;
         $toolCalls = [];
         $currentToolCall = null;
@@ -197,6 +223,8 @@ class AnthropicFormatter implements ProviderFormatterInterface {
                 &$accumulatedContent,
                 &$finishReason,
                 &$inputTokens,
+                &$cacheReadTokens,
+                &$cacheWriteTokens,
                 &$outputTokens,
                 &$model,
                 &$toolCalls,
@@ -220,8 +248,13 @@ class AnthropicFormatter implements ProviderFormatterInterface {
                             $model = $json['message']['model'];
                         }
 
-                        if (isset($json['message']['usage']['input_tokens'])) {
-                            $inputTokens = $json['message']['usage']['input_tokens'];
+                        if (isset($json['message']['usage'])) {
+                            $this->readInputUsage(
+                                $json['message']['usage'],
+                                $inputTokens,
+                                $cacheReadTokens,
+                                $cacheWriteTokens
+                            );
                         }
 
                         break;
@@ -271,6 +304,16 @@ class AnthropicFormatter implements ProviderFormatterInterface {
                             $outputTokens = $json['usage']['output_tokens'];
                         }
 
+                        // message_delta usage is cumulative and may repeat the input counters.
+                        if (isset($json['usage'])) {
+                            $this->readInputUsage(
+                                $json['usage'],
+                                $inputTokens,
+                                $cacheReadTokens,
+                                $cacheWriteTokens
+                            );
+                        }
+
                         break;
                 }
             }
@@ -296,7 +339,12 @@ class AnthropicFormatter implements ProviderFormatterInterface {
                     $message = new Message(Role::ASSISTANT, $accumulatedContent, $parsedToolCalls);
                 }
 
-                $usage = new Usage($inputTokens, $outputTokens);
+                $usage = new Usage(
+                    $inputTokens + $cacheReadTokens + $cacheWriteTokens,
+                    $outputTokens,
+                    $cacheReadTokens,
+                    $cacheWriteTokens
+                );
                 $response = new ChatResponse($message, $model, $usage, $finishReason ?? 'stop');
                 $onComplete($response);
             }
@@ -387,10 +435,7 @@ class AnthropicFormatter implements ProviderFormatterInterface {
         $usage = null;
 
         if (isset($data['usage'])) {
-            $usage = new Usage(
-                $data['usage']['input_tokens'] ?? 0,
-                $data['usage']['output_tokens'] ?? 0
-            );
+            $usage = self::buildUsage($data['usage']);
         }
 
         $stopReason = $this->mapStopReason($data['stop_reason'] ?? 'end_turn');
@@ -764,5 +809,35 @@ class AnthropicFormatter implements ProviderFormatterInterface {
             'tool_use' => 'tool_calls',
             default => $reason,
         };
+    }
+
+    /**
+     * Reads the input-side counters from a streaming usage object.
+     *
+     * Only keys that are present overwrite the current values, so a later
+     * event that omits a counter does not reset it.
+     *
+     * @param array<string, mixed> $usage The `usage` object from a stream event.
+     * @param int $inputTokens Receives `input_tokens`.
+     * @param int $cacheReadTokens Receives `cache_read_input_tokens`.
+     * @param int $cacheWriteTokens Receives `cache_creation_input_tokens`.
+     */
+    private function readInputUsage(
+        array $usage,
+        int &$inputTokens,
+        int &$cacheReadTokens,
+        int &$cacheWriteTokens
+    ): void {
+        if (isset($usage['input_tokens'])) {
+            $inputTokens = (int) $usage['input_tokens'];
+        }
+
+        if (isset($usage['cache_read_input_tokens'])) {
+            $cacheReadTokens = (int) $usage['cache_read_input_tokens'];
+        }
+
+        if (isset($usage['cache_creation_input_tokens'])) {
+            $cacheWriteTokens = (int) $usage['cache_creation_input_tokens'];
+        }
     }
 }
