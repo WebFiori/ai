@@ -36,6 +36,25 @@ use WebFiori\Ai\Usage;
  */
 class InteractionsResponseParser {
     /**
+     * Builds a Usage from an Interactions API usage object.
+     *
+     * The input token count already includes cached tokens. Cached tokens come
+     * from `total_cached_tokens` (or `cached_tokens`). Gemini reports no
+     * separate cache-write count, so cache writes are 0.
+     *
+     * @param array<string, mixed> $usage The `usage` object from the response.
+     *
+     * @return Usage The usage with the cached token count.
+     */
+    public static function buildUsage(array $usage): Usage {
+        return new Usage(
+            // Support both spec format (input_tokens) and real format (total_input_tokens)
+            (int) ($usage['input_tokens'] ?? $usage['total_input_tokens'] ?? 0),
+            (int) ($usage['output_tokens'] ?? $usage['total_output_tokens'] ?? 0),
+            (int) ($usage['total_cached_tokens'] ?? $usage['cached_tokens'] ?? 0)
+        );
+    }
+    /**
      * Parses an Interactions API response body into a ChatResponse.
      *
      * @param array<string, mixed> $data The decoded JSON response body.
@@ -146,26 +165,6 @@ class InteractionsResponseParser {
         }
 
         return 'stop';
-    }
-
-    /**
-     * Builds a Usage from an Interactions API usage object.
-     *
-     * The input token count already includes cached tokens. Cached tokens come
-     * from `total_cached_tokens` (or `cached_tokens`). Gemini reports no
-     * separate cache-write count, so cache writes are 0.
-     *
-     * @param array<string, mixed> $usage The `usage` object from the response.
-     *
-     * @return Usage The usage with the cached token count.
-     */
-    public static function buildUsage(array $usage): Usage {
-        return new Usage(
-            // Support both spec format (input_tokens) and real format (total_input_tokens)
-            (int) ($usage['input_tokens'] ?? $usage['total_input_tokens'] ?? 0),
-            (int) ($usage['output_tokens'] ?? $usage['total_output_tokens'] ?? 0),
-            (int) ($usage['total_cached_tokens'] ?? $usage['cached_tokens'] ?? 0)
-        );
     }
 
     /**

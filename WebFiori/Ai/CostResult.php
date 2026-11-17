@@ -30,20 +30,19 @@ namespace WebFiori\Ai;
  */
 class CostResult {
     /**
-     * Cost of input tokens written to the provider's cache.
-     * Included in the input cost.
-     *
-     * @var float
-     */
-    private float $cacheWriteCost;
-
-    /**
      * Cost of input tokens served from the provider's cache.
      * Included in the input cost.
      *
      * @var float
      */
     private float $cachedInputCost;
+    /**
+     * Cost of input tokens written to the provider's cache.
+     * Included in the input cost.
+     *
+     * @var float
+     */
+    private float $cacheWriteCost;
 
     /**
      * Currency code.
@@ -103,21 +102,21 @@ class CostResult {
     }
 
     /**
-     * Returns the part of the input cost for tokens written to the provider's cache.
-     *
-     * @return float The cache-write cost. It is included in getInputCost().
-     */
-    public function getCacheWriteCost(): float {
-        return $this->cacheWriteCost;
-    }
-
-    /**
      * Returns the part of the input cost for tokens served from the provider's cache.
      *
      * @return float The cached input cost. It is included in getInputCost().
      */
     public function getCachedInputCost(): float {
         return $this->cachedInputCost;
+    }
+
+    /**
+     * Returns the part of the input cost for tokens written to the provider's cache.
+     *
+     * @return float The cache-write cost. It is included in getInputCost().
+     */
+    public function getCacheWriteCost(): float {
+        return $this->cacheWriteCost;
     }
 
     /**

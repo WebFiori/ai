@@ -153,7 +153,9 @@ function streamProbe(string $name, callable $factory): void {
 
         $client->streamChat(
             cacheProbeMessages('Reply with the single word: three.'),
-            function (string $token) {},
+            function (string $token)
+            {
+            },
             function ($response) use (&$completed)
             {
                 $completed = $response;

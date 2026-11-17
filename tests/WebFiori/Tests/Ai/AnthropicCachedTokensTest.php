@@ -27,43 +27,12 @@ use WebFiori\Ai\Provider\Formatter\AnthropicFormatter;
  * total is input_tokens + cache_read_input_tokens + cache_creation_input_tokens.
  */
 class AnthropicCachedTokensTest extends TestCase {
-    // =========================================================================
-    // Non-streaming
-    // =========================================================================
+    public function testBuildUsageHandlesMissingKeys(): void {
+        $usage = AnthropicFormatter::buildUsage([]);
 
-    public function testChatSumsCacheCountersIntoPromptTokens(): void {
-        $usage = $this->chat([
-            'input_tokens' => 50,
-            'cache_read_input_tokens' => 2000,
-            'cache_creation_input_tokens' => 300,
-            'output_tokens' => 80,
-        ])->getUsage();
-
-        $this->assertSame(2350, $usage->getPromptTokens());
-        $this->assertSame(2000, $usage->getCachedTokens());
-        $this->assertSame(300, $usage->getCacheWriteTokens());
-        $this->assertSame(80, $usage->getCompletionTokens());
-    }
-
-    public function testChatWithoutCacheCountersIsUnchanged(): void {
-        $usage = $this->chat(['input_tokens' => 10, 'output_tokens' => 5])->getUsage();
-
-        $this->assertSame(10, $usage->getPromptTokens());
+        $this->assertSame(0, $usage->getPromptTokens());
+        $this->assertSame(0, $usage->getCompletionTokens());
         $this->assertSame(0, $usage->getCachedTokens());
-        $this->assertSame(0, $usage->getCacheWriteTokens());
-        $this->assertSame(15, $usage->getTotalTokens());
-    }
-
-    public function testChatWithOnlyCacheRead(): void {
-        $usage = $this->chat([
-            'input_tokens' => 4,
-            'cache_read_input_tokens' => 1000,
-            'output_tokens' => 1,
-        ])->getUsage();
-
-        $this->assertSame(1004, $usage->getPromptTokens());
-        $this->assertSame(1000, $usage->getCachedTokens());
-        $this->assertSame(0, $usage->getCacheWriteTokens());
     }
 
     public function testChatCostPricesEachInputKind(): void {
@@ -88,13 +57,69 @@ class AnthropicCachedTokensTest extends TestCase {
         $this->assertEqualsWithDelta(0.24, $cost->getCachedInputCost(), 1e-9);
         $this->assertEqualsWithDelta(0.375, $cost->getCacheWriteCost(), 1e-9);
     }
+    // =========================================================================
+    // Non-streaming
+    // =========================================================================
 
-    public function testBuildUsageHandlesMissingKeys(): void {
-        $usage = AnthropicFormatter::buildUsage([]);
+    public function testChatSumsCacheCountersIntoPromptTokens(): void {
+        $usage = $this->chat([
+            'input_tokens' => 50,
+            'cache_read_input_tokens' => 2000,
+            'cache_creation_input_tokens' => 300,
+            'output_tokens' => 80,
+        ])->getUsage();
 
-        $this->assertSame(0, $usage->getPromptTokens());
-        $this->assertSame(0, $usage->getCompletionTokens());
+        $this->assertSame(2350, $usage->getPromptTokens());
+        $this->assertSame(2000, $usage->getCachedTokens());
+        $this->assertSame(300, $usage->getCacheWriteTokens());
+        $this->assertSame(80, $usage->getCompletionTokens());
+    }
+
+    public function testChatWithOnlyCacheRead(): void {
+        $usage = $this->chat([
+            'input_tokens' => 4,
+            'cache_read_input_tokens' => 1000,
+            'output_tokens' => 1,
+        ])->getUsage();
+
+        $this->assertSame(1004, $usage->getPromptTokens());
+        $this->assertSame(1000, $usage->getCachedTokens());
+        $this->assertSame(0, $usage->getCacheWriteTokens());
+    }
+
+    public function testChatWithoutCacheCountersIsUnchanged(): void {
+        $usage = $this->chat(['input_tokens' => 10, 'output_tokens' => 5])->getUsage();
+
+        $this->assertSame(10, $usage->getPromptTokens());
         $this->assertSame(0, $usage->getCachedTokens());
+        $this->assertSame(0, $usage->getCacheWriteTokens());
+        $this->assertSame(15, $usage->getTotalTokens());
+    }
+
+    public function testStreamMessageDeltaCumulativeInputCountersWin(): void {
+        $response = $this->stream([
+            $this->event('message_start', ['message' => ['model' => 'm', 'usage' => [
+                'input_tokens' => 5, 'cache_read_input_tokens' => 500,
+            ]]]),
+            $this->event('message_delta', ['delta' => ['stop_reason' => 'end_turn'], 'usage' => [
+                'input_tokens' => 9, 'cache_read_input_tokens' => 600, 'output_tokens' => 3,
+            ]]),
+        ]);
+
+        $this->assertSame(609, $response->getUsage()->getPromptTokens());
+        $this->assertSame(600, $response->getUsage()->getCachedTokens());
+    }
+
+    public function testStreamMessageDeltaWithoutInputKeysDoesNotResetCounters(): void {
+        $response = $this->stream([
+            $this->event('message_start', ['message' => ['model' => 'm', 'usage' => [
+                'input_tokens' => 5, 'cache_read_input_tokens' => 500,
+            ]]]),
+            $this->event('message_delta', ['delta' => ['stop_reason' => 'end_turn'], 'usage' => ['output_tokens' => 3]]),
+        ]);
+
+        $this->assertSame(505, $response->getUsage()->getPromptTokens());
+        $this->assertSame(500, $response->getUsage()->getCachedTokens());
     }
 
     // =========================================================================
@@ -142,32 +167,6 @@ class AnthropicCachedTokensTest extends TestCase {
         $this->assertSame(5, $usage->getCompletionTokens());
     }
 
-    public function testStreamMessageDeltaWithoutInputKeysDoesNotResetCounters(): void {
-        $response = $this->stream([
-            $this->event('message_start', ['message' => ['model' => 'm', 'usage' => [
-                'input_tokens' => 5, 'cache_read_input_tokens' => 500,
-            ]]]),
-            $this->event('message_delta', ['delta' => ['stop_reason' => 'end_turn'], 'usage' => ['output_tokens' => 3]]),
-        ]);
-
-        $this->assertSame(505, $response->getUsage()->getPromptTokens());
-        $this->assertSame(500, $response->getUsage()->getCachedTokens());
-    }
-
-    public function testStreamMessageDeltaCumulativeInputCountersWin(): void {
-        $response = $this->stream([
-            $this->event('message_start', ['message' => ['model' => 'm', 'usage' => [
-                'input_tokens' => 5, 'cache_read_input_tokens' => 500,
-            ]]]),
-            $this->event('message_delta', ['delta' => ['stop_reason' => 'end_turn'], 'usage' => [
-                'input_tokens' => 9, 'cache_read_input_tokens' => 600, 'output_tokens' => 3,
-            ]]),
-        ]);
-
-        $this->assertSame(609, $response->getUsage()->getPromptTokens());
-        $this->assertSame(600, $response->getUsage()->getCachedTokens());
-    }
-
     // =========================================================================
     // Helpers
     // =========================================================================
@@ -209,8 +208,11 @@ class AnthropicCachedTokensTest extends TestCase {
         $completed = null;
         $client->streamChat(
             [new Message('user', 'Hi')],
-            function (string $token) {},
-            function ($response) use (&$completed) {
+            function (string $token)
+            {
+            },
+            function ($response) use (&$completed)
+            {
                 $completed = $response;
             }
         );

@@ -26,18 +26,17 @@ namespace WebFiori\Ai;
  */
 class Usage {
     /**
-     * The number of input tokens written to the provider's cache by this request.
-     *
-     * @var int
-     */
-    private int $cacheWriteTokens;
-
-    /**
      * The number of input tokens served from the provider's cache.
      *
      * @var int
      */
     private int $cachedTokens;
+    /**
+     * The number of input tokens written to the provider's cache by this request.
+     *
+     * @var int
+     */
+    private int $cacheWriteTokens;
 
     /**
      * The number of tokens used by the AI-generated completion.
@@ -100,6 +99,17 @@ class Usage {
     }
 
     /**
+     * Returns the number of prompt tokens served from the provider's cache.
+     *
+     * This is a subset of the prompt token count.
+     *
+     * @return int The cached token count.
+     */
+    public function getCachedTokens(): int {
+        return $this->cachedTokens;
+    }
+
+    /**
      * Returns the number of prompt tokens written to the provider's cache.
      *
      * This is a subset of the prompt token count. It is 0 when the provider
@@ -109,17 +119,6 @@ class Usage {
      */
     public function getCacheWriteTokens(): int {
         return $this->cacheWriteTokens;
-    }
-
-    /**
-     * Returns the number of prompt tokens served from the provider's cache.
-     *
-     * This is a subset of the prompt token count.
-     *
-     * @return int The cached token count.
-     */
-    public function getCachedTokens(): int {
-        return $this->cachedTokens;
     }
 
     /**

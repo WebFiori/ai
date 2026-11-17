@@ -76,18 +76,6 @@ class PricingConfig {
     }
 
     /**
-     * Returns the cache-write price per 1,000,000 tokens for a model.
-     *
-     * @param string $model The model name.
-     *
-     * @return float|null The price per million tokens, or null if not configured.
-     *         When null, cache-write tokens are charged at the input price.
-     */
-    public function getCacheWritePrice(string $model): ?float {
-        return $this->models[$model]['cache_write'] ?? null;
-    }
-
-    /**
      * Returns the cached input price per 1,000,000 tokens for a model.
      *
      * @param string $model The model name.
@@ -97,6 +85,18 @@ class PricingConfig {
      */
     public function getCachedInputPrice(string $model): ?float {
         return $this->models[$model]['cached_input'] ?? null;
+    }
+
+    /**
+     * Returns the cache-write price per 1,000,000 tokens for a model.
+     *
+     * @param string $model The model name.
+     *
+     * @return float|null The price per million tokens, or null if not configured.
+     *         When null, cache-write tokens are charged at the input price.
+     */
+    public function getCacheWritePrice(string $model): ?float {
+        return $this->models[$model]['cache_write'] ?? null;
     }
 
     /**

@@ -24,30 +24,6 @@ use WebFiori\Ai\Provider\Google\GoogleClientConfig;
  * Interactions API (issue #198).
  */
 class GoogleCachedTokensTest extends TestCase {
-    // =========================================================================
-    // generateContent
-    // =========================================================================
-
-    public function testGenerateContentReportsCachedTokens(): void {
-        $usage = $this->generateContent([
-            'promptTokenCount' => 4096,
-            'candidatesTokenCount' => 50,
-            'cachedContentTokenCount' => 3072,
-        ])->getUsage();
-
-        $this->assertSame(4096, $usage->getPromptTokens());
-        $this->assertSame(50, $usage->getCompletionTokens());
-        $this->assertSame(3072, $usage->getCachedTokens());
-        $this->assertSame(0, $usage->getCacheWriteTokens());
-    }
-
-    public function testGenerateContentWithoutCachedFieldReportsZero(): void {
-        $usage = $this->generateContent(['promptTokenCount' => 10, 'candidatesTokenCount' => 5])->getUsage();
-
-        $this->assertSame(10, $usage->getPromptTokens());
-        $this->assertSame(0, $usage->getCachedTokens());
-    }
-
     public function testGenerateContentCostUsesCachedPrice(): void {
         $client = $this->createGemini2Client();
         $client->setPricing(new PricingConfig([
@@ -65,6 +41,22 @@ class GoogleCachedTokensTest extends TestCase {
         $this->assertNotNull($cost);
         $this->assertEqualsWithDelta(0.0975, $cost->getInputCost(), 1e-9);
         $this->assertEqualsWithDelta(0.0225, $cost->getCachedInputCost(), 1e-9);
+    }
+    // =========================================================================
+    // generateContent
+    // =========================================================================
+
+    public function testGenerateContentReportsCachedTokens(): void {
+        $usage = $this->generateContent([
+            'promptTokenCount' => 4096,
+            'candidatesTokenCount' => 50,
+            'cachedContentTokenCount' => 3072,
+        ])->getUsage();
+
+        $this->assertSame(4096, $usage->getPromptTokens());
+        $this->assertSame(50, $usage->getCompletionTokens());
+        $this->assertSame(3072, $usage->getCachedTokens());
+        $this->assertSame(0, $usage->getCacheWriteTokens());
     }
 
     public function testGenerateContentStreamingReportsCachedTokens(): void {
@@ -86,8 +78,11 @@ class GoogleCachedTokensTest extends TestCase {
         $completed = null;
         $client->streamChat(
             [new Message('user', 'Hi')],
-            function (string $token) {},
-            function ($response) use (&$completed) {
+            function (string $token)
+            {
+            },
+            function ($response) use (&$completed)
+            {
                 $completed = $response;
             }
         );
@@ -112,14 +107,31 @@ class GoogleCachedTokensTest extends TestCase {
         $completed = null;
         $client->streamChat(
             [new Message('user', 'Hi')],
-            function (string $token) {},
-            function ($response) use (&$completed) {
+            function (string $token)
+            {
+            },
+            function ($response) use (&$completed)
+            {
                 $completed = $response;
             }
         );
 
         $this->assertSame(9, $completed->getUsage()->getPromptTokens());
         $this->assertSame(0, $completed->getUsage()->getCachedTokens());
+    }
+
+    public function testGenerateContentWithoutCachedFieldReportsZero(): void {
+        $usage = $this->generateContent(['promptTokenCount' => 10, 'candidatesTokenCount' => 5])->getUsage();
+
+        $this->assertSame(10, $usage->getPromptTokens());
+        $this->assertSame(0, $usage->getCachedTokens());
+    }
+
+    public function testInteractionsAcceptsSpecFieldNames(): void {
+        $usage = $this->interactions(['input_tokens' => 100, 'output_tokens' => 3, 'cached_tokens' => 40])->getUsage();
+
+        $this->assertSame(100, $usage->getPromptTokens());
+        $this->assertSame(40, $usage->getCachedTokens());
     }
 
     // =========================================================================
@@ -138,20 +150,6 @@ class GoogleCachedTokensTest extends TestCase {
         $this->assertSame(20, $usage->getCompletionTokens());
         $this->assertSame(4000, $usage->getCachedTokens());
         $this->assertSame(0, $usage->getCacheWriteTokens());
-    }
-
-    public function testInteractionsWithoutCachedFieldReportsZero(): void {
-        $usage = $this->interactions(['total_input_tokens' => 12, 'total_output_tokens' => 3])->getUsage();
-
-        $this->assertSame(12, $usage->getPromptTokens());
-        $this->assertSame(0, $usage->getCachedTokens());
-    }
-
-    public function testInteractionsAcceptsSpecFieldNames(): void {
-        $usage = $this->interactions(['input_tokens' => 100, 'output_tokens' => 3, 'cached_tokens' => 40])->getUsage();
-
-        $this->assertSame(100, $usage->getPromptTokens());
-        $this->assertSame(40, $usage->getCachedTokens());
     }
 
     public function testInteractionsStreamingReportsCachedTokens(): void {
@@ -175,8 +173,11 @@ class GoogleCachedTokensTest extends TestCase {
         $completed = null;
         $client->streamChat(
             [new Message('user', 'Hi')],
-            function (string $token) {},
-            function ($response) use (&$completed) {
+            function (string $token)
+            {
+            },
+            function ($response) use (&$completed)
+            {
                 $completed = $response;
             }
         );
@@ -204,14 +205,24 @@ class GoogleCachedTokensTest extends TestCase {
         $completed = null;
         $client->streamChat(
             [new Message('user', 'Hi')],
-            function (string $token) {},
-            function ($response) use (&$completed) {
+            function (string $token)
+            {
+            },
+            function ($response) use (&$completed)
+            {
                 $completed = $response;
             }
         );
 
         $this->assertSame(3, $completed->getUsage()->getPromptTokens());
         $this->assertSame(0, $completed->getUsage()->getCachedTokens());
+    }
+
+    public function testInteractionsWithoutCachedFieldReportsZero(): void {
+        $usage = $this->interactions(['total_input_tokens' => 12, 'total_output_tokens' => 3])->getUsage();
+
+        $this->assertSame(12, $usage->getPromptTokens());
+        $this->assertSame(0, $usage->getCachedTokens());
     }
 
     // =========================================================================

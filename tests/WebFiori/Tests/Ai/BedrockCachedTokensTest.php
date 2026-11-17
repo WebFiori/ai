@@ -30,33 +30,6 @@ use WebFiori\Ai\Provider\Bedrock\BedrockClientConfig;
 class BedrockCachedTokensTest extends TestCase {
     private const ANTHROPIC_MODEL = 'anthropic.claude-3-5-sonnet-20241022-v2:0';
 
-    // =========================================================================
-    // Converse: non-streaming
-    // =========================================================================
-
-    public function testConverseSumsCacheCountersIntoPromptTokens(): void {
-        $usage = $this->converse([
-            'inputTokens' => 30,
-            'outputTokens' => 12,
-            'totalTokens' => 2342,
-            'cacheReadInputTokens' => 2000,
-            'cacheWriteInputTokens' => 300,
-        ])->getUsage();
-
-        $this->assertSame(2330, $usage->getPromptTokens());
-        $this->assertSame(2000, $usage->getCachedTokens());
-        $this->assertSame(300, $usage->getCacheWriteTokens());
-        $this->assertSame(12, $usage->getCompletionTokens());
-    }
-
-    public function testConverseWithoutCacheCountersIsUnchanged(): void {
-        $usage = $this->converse(['inputTokens' => 12, 'outputTokens' => 5])->getUsage();
-
-        $this->assertSame(12, $usage->getPromptTokens());
-        $this->assertSame(0, $usage->getCachedTokens());
-        $this->assertSame(0, $usage->getCacheWriteTokens());
-    }
-
     public function testConverseCostPricesEachInputKind(): void {
         $client = $this->client(ApiMethod::CONVERSE);
         $client->setPricing(new PricingConfig([
@@ -118,6 +91,64 @@ class BedrockCachedTokensTest extends TestCase {
     }
 
     // =========================================================================
+    // Converse: non-streaming
+    // =========================================================================
+
+    public function testConverseSumsCacheCountersIntoPromptTokens(): void {
+        $usage = $this->converse([
+            'inputTokens' => 30,
+            'outputTokens' => 12,
+            'totalTokens' => 2342,
+            'cacheReadInputTokens' => 2000,
+            'cacheWriteInputTokens' => 300,
+        ])->getUsage();
+
+        $this->assertSame(2330, $usage->getPromptTokens());
+        $this->assertSame(2000, $usage->getCachedTokens());
+        $this->assertSame(300, $usage->getCacheWriteTokens());
+        $this->assertSame(12, $usage->getCompletionTokens());
+    }
+
+    public function testConverseWithoutCacheCountersIsUnchanged(): void {
+        $usage = $this->converse(['inputTokens' => 12, 'outputTokens' => 5])->getUsage();
+
+        $this->assertSame(12, $usage->getPromptTokens());
+        $this->assertSame(0, $usage->getCachedTokens());
+        $this->assertSame(0, $usage->getCacheWriteTokens());
+    }
+
+    public function testInvokeStreamSumsCacheCountersFromMessageStart(): void {
+        $response = $this->stream(ApiMethod::INVOKE, [
+            $this->invokeEvent(['type' => 'message_start', 'message' => ['usage' => [
+                'input_tokens' => 15,
+                'cache_read_input_tokens' => 900,
+                'cache_creation_input_tokens' => 85,
+            ]]]),
+            $this->invokeEvent(['type' => 'content_block_delta', 'delta' => ['type' => 'text_delta', 'text' => 'Hi']]),
+            $this->invokeEvent(['type' => 'message_delta', 'delta' => ['stop_reason' => 'end_turn'], 'usage' => ['output_tokens' => 4]]),
+        ]);
+
+        $usage = $response->getUsage();
+        $this->assertSame('Hi', $response->getMessage()->getContent());
+        $this->assertSame(1000, $usage->getPromptTokens());
+        $this->assertSame(900, $usage->getCachedTokens());
+        $this->assertSame(85, $usage->getCacheWriteTokens());
+        $this->assertSame(4, $usage->getCompletionTokens());
+    }
+
+    public function testInvokeStreamWithoutCacheCountersIsUnchanged(): void {
+        $response = $this->stream(ApiMethod::INVOKE, [
+            $this->invokeEvent(['type' => 'message_start', 'message' => ['usage' => ['input_tokens' => 5]]]),
+            $this->invokeEvent(['type' => 'content_block_delta', 'delta' => ['type' => 'text_delta', 'text' => 'Hi']]),
+            $this->invokeEvent(['type' => 'message_delta', 'delta' => ['stop_reason' => 'end_turn'], 'usage' => ['output_tokens' => 3]]),
+        ]);
+
+        $this->assertSame(5, $response->getUsage()->getPromptTokens());
+        $this->assertSame(0, $response->getUsage()->getCachedTokens());
+        $this->assertSame(0, $response->getUsage()->getCacheWriteTokens());
+    }
+
+    // =========================================================================
     // InvokeModel (Anthropic family)
     // =========================================================================
 
@@ -158,37 +189,6 @@ class BedrockCachedTokensTest extends TestCase {
 
         $this->assertSame(4, $usage->getPromptTokens());
         $this->assertSame(0, $usage->getCachedTokens());
-    }
-
-    public function testInvokeStreamSumsCacheCountersFromMessageStart(): void {
-        $response = $this->stream(ApiMethod::INVOKE, [
-            $this->invokeEvent(['type' => 'message_start', 'message' => ['usage' => [
-                'input_tokens' => 15,
-                'cache_read_input_tokens' => 900,
-                'cache_creation_input_tokens' => 85,
-            ]]]),
-            $this->invokeEvent(['type' => 'content_block_delta', 'delta' => ['type' => 'text_delta', 'text' => 'Hi']]),
-            $this->invokeEvent(['type' => 'message_delta', 'delta' => ['stop_reason' => 'end_turn'], 'usage' => ['output_tokens' => 4]]),
-        ]);
-
-        $usage = $response->getUsage();
-        $this->assertSame('Hi', $response->getMessage()->getContent());
-        $this->assertSame(1000, $usage->getPromptTokens());
-        $this->assertSame(900, $usage->getCachedTokens());
-        $this->assertSame(85, $usage->getCacheWriteTokens());
-        $this->assertSame(4, $usage->getCompletionTokens());
-    }
-
-    public function testInvokeStreamWithoutCacheCountersIsUnchanged(): void {
-        $response = $this->stream(ApiMethod::INVOKE, [
-            $this->invokeEvent(['type' => 'message_start', 'message' => ['usage' => ['input_tokens' => 5]]]),
-            $this->invokeEvent(['type' => 'content_block_delta', 'delta' => ['type' => 'text_delta', 'text' => 'Hi']]),
-            $this->invokeEvent(['type' => 'message_delta', 'delta' => ['stop_reason' => 'end_turn'], 'usage' => ['output_tokens' => 3]]),
-        ]);
-
-        $this->assertSame(5, $response->getUsage()->getPromptTokens());
-        $this->assertSame(0, $response->getUsage()->getCachedTokens());
-        $this->assertSame(0, $response->getUsage()->getCacheWriteTokens());
     }
 
     // =========================================================================
@@ -252,8 +252,11 @@ class BedrockCachedTokensTest extends TestCase {
         $completed = null;
         $client->streamChat(
             [new Message('user', 'Hi')],
-            function (string $token) {},
-            function ($response) use (&$completed) {
+            function (string $token)
+            {
+            },
+            function ($response) use (&$completed)
+            {
                 $completed = $response;
             }
         );

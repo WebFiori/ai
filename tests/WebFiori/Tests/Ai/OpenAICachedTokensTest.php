@@ -23,6 +23,58 @@ use WebFiori\Ai\Provider\OpenAI\OpenAIClientConfig;
  * Tests for cached token reporting from OpenAI Chat Completions (issue #199).
  */
 class OpenAICachedTokensTest extends TestCase {
+    public function testAuditEntryCachedTokensAreZeroWithoutCaching(): void {
+        $client = $this->createClient();
+        $entry = null;
+        $client->setAuditCallback(function ($e) use (&$entry)
+        {
+            $entry = $e;
+        });
+        $client->setHttpClient($this->fakeChat(['prompt_tokens' => 10, 'completion_tokens' => 5]));
+
+        $client->chat([new Message('user', 'Hi')]);
+
+        $this->assertSame(0, $entry['tokens']['cached']);
+        $this->assertSame(0, $entry['tokens']['cache_write']);
+    }
+
+    // =========================================================================
+    // Audit and metrics (ADR-0062)
+    // =========================================================================
+
+    public function testAuditEntryCarriesCachedTokens(): void {
+        $client = $this->createClient();
+        $entry = null;
+        $client->setAuditCallback(function ($e) use (&$entry)
+        {
+            $entry = $e;
+        });
+        $client->setHttpClient($this->fakeChat([
+            'prompt_tokens' => 2006,
+            'completion_tokens' => 300,
+            'prompt_tokens_details' => ['cached_tokens' => 1920],
+        ]));
+
+        $client->chat([new Message('user', 'Hi')]);
+
+        // prompt keeps its meaning: total input including cached tokens.
+        $this->assertSame(2006, $entry['tokens']['prompt']);
+        $this->assertSame(300, $entry['tokens']['completion']);
+        $this->assertSame(2306, $entry['tokens']['total']);
+        $this->assertSame(1920, $entry['tokens']['cached']);
+        $this->assertSame(0, $entry['tokens']['cache_write']);
+    }
+
+    public function testChatClampsCachedTokensAbovePrompt(): void {
+        $usage = $this->chatWithUsage([
+            'prompt_tokens' => 100,
+            'completion_tokens' => 5,
+            'prompt_tokens_details' => ['cached_tokens' => 500],
+        ])->getUsage();
+
+        $this->assertSame(100, $usage->getPromptTokens());
+        $this->assertSame(100, $usage->getCachedTokens());
+    }
     public function testChatReportsCachedTokens(): void {
         $response = $this->chatWithUsage([
             'prompt_tokens' => 2006,
@@ -38,11 +90,15 @@ class OpenAICachedTokensTest extends TestCase {
         $this->assertSame(0, $usage->getCacheWriteTokens());
     }
 
-    public function testChatWithoutPromptTokensDetailsReportsZeroCached(): void {
-        $usage = $this->chatWithUsage(['prompt_tokens' => 10, 'completion_tokens' => 5])->getUsage();
+    public function testChatReportsCacheWritesWhenProviderSendsThem(): void {
+        $usage = $this->chatWithUsage([
+            'prompt_tokens' => 1000,
+            'completion_tokens' => 5,
+            'prompt_tokens_details' => ['cached_tokens' => 200, 'cache_write_tokens' => 300],
+        ])->getUsage();
 
-        $this->assertSame(10, $usage->getPromptTokens());
-        $this->assertSame(0, $usage->getCachedTokens());
+        $this->assertSame(200, $usage->getCachedTokens());
+        $this->assertSame(300, $usage->getCacheWriteTokens());
     }
 
     public function testChatWithNullPromptTokensDetailsReportsZeroCached(): void {
@@ -55,26 +111,25 @@ class OpenAICachedTokensTest extends TestCase {
         $this->assertSame(0, $usage->getCachedTokens());
     }
 
-    public function testChatReportsCacheWritesWhenProviderSendsThem(): void {
-        $usage = $this->chatWithUsage([
-            'prompt_tokens' => 1000,
-            'completion_tokens' => 5,
-            'prompt_tokens_details' => ['cached_tokens' => 200, 'cache_write_tokens' => 300],
-        ])->getUsage();
+    public function testChatWithoutPromptTokensDetailsReportsZeroCached(): void {
+        $usage = $this->chatWithUsage(['prompt_tokens' => 10, 'completion_tokens' => 5])->getUsage();
 
-        $this->assertSame(200, $usage->getCachedTokens());
-        $this->assertSame(300, $usage->getCacheWriteTokens());
+        $this->assertSame(10, $usage->getPromptTokens());
+        $this->assertSame(0, $usage->getCachedTokens());
     }
 
-    public function testChatClampsCachedTokensAbovePrompt(): void {
-        $usage = $this->chatWithUsage([
-            'prompt_tokens' => 100,
-            'completion_tokens' => 5,
-            'prompt_tokens_details' => ['cached_tokens' => 500],
-        ])->getUsage();
+    public function testCostIsUnchangedWhenNoCachedPriceConfigured(): void {
+        $client = $this->createClient();
+        $client->setPricing(new PricingConfig(['gpt-4o' => ['input' => 2.50, 'output' => 10.00]]));
+        $client->setHttpClient($this->fakeChat([
+            'prompt_tokens' => 1_000_000,
+            'completion_tokens' => 0,
+            'prompt_tokens_details' => ['cached_tokens' => 800_000],
+        ]));
 
-        $this->assertSame(100, $usage->getPromptTokens());
-        $this->assertSame(100, $usage->getCachedTokens());
+        $cost = $client->chat([new Message('user', 'Hi')])->getCost();
+
+        $this->assertEqualsWithDelta(2.5, $cost->getInputCost(), 1e-9);
     }
 
     public function testCostUsesCachedInputPrice(): void {
@@ -96,64 +151,11 @@ class OpenAICachedTokensTest extends TestCase {
         $this->assertEqualsWithDelta(1.0, $cost->getOutputCost(), 1e-9);
     }
 
-    public function testCostIsUnchangedWhenNoCachedPriceConfigured(): void {
-        $client = $this->createClient();
-        $client->setPricing(new PricingConfig(['gpt-4o' => ['input' => 2.50, 'output' => 10.00]]));
-        $client->setHttpClient($this->fakeChat([
-            'prompt_tokens' => 1_000_000,
-            'completion_tokens' => 0,
-            'prompt_tokens_details' => ['cached_tokens' => 800_000],
-        ]));
-
-        $cost = $client->chat([new Message('user', 'Hi')])->getCost();
-
-        $this->assertEqualsWithDelta(2.5, $cost->getInputCost(), 1e-9);
-    }
-
-    // =========================================================================
-    // Audit and metrics (ADR-0062)
-    // =========================================================================
-
-    public function testAuditEntryCarriesCachedTokens(): void {
-        $client = $this->createClient();
-        $entry = null;
-        $client->setAuditCallback(function ($e) use (&$entry) {
-            $entry = $e;
-        });
-        $client->setHttpClient($this->fakeChat([
-            'prompt_tokens' => 2006,
-            'completion_tokens' => 300,
-            'prompt_tokens_details' => ['cached_tokens' => 1920],
-        ]));
-
-        $client->chat([new Message('user', 'Hi')]);
-
-        // prompt keeps its meaning: total input including cached tokens.
-        $this->assertSame(2006, $entry['tokens']['prompt']);
-        $this->assertSame(300, $entry['tokens']['completion']);
-        $this->assertSame(2306, $entry['tokens']['total']);
-        $this->assertSame(1920, $entry['tokens']['cached']);
-        $this->assertSame(0, $entry['tokens']['cache_write']);
-    }
-
-    public function testAuditEntryCachedTokensAreZeroWithoutCaching(): void {
-        $client = $this->createClient();
-        $entry = null;
-        $client->setAuditCallback(function ($e) use (&$entry) {
-            $entry = $e;
-        });
-        $client->setHttpClient($this->fakeChat(['prompt_tokens' => 10, 'completion_tokens' => 5]));
-
-        $client->chat([new Message('user', 'Hi')]);
-
-        $this->assertSame(0, $entry['tokens']['cached']);
-        $this->assertSame(0, $entry['tokens']['cache_write']);
-    }
-
     public function testMetricsRequestCompletedCarriesCachedTokens(): void {
         $client = $this->createClient();
         $events = [];
-        $client->setMetricsCallback(function ($event, $data) use (&$events) {
+        $client->setMetricsCallback(function ($event, $data) use (&$events)
+        {
             $events[$event] = $data;
         });
         $client->setHttpClient($this->fakeChat([
@@ -168,22 +170,6 @@ class OpenAICachedTokensTest extends TestCase {
         $this->assertSame(2006, $completed['prompt_tokens']);
         $this->assertSame(1920, $completed['cached_tokens']);
         $this->assertSame(0, $completed['cache_write_tokens']);
-    }
-
-    // =========================================================================
-    // Streaming
-    // =========================================================================
-
-    public function testStreamRequestAsksForUsage(): void {
-        $http = new FakeHttpClient();
-        $http->addStreamingChunks(["data: [DONE]\n\n"]);
-        $client = $this->createClient();
-        $client->setHttpClient($http);
-
-        $client->streamChat([new Message('user', 'Hi')], function (string $token) {});
-
-        $body = json_decode($http->getLastRequest()->getBody(), true);
-        $this->assertSame(['include_usage' => true], $body['stream_options']);
     }
 
     public function testNonStreamRequestDoesNotSendStreamOptions(): void {
@@ -221,13 +207,22 @@ class OpenAICachedTokensTest extends TestCase {
         $this->assertSame(1920, $response->getUsage()->getCachedTokens());
     }
 
-    public function testStreamWithoutUsageChunkHasNullUsage(): void {
-        $response = $this->stream([
-            $this->sse(['model' => 'gpt-4o', 'choices' => [['delta' => ['content' => 'Hi'], 'finish_reason' => 'stop']]]),
-            "data: [DONE]\n\n",
-        ]);
+    // =========================================================================
+    // Streaming
+    // =========================================================================
 
-        $this->assertNull($response->getUsage());
+    public function testStreamRequestAsksForUsage(): void {
+        $http = new FakeHttpClient();
+        $http->addStreamingChunks(["data: [DONE]\n\n"]);
+        $client = $this->createClient();
+        $client->setHttpClient($http);
+
+        $client->streamChat([new Message('user', 'Hi')], function (string $token)
+        {
+        });
+
+        $body = json_decode($http->getLastRequest()->getBody(), true);
+        $this->assertSame(['include_usage' => true], $body['stream_options']);
     }
 
     public function testStreamUsageWithoutDetailsReportsZeroCached(): void {
@@ -239,6 +234,15 @@ class OpenAICachedTokensTest extends TestCase {
 
         $this->assertSame(7, $response->getUsage()->getPromptTokens());
         $this->assertSame(0, $response->getUsage()->getCachedTokens());
+    }
+
+    public function testStreamWithoutUsageChunkHasNullUsage(): void {
+        $response = $this->stream([
+            $this->sse(['model' => 'gpt-4o', 'choices' => [['delta' => ['content' => 'Hi'], 'finish_reason' => 'stop']]]),
+            "data: [DONE]\n\n",
+        ]);
+
+        $this->assertNull($response->getUsage());
     }
 
     // =========================================================================
@@ -284,8 +288,11 @@ class OpenAICachedTokensTest extends TestCase {
         $completed = null;
         $client->streamChat(
             [new Message('user', 'Hi')],
-            function (string $token) {},
-            function ($response) use (&$completed) {
+            function (string $token)
+            {
+            },
+            function ($response) use (&$completed)
+            {
                 $completed = $response;
             }
         );
