@@ -18,6 +18,7 @@ use WebFiori\Ai\Http\HttpRequest;
 use WebFiori\Ai\Http\HttpResponse;
 use WebFiori\Ai\Http\SseParser;
 use WebFiori\Ai\Message;
+use WebFiori\Ai\Provider\Formatter\AnthropicFormatter;
 use WebFiori\Ai\Role;
 use WebFiori\Ai\Tool\ToolCall;
 use WebFiori\Ai\Tool\ToolInterface;
@@ -118,6 +119,8 @@ class InvokeStrategy implements InvocationStrategyInterface {
         $modelId = $client->getConfig('model', 'anthropic.claude-3-5-sonnet-20241022-v2:0');
         $finishReason = null;
         $inputTokens = 0;
+        $cacheReadTokens = 0;
+        $cacheWriteTokens = 0;
         $outputTokens = 0;
 
         $parser = new SseParser(
@@ -127,6 +130,8 @@ class InvokeStrategy implements InvocationStrategyInterface {
                 &$accumulatedContent,
                 &$finishReason,
                 &$inputTokens,
+                &$cacheReadTokens,
+                &$cacheWriteTokens,
                 &$outputTokens
             ) {
                 $json = json_decode($data, true);
@@ -155,6 +160,8 @@ class InvokeStrategy implements InvocationStrategyInterface {
                         $accumulatedContent,
                         $finishReason,
                         $inputTokens,
+                        $cacheReadTokens,
+                        $cacheWriteTokens,
                         $outputTokens
                     );
                 } elseif (isset($chunk['generation'])) {
@@ -177,7 +184,12 @@ class InvokeStrategy implements InvocationStrategyInterface {
 
             if ($onComplete !== null) {
                 $message = new Message(Role::ASSISTANT, $accumulatedContent);
-                $usage = new Usage($inputTokens, $outputTokens);
+                $usage = new Usage(
+                    $inputTokens + $cacheReadTokens + $cacheWriteTokens,
+                    $outputTokens,
+                    $cacheReadTokens,
+                    $cacheWriteTokens
+                );
                 $response = new ChatResponse($message, $modelId, $usage, $finishReason ?? 'stop');
                 $onComplete($response);
             }
@@ -587,10 +599,8 @@ class InvokeStrategy implements InvocationStrategyInterface {
         $usage = null;
 
         if (isset($data['usage'])) {
-            $usage = new Usage(
-                $data['usage']['input_tokens'] ?? 0,
-                $data['usage']['output_tokens'] ?? 0
-            );
+            // Anthropic-format usage: input_tokens excludes cache reads and writes.
+            $usage = AnthropicFormatter::buildUsage($data['usage']);
         }
 
         $finishReason = match ($data['stop_reason'] ?? 'end_turn') {
@@ -610,7 +620,9 @@ class InvokeStrategy implements InvocationStrategyInterface {
      * @param callable $onToken Token callback.
      * @param string &$content Accumulated content reference.
      * @param string|null &$finishReason Finish reason reference.
-     * @param int &$inputTokens Input token count reference.
+     * @param int &$inputTokens Input token count reference (excludes cache reads and writes).
+     * @param int &$cacheReadTokens Cache-read token count reference.
+     * @param int &$cacheWriteTokens Cache-write token count reference.
      * @param int &$outputTokens Output token count reference.
      */
     private function processAnthropicStreamChunk(
@@ -619,11 +631,16 @@ class InvokeStrategy implements InvocationStrategyInterface {
         string &$content,
         ?string &$finishReason,
         int &$inputTokens,
+        int &$cacheReadTokens,
+        int &$cacheWriteTokens,
         int &$outputTokens
     ): void {
         switch ($chunk['type'] ?? '') {
             case 'message_start':
-                $inputTokens = $chunk['message']['usage']['input_tokens'] ?? $inputTokens;
+                $startUsage = $chunk['message']['usage'] ?? [];
+                $inputTokens = $startUsage['input_tokens'] ?? $inputTokens;
+                $cacheReadTokens = $startUsage['cache_read_input_tokens'] ?? $cacheReadTokens;
+                $cacheWriteTokens = $startUsage['cache_creation_input_tokens'] ?? $cacheWriteTokens;
 
                 break;
 

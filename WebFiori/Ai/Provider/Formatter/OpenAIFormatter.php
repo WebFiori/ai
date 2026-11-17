@@ -151,6 +151,8 @@ class OpenAIFormatter implements ProviderFormatterInterface {
             'model' => $model,
             'messages' => $this->formatMessages($messages, $options),
             'stream' => true,
+            // Without this, Chat Completions streams carry no usage at all.
+            'stream_options' => ['include_usage' => true],
         ];
 
         $this->applyOptions($body, $options);
@@ -181,9 +183,12 @@ class OpenAIFormatter implements ProviderFormatterInterface {
         // for an index carries id + function.name, later deltas append
         // function.arguments fragments. Accumulate by index (ADR-0060).
         $toolCallFragments = [];
+        // With stream_options.include_usage, usage arrives in a final chunk
+        // whose choices array is empty.
+        $usage = null;
 
         $parser = new SseParser(
-            function (string $data) use ($onToken, &$accumulatedContent, &$model, &$finishReason, &$toolCallFragments)
+            function (string $data) use ($onToken, &$accumulatedContent, &$model, &$finishReason, &$toolCallFragments, &$usage)
             {
                 $json = json_decode($data, true);
 
@@ -193,6 +198,10 @@ class OpenAIFormatter implements ProviderFormatterInterface {
 
                 if (isset($json['model'])) {
                     $model = $json['model'];
+                }
+
+                if (isset($json['usage']) && is_array($json['usage'])) {
+                    $usage = $this->buildUsage($json['usage']);
                 }
 
                 $choices = $json['choices'] ?? [];
@@ -230,7 +239,7 @@ class OpenAIFormatter implements ProviderFormatterInterface {
                     }
                 }
             },
-            function () use ($onComplete, &$accumulatedContent, &$model, &$finishReason, &$toolCallFragments)
+            function () use ($onComplete, &$accumulatedContent, &$model, &$finishReason, &$toolCallFragments, &$usage)
             {
                 if ($onComplete !== null) {
                     $toolCalls = [];
@@ -246,7 +255,7 @@ class OpenAIFormatter implements ProviderFormatterInterface {
                     }
 
                     $message = new Message(Role::ASSISTANT, $accumulatedContent, $toolCalls);
-                    $response = new ChatResponse($message, $model, null, $finishReason);
+                    $response = new ChatResponse($message, $model, $usage, $finishReason);
                     $onComplete($response);
                 }
             }
@@ -325,10 +334,7 @@ class OpenAIFormatter implements ProviderFormatterInterface {
         $usage = null;
 
         if (isset($data['usage'])) {
-            $usage = new Usage(
-                $data['usage']['prompt_tokens'] ?? 0,
-                $data['usage']['completion_tokens'] ?? 0
-            );
+            $usage = $this->buildUsage($data['usage']);
         }
 
         return new ChatResponse(
@@ -401,6 +407,29 @@ class OpenAIFormatter implements ProviderFormatterInterface {
         } elseif (!empty($options[ChatOption::JSON_MODE])) {
             $body['response_format'] = ['type' => 'json_object'];
         }
+    }
+
+    /**
+     * Builds a Usage from a Chat Completions usage object.
+     *
+     * `prompt_tokens` already includes cached tokens, so it is used as the
+     * prompt total. Cached tokens come from `prompt_tokens_details.cached_tokens`.
+     * Cache writes are read from `prompt_tokens_details.cache_write_tokens` when
+     * the API reports them, and are 0 otherwise.
+     *
+     * @param array<string, mixed> $usage The `usage` object from the response.
+     *
+     * @return Usage The usage with cache counts.
+     */
+    private function buildUsage(array $usage): Usage {
+        $details = is_array($usage['prompt_tokens_details'] ?? null) ? $usage['prompt_tokens_details'] : [];
+
+        return new Usage(
+            (int) ($usage['prompt_tokens'] ?? 0),
+            (int) ($usage['completion_tokens'] ?? 0),
+            (int) ($details['cached_tokens'] ?? 0),
+            (int) ($details['cache_write_tokens'] ?? 0)
+        );
     }
 
     /**

@@ -216,6 +216,25 @@ class GoogleClient extends AbstractClient {
     }
 
     /**
+     * Builds a Usage from a generateContent `usageMetadata` object.
+     *
+     * `promptTokenCount` already includes cached tokens. Cached tokens come
+     * from `cachedContentTokenCount`. Gemini reports no separate cache-write
+     * count, so cache writes are 0.
+     *
+     * @param array<string, mixed> $metadata The `usageMetadata` object.
+     *
+     * @return Usage The usage with the cached token count.
+     */
+    private function buildGenerateContentUsage(array $metadata): Usage {
+        return new Usage(
+            (int) ($metadata['promptTokenCount'] ?? 0),
+            (int) ($metadata['candidatesTokenCount'] ?? 0),
+            (int) ($metadata['cachedContentTokenCount'] ?? 0)
+        );
+    }
+
+    /**
      * Builds the generation config from options.
      *
      * @param array<string, mixed> $options The request options.
@@ -347,10 +366,7 @@ class GoogleClient extends AbstractClient {
                 }
 
                 if (isset($json['usageMetadata'])) {
-                    $usage = new Usage(
-                        $json['usageMetadata']['promptTokenCount'] ?? 0,
-                        $json['usageMetadata']['candidatesTokenCount'] ?? 0
-                    );
+                    $usage = $this->buildGenerateContentUsage($json['usageMetadata']);
                 }
             }
         );
@@ -519,10 +535,7 @@ class GoogleClient extends AbstractClient {
                     $usageData = $interaction['usage'] ?? null;
 
                     if ($usageData !== null) {
-                        $usage = new Usage(
-                            $usageData['total_input_tokens'] ?? $usageData['input_tokens'] ?? 0,
-                            $usageData['total_output_tokens'] ?? $usageData['output_tokens'] ?? 0
-                        );
+                        $usage = InteractionsResponseParser::buildUsage($usageData);
                     }
 
                     break;
@@ -1862,10 +1875,7 @@ class GoogleClient extends AbstractClient {
         $usage = null;
 
         if (isset($data['usageMetadata'])) {
-            $usage = new Usage(
-                $data['usageMetadata']['promptTokenCount'] ?? 0,
-                $data['usageMetadata']['candidatesTokenCount'] ?? 0
-            );
+            $usage = $this->buildGenerateContentUsage($data['usageMetadata']);
         }
 
         $finishReason = $this->mapFinishReason($candidate['finishReason'] ?? '');

@@ -483,6 +483,8 @@ abstract class AbstractClient implements ProviderInterface {
                 'prompt_tokens' => $response->getUsage()?->getPromptTokens(),
                 'completion_tokens' => $response->getUsage()?->getCompletionTokens(),
                 'total_tokens' => $response->getUsage()?->getTotalTokens(),
+                'cached_tokens' => $response->getUsage()?->getCachedTokens(),
+                'cache_write_tokens' => $response->getUsage()?->getCacheWriteTokens(),
             ]);
 
             $this->emitMetric('request.completed', array_merge(
@@ -493,6 +495,8 @@ abstract class AbstractClient implements ProviderInterface {
                     'prompt_tokens' => $response->getUsage()?->getPromptTokens(),
                     'completion_tokens' => $response->getUsage()?->getCompletionTokens(),
                     'total_tokens' => $response->getUsage()?->getTotalTokens(),
+                    'cached_tokens' => $response->getUsage()?->getCachedTokens(),
+                    'cache_write_tokens' => $response->getUsage()?->getCacheWriteTokens(),
                 ]
             ));
 
@@ -543,6 +547,8 @@ abstract class AbstractClient implements ProviderInterface {
                         'prompt' => $response->getUsage()?->getPromptTokens(),
                         'completion' => $response->getUsage()?->getCompletionTokens(),
                         'total' => $response->getUsage()?->getTotalTokens(),
+                        'cached' => $response->getUsage()?->getCachedTokens(),
+                        'cache_write' => $response->getUsage()?->getCacheWriteTokens(),
                     ],
                     'error' => null,
                 ]
@@ -1903,14 +1909,25 @@ abstract class AbstractClient implements ProviderInterface {
         $inputPrice = $this->pricing->getInputPrice($model);
         $outputPrice = $this->pricing->getOutputPrice($model);
 
-        $inputCost = ($usage->getPromptTokens() / 1_000_000) * $inputPrice;
+        $cachedTokens = $usage->getCachedTokens();
+        $cacheWriteTokens = $usage->getCacheWriteTokens();
+        $uncachedTokens = $usage->getPromptTokens() - $cachedTokens - $cacheWriteTokens;
+
+        $cachedPrice = $this->pricing->getCachedInputPrice($model) ?? $inputPrice;
+        $cacheWritePrice = $this->pricing->getCacheWritePrice($model) ?? $inputPrice;
+
+        $cachedInputCost = ($cachedTokens / 1_000_000) * $cachedPrice;
+        $cacheWriteCost = ($cacheWriteTokens / 1_000_000) * $cacheWritePrice;
+        $inputCost = ($uncachedTokens / 1_000_000) * $inputPrice + $cachedInputCost + $cacheWriteCost;
         $outputCost = ($usage->getCompletionTokens() / 1_000_000) * $outputPrice;
 
         return new CostResult(
             $inputCost,
             $outputCost,
             $model,
-            $this->pricing->getCurrency()
+            $this->pricing->getCurrency(),
+            $cachedInputCost,
+            $cacheWriteCost
         );
     }
 

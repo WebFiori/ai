@@ -35,6 +35,7 @@ $suites = [
     'modelrouter' => 'live/10-model-router.php',
     'cancellation' => 'live/16-cancellation.php',
     'streamtools' => 'live/17-streaming-tool-loop.php',
+    'cachedtokens' => 'live/18-cached-tokens.php',
 ];
 
 $rootDir = __DIR__.'/..';

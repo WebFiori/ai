@@ -30,6 +30,21 @@ namespace WebFiori\Ai;
  */
 class CostResult {
     /**
+     * Cost of input tokens served from the provider's cache.
+     * Included in the input cost.
+     *
+     * @var float
+     */
+    private float $cachedInputCost;
+    /**
+     * Cost of input tokens written to the provider's cache.
+     * Included in the input cost.
+     *
+     * @var float
+     */
+    private float $cacheWriteCost;
+
+    /**
      * Currency code.
      *
      * @var string
@@ -37,7 +52,7 @@ class CostResult {
     private string $currency;
 
     /**
-     * Cost of input (prompt) tokens.
+     * Total cost of input (prompt) tokens, including cached and cache-write tokens.
      *
      * @var float
      */
@@ -60,21 +75,48 @@ class CostResult {
     /**
      * Creates a new CostResult instance.
      *
-     * @param float $inputCost Cost of input tokens.
+     * @param float $inputCost Total cost of input tokens, including the cached
+     *        and cache-write parts.
      * @param float $outputCost Cost of output tokens.
      * @param string $model The model name.
      * @param string $currency The currency code. Default is 'USD'.
+     * @param float $cachedInputCost The part of the input cost that is for
+     *        tokens served from cache. Default is 0.0.
+     * @param float $cacheWriteCost The part of the input cost that is for
+     *        tokens written to cache. Default is 0.0.
      */
     public function __construct(
         float $inputCost,
         float $outputCost,
         string $model,
-        string $currency = 'USD'
+        string $currency = 'USD',
+        float $cachedInputCost = 0.0,
+        float $cacheWriteCost = 0.0
     ) {
         $this->inputCost = $inputCost;
         $this->outputCost = $outputCost;
         $this->model = $model;
         $this->currency = $currency;
+        $this->cachedInputCost = $cachedInputCost;
+        $this->cacheWriteCost = $cacheWriteCost;
+    }
+
+    /**
+     * Returns the part of the input cost for tokens served from the provider's cache.
+     *
+     * @return float The cached input cost. It is included in getInputCost().
+     */
+    public function getCachedInputCost(): float {
+        return $this->cachedInputCost;
+    }
+
+    /**
+     * Returns the part of the input cost for tokens written to the provider's cache.
+     *
+     * @return float The cache-write cost. It is included in getInputCost().
+     */
+    public function getCacheWriteCost(): float {
+        return $this->cacheWriteCost;
     }
 
     /**
@@ -87,7 +129,8 @@ class CostResult {
     }
 
     /**
-     * Returns the cost of input (prompt) tokens.
+     * Returns the total cost of input (prompt) tokens, including the cached
+     * and cache-write parts.
      *
      * @return float The input token cost.
      */
