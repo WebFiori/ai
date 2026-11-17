@@ -117,7 +117,10 @@ class ConverseStrategy implements InvocationStrategyInterface {
     ): void {
         $accumulatedContent = '';
         $finishReason = null;
+        // Converse reports cache reads and writes separately from inputTokens.
         $inputTokens = 0;
+        $cacheReadTokens = 0;
+        $cacheWriteTokens = 0;
         $outputTokens = 0;
         $toolCalls = [];
         $currentToolCall = null;
@@ -129,6 +132,8 @@ class ConverseStrategy implements InvocationStrategyInterface {
                 &$accumulatedContent,
                 &$finishReason,
                 &$inputTokens,
+                &$cacheReadTokens,
+                &$cacheWriteTokens,
                 &$outputTokens,
                 &$toolCalls,
                 &$currentToolCall
@@ -182,6 +187,8 @@ class ConverseStrategy implements InvocationStrategyInterface {
                     case 'metadata':
                         $usage = $json['usage'] ?? [];
                         $inputTokens = $usage['inputTokens'] ?? $inputTokens;
+                        $cacheReadTokens = $usage['cacheReadInputTokens'] ?? $cacheReadTokens;
+                        $cacheWriteTokens = $usage['cacheWriteInputTokens'] ?? $cacheWriteTokens;
                         $outputTokens = $usage['outputTokens'] ?? $outputTokens;
 
                         break;
@@ -204,7 +211,12 @@ class ConverseStrategy implements InvocationStrategyInterface {
                 }
 
                 $message = new Message(Role::ASSISTANT, $accumulatedContent, $parsedToolCalls);
-                $usage = new Usage($inputTokens, $outputTokens);
+                $usage = new Usage(
+                    $inputTokens + $cacheReadTokens + $cacheWriteTokens,
+                    $outputTokens,
+                    $cacheReadTokens,
+                    $cacheWriteTokens
+                );
                 $response = new ChatResponse($message, $modelId, $usage, $finishReason ?? 'stop');
                 $onComplete($response);
             }
@@ -248,9 +260,15 @@ class ConverseStrategy implements InvocationStrategyInterface {
         $usage = null;
 
         if (isset($data['usage'])) {
+            // inputTokens excludes cache reads and writes; add them back so the
+            // prompt count is the full input.
+            $cacheRead = (int) ($data['usage']['cacheReadInputTokens'] ?? 0);
+            $cacheWrite = (int) ($data['usage']['cacheWriteInputTokens'] ?? 0);
             $usage = new Usage(
-                $data['usage']['inputTokens'] ?? 0,
-                $data['usage']['outputTokens'] ?? 0
+                (int) ($data['usage']['inputTokens'] ?? 0) + $cacheRead + $cacheWrite,
+                (int) ($data['usage']['outputTokens'] ?? 0),
+                $cacheRead,
+                $cacheWrite
             );
         }
 
