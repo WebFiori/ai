@@ -111,6 +111,66 @@ class OpenAICachedTokensTest extends TestCase {
     }
 
     // =========================================================================
+    // Audit and metrics (ADR-0062)
+    // =========================================================================
+
+    public function testAuditEntryCarriesCachedTokens(): void {
+        $client = $this->createClient();
+        $entry = null;
+        $client->setAuditCallback(function ($e) use (&$entry) {
+            $entry = $e;
+        });
+        $client->setHttpClient($this->fakeChat([
+            'prompt_tokens' => 2006,
+            'completion_tokens' => 300,
+            'prompt_tokens_details' => ['cached_tokens' => 1920],
+        ]));
+
+        $client->chat([new Message('user', 'Hi')]);
+
+        // prompt keeps its meaning: total input including cached tokens.
+        $this->assertSame(2006, $entry['tokens']['prompt']);
+        $this->assertSame(300, $entry['tokens']['completion']);
+        $this->assertSame(2306, $entry['tokens']['total']);
+        $this->assertSame(1920, $entry['tokens']['cached']);
+        $this->assertSame(0, $entry['tokens']['cache_write']);
+    }
+
+    public function testAuditEntryCachedTokensAreZeroWithoutCaching(): void {
+        $client = $this->createClient();
+        $entry = null;
+        $client->setAuditCallback(function ($e) use (&$entry) {
+            $entry = $e;
+        });
+        $client->setHttpClient($this->fakeChat(['prompt_tokens' => 10, 'completion_tokens' => 5]));
+
+        $client->chat([new Message('user', 'Hi')]);
+
+        $this->assertSame(0, $entry['tokens']['cached']);
+        $this->assertSame(0, $entry['tokens']['cache_write']);
+    }
+
+    public function testMetricsRequestCompletedCarriesCachedTokens(): void {
+        $client = $this->createClient();
+        $events = [];
+        $client->setMetricsCallback(function ($event, $data) use (&$events) {
+            $events[$event] = $data;
+        });
+        $client->setHttpClient($this->fakeChat([
+            'prompt_tokens' => 2006,
+            'completion_tokens' => 300,
+            'prompt_tokens_details' => ['cached_tokens' => 1920],
+        ]));
+
+        $client->chat([new Message('user', 'Hi')]);
+
+        $completed = $events['request.completed'];
+        $this->assertSame(2006, $completed['prompt_tokens']);
+        $this->assertSame(1920, $completed['cached_tokens']);
+        $this->assertSame(0, $completed['cache_write_tokens']);
+    }
+
+    // =========================================================================
     // Streaming
     // =========================================================================
 

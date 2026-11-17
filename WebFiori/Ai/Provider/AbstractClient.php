@@ -483,6 +483,8 @@ abstract class AbstractClient implements ProviderInterface {
                 'prompt_tokens' => $response->getUsage()?->getPromptTokens(),
                 'completion_tokens' => $response->getUsage()?->getCompletionTokens(),
                 'total_tokens' => $response->getUsage()?->getTotalTokens(),
+                'cached_tokens' => $response->getUsage()?->getCachedTokens(),
+                'cache_write_tokens' => $response->getUsage()?->getCacheWriteTokens(),
             ]);
 
             $this->emitMetric('request.completed', array_merge(
@@ -493,6 +495,8 @@ abstract class AbstractClient implements ProviderInterface {
                     'prompt_tokens' => $response->getUsage()?->getPromptTokens(),
                     'completion_tokens' => $response->getUsage()?->getCompletionTokens(),
                     'total_tokens' => $response->getUsage()?->getTotalTokens(),
+                    'cached_tokens' => $response->getUsage()?->getCachedTokens(),
+                    'cache_write_tokens' => $response->getUsage()?->getCacheWriteTokens(),
                 ]
             ));
 
@@ -543,6 +547,8 @@ abstract class AbstractClient implements ProviderInterface {
                         'prompt' => $response->getUsage()?->getPromptTokens(),
                         'completion' => $response->getUsage()?->getCompletionTokens(),
                         'total' => $response->getUsage()?->getTotalTokens(),
+                        'cached' => $response->getUsage()?->getCachedTokens(),
+                        'cache_write' => $response->getUsage()?->getCacheWriteTokens(),
                     ],
                     'error' => null,
                 ]
