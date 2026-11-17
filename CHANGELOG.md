@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.8.0](https://github.com/WebFiori/ai/compare/v1.7.0...v1.8.0) (2026-11-17)
+
+
+### Features
+
+* **anthropic:** report cache read/write tokens and include them in prompt tokens ([3a69dba](https://github.com/WebFiori/ai/commit/3a69dba207fdc6fe3a65e1d83830ac5efeaaf219)), closes [#200](https://github.com/WebFiori/ai/issues/200)
+* **bedrock:** report cache read/write tokens and include them in prompt tokens ([40c4410](https://github.com/WebFiori/ai/commit/40c4410040f1a6966dc54cc8e4349705e6265e1a)), closes [#201](https://github.com/WebFiori/ai/issues/201)
+* **google:** report cached tokens from generateContent and Interactions API ([16b9372](https://github.com/WebFiori/ai/commit/16b9372bd7b9904a1a7057f7bd91518aa1527129)), closes [#198](https://github.com/WebFiori/ai/issues/198)
+* **openai:** report cached tokens from prompt_tokens_details ([f43bdb0](https://github.com/WebFiori/ai/commit/f43bdb0239e454346dffebc2160dbae18bf0ba78)), closes [#199](https://github.com/WebFiori/ai/issues/199)
+* **usage:** add cached and cache-write input tokens to Usage and price them in cost calculation ([71da5b9](https://github.com/WebFiori/ai/commit/71da5b94b8e919d890e8c05a4ec29862a8a76d22)), closes [#197](https://github.com/WebFiori/ai/issues/197)
+* **usage:** report and price cached input tokens across providers ([45dbfc5](https://github.com/WebFiori/ai/commit/45dbfc5cd1bd92f93d75a5259b59db917670ba44))
+* **usage:** report cached tokens in chat audit entries and metrics ([f3d758d](https://github.com/WebFiori/ai/commit/f3d758d2c8c81a5bdae20be3cd8efdf3e286ad7c))
+
+
+### Bug Fixes
+
+* **cache:** include tool definitions and response-format options in the chat cache key ([0273a30](https://github.com/WebFiori/ai/commit/0273a30da7b665ed10b91b282af6402a8f3a3be6))
+* **cache:** include tool definitions and response-format options in the chat cache key ([d495755](https://github.com/WebFiori/ai/commit/d495755bfb9b574b3737717dbc0fad2a8512155c)), closes [#204](https://github.com/WebFiori/ai/issues/204)
+* **google:** keep the cancellation token on incrementally built requests ([a3f0b27](https://github.com/WebFiori/ai/commit/a3f0b27a8cf946bc05e0c5cc73feae141c5b3d10))
+* **tools:** rebuild the request after mid-loop truncation instead of appending to it ([c72fa0c](https://github.com/WebFiori/ai/commit/c72fa0c4c9577b8fe4802f4a28ab9835651cbc42))
+* **tools:** rebuild the request after mid-loop truncation instead of appending to it ([89b57fa](https://github.com/WebFiori/ai/commit/89b57faea10bd2d41e81b55698ae5e099df55448)), closes [#206](https://github.com/WebFiori/ai/issues/206)
+
 ## [1.7.0](https://github.com/WebFiori/ai/compare/v1.6.0...v1.7.0) (2026-11-08)
 
 
