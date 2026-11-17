@@ -43,11 +43,25 @@ class MidLoopTestClient extends AbstractClient {
     public array $formattedRequests = [];
 
     /**
+     * Number of messages in the conversation and in the appended slice for each
+     * call to buildIncrementalChatRequest().
+     *
+     * @var array<int, array{all: int, new: int}>
+     */
+    public array $incrementalCalls = [];
+
+    /**
      * Incremental "new messages" slice for each in-loop request build.
      *
      * @var array<int, Message[]>
      */
     public array $incrementalSlices = [];
+
+    /**
+     * Number of times buildChatRequest() built a request from scratch
+     * (the initial request plus every rebuild).
+     */
+    public int $fullBuilds = 0;
 
     private int $toolIterations;
     private int $responseIndex = 0;
@@ -82,6 +96,7 @@ class MidLoopTestClient extends AbstractClient {
     }
 
     protected function buildChatRequest(array $messages, array $options): HttpRequest {
+        $this->fullBuilds++;
         $this->formattedRequests[] = $messages;
 
         return new HttpRequest(
@@ -100,6 +115,7 @@ class MidLoopTestClient extends AbstractClient {
     ): HttpRequest {
         $this->formattedRequests[] = $allMessages;
         $this->incrementalSlices[] = $newMessages;
+        $this->incrementalCalls[] = ['all' => count($allMessages), 'new' => count($newMessages)];
 
         return new HttpRequest(
             'POST',

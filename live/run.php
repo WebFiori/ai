@@ -36,6 +36,7 @@ $suites = [
     'cancellation' => 'live/16-cancellation.php',
     'streamtools' => 'live/17-streaming-tool-loop.php',
     'cachedtokens' => 'live/18-cached-tokens.php',
+    'midlooptruncation' => 'live/19-google-midloop-truncation.php',
 ];
 
 $rootDir = __DIR__.'/..';

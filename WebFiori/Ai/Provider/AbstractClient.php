@@ -394,6 +394,7 @@ abstract class AbstractClient implements ProviderInterface {
                     $cancellationToken?->throwIfCancelled();
 
                     $iteration++;
+                    $rebuild = false;
                     $messages[] = $response->getMessage();
 
                     $toolCalls = $response->getMessage()->getToolCalls();
@@ -419,7 +420,7 @@ abstract class AbstractClient implements ProviderInterface {
                     // budget. Pairing-safe truncation removes whole tool-call
                     // groups, so outgoing requests stay provider-valid.
                     if ($truncateBetweenIterations && $this->contextStrategy !== null) {
-                        $beforeCount = count($messages);
+                        $messagesBeforeTruncation = $messages;
                         $messages = $this->truncateBetweenToolIterations(
                             $messages,
                             $tools,
@@ -427,26 +428,35 @@ abstract class AbstractClient implements ProviderInterface {
                             $loopSummarizer
                         );
 
-                        if (count($messages) !== $beforeCount) {
-                            // The message set changed: force a full rebuild of the
-                            // next request so the incremental slice is consistent
-                            // with the truncated conversation.
+                        // Compared by identity, not by count: replacing messages
+                        // (for example with a summary) can keep the count equal.
+                        if ($messages !== $messagesBeforeTruncation) {
+                            // Messages were removed or replaced, so the previous
+                            // request no longer corresponds to the leading messages
+                            // and cannot be extended. Build the next request from
+                            // scratch instead of asking a provider to append to it.
                             $this->statusEmitter->emit(Status::TRUNCATING_CONTEXT, [
                                 'iteration' => $iteration,
                             ]);
-                            $formattedCount = 0;
+                            $rebuild = true;
                         }
                     }
-
-                    // Build next request: pass all messages but hint provider about
-                    // how many were already formatted so it can optimize
-                    $newMessages = array_slice($messages, $formattedCount);
 
                     // A cancel that landed during tool execution must stop the
                     // loop here, before the next provider round-trip is issued.
                     $cancellationToken?->throwIfCancelled();
 
-                    $request = $this->buildIncrementalChatRequest($request, $messages, $newMessages, $options);
+                    if ($rebuild) {
+                        $request = $this->buildChatRequest($messages, $options)
+                            ->withCancellationToken($cancellationToken);
+                    } else {
+                        // Messages were only appended: pass all messages plus the
+                        // slice added since the last request, so a provider can
+                        // extend the previous request instead of re-formatting.
+                        $newMessages = array_slice($messages, $formattedCount);
+                        $request = $this->buildIncrementalChatRequest($request, $messages, $newMessages, $options);
+                    }
+
                     $formattedCount = count($messages);
 
                     $this->statusEmitter->emit(Status::SENDING_REQUEST, [
@@ -2391,6 +2401,14 @@ abstract class AbstractClient implements ProviderInterface {
      * Default implementation rebuilds from scratch using all messages.
      * Providers can override for optimized incremental building that avoids
      * re-formatting existing messages using only newMessages.
+     *
+     * The tool loop calls this only when messages were appended to the
+     * conversation since the previous request, so the previous request
+     * corresponds to the first `count($allMessages) - count($newMessages)`
+     * messages and `$newMessages` can be appended to it. When messages were
+     * removed or replaced (context truncation), the loop calls
+     * {@see AbstractClient::buildChatRequest()} instead, so overrides never
+     * have to detect that case.
      *
      * @param HttpRequest $previousRequest The previous HTTP request.
      * @param Message[] $allMessages All messages in the conversation.
