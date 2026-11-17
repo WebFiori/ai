@@ -11,11 +11,16 @@
 namespace WebFiori\Ai\Cache;
 
 use WebFiori\Ai\ChatOption;
+use WebFiori\Ai\Tool\BuiltInToolInterface;
+use WebFiori\Ai\Tool\ToolInterface;
 /**
  * Generates deterministic cache keys for AI requests.
  *
  * Keys are based on the provider, model, messages/input, and relevant options.
- * The same request will always produce the same key.
+ * For chat requests this includes the tool definitions (name, description and
+ * parameter schema, in the order given) and the built-in tools, because they
+ * change what the model can answer. The same request will always produce the
+ * same key.
  *
  * @author Ibrahim
  */
@@ -45,6 +50,22 @@ class CacheKeyGenerator {
         $relevantOptions = $this->extractRelevantOptions($options);
         hash_update($ctx, json_encode($relevantOptions));
 
+        // Added only when present, so requests without tools keep the key
+        // they had before tool definitions were part of it.
+        $tools = $this->describeTools($options[ChatOption::TOOLS] ?? []);
+
+        if ($tools !== []) {
+            hash_update($ctx, "\0tools:");
+            hash_update($ctx, $this->encode($tools));
+        }
+
+        $builtInTools = $this->describeBuiltInTools($options['built_in_tools'] ?? []);
+
+        if ($builtInTools !== []) {
+            hash_update($ctx, "\0built_in_tools:");
+            hash_update($ctx, $this->encode($builtInTools));
+        }
+
         return 'chat_'.hash_final($ctx);
     }
 
@@ -70,6 +91,76 @@ class CacheKeyGenerator {
     }
 
     /**
+     * Describes built-in tools (such as web search) for hashing.
+     *
+     * @param mixed $builtInTools The `built_in_tools` option value.
+     *
+     * @return array<int, string> One entry per built-in tool, in the order given.
+     */
+    private function describeBuiltInTools(mixed $builtInTools): array {
+        if (!is_array($builtInTools)) {
+            return [];
+        }
+
+        $described = [];
+
+        foreach ($builtInTools as $tool) {
+            if ($tool instanceof BuiltInToolInterface) {
+                $described[] = get_class($tool).':'.$tool->getValue();
+            }
+        }
+
+        return $described;
+    }
+
+    /**
+     * Describes tool definitions for hashing.
+     *
+     * Order is kept as given, because it can influence which tool the model
+     * picks. A different order is a cache miss, never a wrong hit.
+     *
+     * @param mixed $tools The `tools` option value.
+     *
+     * @return array<int, array{name: string, description: string, parameters: array}>
+     */
+    private function describeTools(mixed $tools): array {
+        if (!is_array($tools)) {
+            return [];
+        }
+
+        $described = [];
+
+        foreach ($tools as $tool) {
+            if ($tool instanceof ToolInterface) {
+                $described[] = [
+                    'name' => $tool->getName(),
+                    'description' => $tool->getDescription(),
+                    'parameters' => $tool->getParameters(),
+                ];
+            }
+        }
+
+        return $described;
+    }
+
+    /**
+     * Encodes a value to a string for hashing.
+     *
+     * Falls back to serialize() when the value cannot be JSON encoded (for
+     * example invalid UTF-8), so two different values never hash the same
+     * empty string.
+     *
+     * @param mixed $value The value to encode.
+     *
+     * @return string The encoded value.
+     */
+    private function encode(mixed $value): string {
+        $json = json_encode($value);
+
+        return $json === false ? serialize($value) : $json;
+    }
+
+    /**
      * Extracts options that affect the model output.
      *
      * @param array<string, mixed> $options The full options array.
@@ -89,6 +180,23 @@ class CacheKeyGenerator {
         ];
 
         foreach ($keys as $key) {
+            if (isset($options[$key])) {
+                $relevant[$key] = $options[$key];
+            }
+        }
+
+        // Options that change the request body or the output format. Added
+        // only when set, so requests without them keep their previous key.
+        if (!empty($options[ChatOption::JSON_MODE])) {
+            $relevant[ChatOption::JSON_MODE] = true;
+        }
+
+        foreach ([
+            ChatOption::JSON_SCHEMA,
+            ChatOption::PREVIOUS_INTERACTION_ID,
+            'thinking_level',
+            'detail',
+        ] as $key) {
             if (isset($options[$key])) {
                 $relevant[$key] = $options[$key];
             }
