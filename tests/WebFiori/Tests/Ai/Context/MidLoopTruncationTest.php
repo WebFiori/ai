@@ -11,6 +11,7 @@
 namespace WebFiori\Tests\Ai\Context;
 
 use PHPUnit\Framework\TestCase;
+use WebFiori\Ai\Cancellation\CancellationTokenSource;
 use WebFiori\Ai\ChatOption;
 use WebFiori\Ai\Context\SlidingWindowStrategy;
 use WebFiori\Ai\Context\ToolLoopOverflowBehavior;
@@ -190,6 +191,121 @@ class MidLoopTruncationTest extends TestCase {
         foreach ($provider->formattedRequests as $i => $msgs) {
             $this->assertPairingIntact($msgs, $i);
         }
+    }
+
+    /**
+     * After a truncation the request is built from scratch. Asking a provider to
+     * append to the previous request would resend the whole truncated
+     * conversation on top of the untruncated one (issue #206).
+     *
+     * @test
+     */
+    public function testTruncationRebuildsTheRequestInsteadOfAppending() {
+        $provider = new MidLoopTestClient(toolIterations: 3);
+        $provider->setContextWindowStrategy(new SlidingWindowStrategy(maxTokens: 2000, reserveForCompletion: 200));
+
+        $provider->chat([
+            new Message('system', 'Sys.'),
+            new Message('user', 'Start.'),
+        ], [
+            ChatOption::TOOLS => [$this->makeBigOutputTool()],
+            ChatOption::AUTO_EXECUTE_TOOLS => true,
+            ChatOption::TRUNCATE_BETWEEN_TOOL_ITERATIONS => true,
+        ]);
+
+        $this->assertGreaterThanOrEqual(2, $provider->fullBuilds, 'After truncating, the loop must build the request from scratch');
+
+        foreach ($provider->incrementalCalls as $i => $call) {
+            $this->assertLessThan(
+                $call['all'],
+                $call['new'],
+                "Incremental call #{$i} was asked to append the whole conversation"
+            );
+        }
+    }
+
+    /**
+     * Replacing messages with a summary is a truncation too.
+     *
+     * @test
+     */
+    public function testSummarizeRebuildsTheRequestInsteadOfAppending() {
+        $provider = new MidLoopTestClient(toolIterations: 3);
+        $provider->setContextWindowStrategy(new SlidingWindowStrategy(2000, 200));
+
+        $provider->chat([
+            new Message('system', 'Sys.'),
+            new Message('user', 'Go.'),
+        ], [
+            ChatOption::TOOLS => [$this->makeBigOutputTool()],
+            ChatOption::AUTO_EXECUTE_TOOLS => true,
+            ChatOption::TRUNCATE_BETWEEN_TOOL_ITERATIONS => true,
+            ChatOption::TOOL_LOOP_OVERFLOW_BEHAVIOR => ToolLoopOverflowBehavior::SUMMARIZE,
+            ChatOption::TOOL_LOOP_SUMMARIZER => new StubSummarizerProvider('Earlier docs were extracted.'),
+        ]);
+
+        $this->assertGreaterThanOrEqual(2, $provider->fullBuilds, 'After truncating, the loop must build the request from scratch');
+
+        foreach ($provider->incrementalCalls as $i => $call) {
+            $this->assertLessThan($call['all'], $call['new'], "Incremental call #{$i} was asked to append the whole conversation");
+        }
+    }
+
+    /**
+     * Control: when nothing is truncated the incremental path is still used and
+     * only the new messages are appended.
+     *
+     * @test
+     */
+    public function testWithoutTruncationRequestsAreStillBuiltIncrementally() {
+        $provider = new MidLoopTestClient(toolIterations: 3);
+        $provider->setContextWindowStrategy(new SlidingWindowStrategy(maxTokens: 1000000, reserveForCompletion: 200));
+
+        $provider->chat([
+            new Message('system', 'Sys.'),
+            new Message('user', 'Go.'),
+        ], [
+            ChatOption::TOOLS => [$this->makeBigOutputTool()],
+            ChatOption::AUTO_EXECUTE_TOOLS => true,
+            ChatOption::TRUNCATE_BETWEEN_TOOL_ITERATIONS => true,
+        ]);
+
+        $this->assertSame(1, $provider->fullBuilds, 'Only the initial request is built from scratch');
+        $this->assertCount(3, $provider->incrementalCalls);
+
+        foreach ($provider->incrementalCalls as $call) {
+            // One assistant tool-call message and one tool result per iteration.
+            $this->assertSame(2, $call['new']);
+        }
+    }
+
+    /**
+     * @test
+     */
+    public function testRebuiltRequestKeepsTheCancellationToken() {
+        $provider = new MidLoopTestClient(toolIterations: 3);
+        $provider->setContextWindowStrategy(new SlidingWindowStrategy(maxTokens: 2000, reserveForCompletion: 200));
+        $token = (new CancellationTokenSource())->getToken();
+
+        $provider->chat([
+            new Message('system', 'Sys.'),
+            new Message('user', 'Start.'),
+        ], [
+            ChatOption::TOOLS => [$this->makeBigOutputTool()],
+            ChatOption::AUTO_EXECUTE_TOOLS => true,
+            ChatOption::TRUNCATE_BETWEEN_TOOL_ITERATIONS => true,
+            ChatOption::CANCELLATION_TOKEN => $token,
+        ]);
+
+        $this->assertGreaterThanOrEqual(2, $provider->fullBuilds, 'After truncating, the loop must build the request from scratch');
+
+        // The stub's incremental builder does not attach a token, so a request
+        // that has one in a rebuilt iteration came from the rebuild path.
+        $withToken = array_filter(
+            $provider->getHttpClient()->getRequests(),
+            fn ($request) => $request->getCancellationToken() === $token
+        );
+        $this->assertNotEmpty($withToken);
     }
 
     /**
