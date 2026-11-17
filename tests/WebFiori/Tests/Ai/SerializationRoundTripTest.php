@@ -40,7 +40,7 @@ class SerializationRoundTripTest extends TestCase {
 
     public function testUsage_ToArrayKeys(): void {
         $this->assertSame(
-            ['prompt_tokens' => 10, 'completion_tokens' => 5],
+            ['prompt_tokens' => 10, 'completion_tokens' => 5, 'cached_tokens' => 0, 'cache_write_tokens' => 0],
             (new Usage(10, 5))->toArray()
         );
     }
